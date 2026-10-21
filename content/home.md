@@ -118,7 +118,13 @@ Hear from real customers who explored the world with TripCod
 
 A glimpse into the unforgettable journeys, breathtaking views, and memorable experiences captured by our travelers across the globe.
 
-<!-- Gallery images not yet added to the repo. -->
+| Image | Caption |
+| ----- | ------- |
+| ![Sir Baniyas Cruise Happy Family](gallery/sir-baniyas-cruise.jpg) | Sir Baniyas Cruise Happy Family |
+| ![Dubai Tour Sujithettans Family](gallery/dubai-tour.jpg) | Dubai Tour Sujithettans Family |
+| ![Family group at the Petronas Towers, Kuala Lumpur](gallery/kuala-lumpur-petronas-towers.jpg) | Kuala Lumpur, Malaysia |
+| ![Baku trip Happy Family](gallery/baku-trip.jpg) | Baku trip Happy Family |
+| ![Group of travelers in the snowy mountains](gallery/snow-mountain-group.jpg) | Snow mountain group trip |
 
 ---
 
