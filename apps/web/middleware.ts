@@ -44,7 +44,7 @@ function extractTenantSlug(host: string): string {
   if (host.endsWith(".flypoomas.com")) {
     return host.split(".")[0];
   }
-  if (host === "flypoomas.com" || host === "www.flypoomas.com") {
+  if (host === "flypoomas.com" || host === "www.flypoomas.com" || host === "tripcod.com" || host === "www.tripcod.com") {
     return "poomas";
   }
   return host;

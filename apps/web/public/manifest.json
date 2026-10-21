@@ -1,12 +1,17 @@
 {
-  "name": "FlyPoomas",
-  "short_name": "FlyPoomas",
-  "description": "Book flights at best prices",
+  "name": "Tripcod Travel Solutions",
+  "short_name": "Tripcod",
+  "description": "Flights, hotels, visas and holiday packages",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#ffffff",
-  "theme_color": "#E31E24",
+  "theme_color": "#4B4D4F",
   "icons": [
-    { "src": "/icon.png", "sizes": "512x512", "type": "image/png", "purpose": "any" }
+    {
+      "src": "/icon.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    }
   ]
 }

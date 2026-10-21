@@ -8,7 +8,7 @@ interface Tx { id: string; type: string; amount: string; note: string | null; cr
 interface Coupon { id: string; code: string; amount: string; status: string; expiresAt: string; redeemedAt: string | null }
 
 const TX_LABEL: Record<string, string> = {
-  BOOKING_BONUS: "Booking bonus", ADMIN_CREDIT: "Added by POOMAS", BOOKING_DEBIT: "Paid for booking",
+  BOOKING_BONUS: "Booking bonus", ADMIN_CREDIT: "Added by Tripcod", BOOKING_DEBIT: "Paid for booking",
   REFUND_CREDIT: "Refund", COUPON_DEBIT: "Coupon created", COUPON_CREDIT: "Coupon redeemed", COUPON_REFUND: "Coupon returned",
 };
 const DEBITS = new Set(["BOOKING_DEBIT", "COUPON_DEBIT"]);
@@ -88,7 +88,7 @@ export default function WalletPage() {
 
   function shareReferral() {
     if (!referral) return;
-    const text = `Join me on FlyPoomas! Use my code ${referral.code} in your wallet and we both get ₹${referral.reward} when you book your first flight: https://flypoomas.com/wallet`;
+    const text = `Join me on Tripcod! Use my code ${referral.code} in your wallet and we both get ₹${referral.reward} when you book your first flight: https://tripcod.com/wallet`;
     if (navigator.share) navigator.share({ text }).catch(() => {});
     else window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, "_blank", "noopener");
   }
@@ -136,7 +136,7 @@ export default function WalletPage() {
   }
 
   function share(c: Coupon) {
-    const text = `I've sent you ${inr(Number(c.amount))} on FlyPoomas! Redeem code ${c.code} at https://flypoomas.com/wallet before ${new Date(c.expiresAt).toLocaleDateString("en-IN")}.`;
+    const text = `I've sent you ${inr(Number(c.amount))} on Tripcod! Redeem code ${c.code} at https://tripcod.com/wallet before ${new Date(c.expiresAt).toLocaleDateString("en-IN")}.`;
     if (navigator.share) navigator.share({ text }).catch(() => {});
     else window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, "_blank", "noopener");
   }
@@ -148,7 +148,7 @@ export default function WalletPage() {
       <main className={styles.page}>
         <section className={styles.signInCard}>
           <span className={styles.sectionIcon}><WalletIcon kind="wallet" /></span>
-          <h1>FlyPoomas Wallet</h1>
+          <h1>Tripcod Wallet</h1>
           <p>Sign in to see your balance. Every confirmed booking earns you ₹50, and you can pay for flights with your wallet.</p>
           <div className={styles.signInActions}>
             <a className={styles.primaryButton} href="/signup?next=/wallet">Create account</a>
@@ -183,7 +183,7 @@ export default function WalletPage() {
           </form>
         </section>
         <section className={styles.actionCard}>
-          <div className={styles.cardTitle}><span className={styles.sectionIcon}><WalletIcon kind="redeem" /></span><div><h2>Redeem a code</h2><p>Got a FlyPoomas wallet code from someone? Add it here.</p></div></div>
+          <div className={styles.cardTitle}><span className={styles.sectionIcon}><WalletIcon kind="redeem" /></span><div><h2>Redeem a code</h2><p>Got a Tripcod wallet code from someone? Add it here.</p></div></div>
           <form className={styles.actionForm} onSubmit={redeem}>
             <label className={styles.srOnly} htmlFor="wallet-redeem-code">Wallet code</label>
             <input id="wallet-redeem-code" placeholder="PM-XXXXX-XXXXX" value={redeemCode} onChange={(e) => setRedeemCode(e.target.value.toUpperCase())} style={{ textTransform: "uppercase" }} />
@@ -213,7 +213,7 @@ export default function WalletPage() {
 
       <section className={styles.infoStrip} aria-label="Wallet benefits">
         <span className={styles.infoIcon}><WalletIcon kind="wallet" /></span>
-        <div><h2>Why use FlyPoomas Wallet?</h2><p>Earn ₹50 after a confirmed booking, pay for eligible INR flights with a sufficient balance, or share balance with a one-time code.</p></div>
+        <div><h2>Why use Tripcod Wallet?</h2><p>Earn ₹50 after a confirmed booking, pay for eligible INR flights with a sufficient balance, or share balance with a one-time code.</p></div>
       </section>
 
       {coupons.length > 0 && (

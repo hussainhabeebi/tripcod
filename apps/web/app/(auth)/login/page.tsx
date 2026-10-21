@@ -23,7 +23,7 @@ function now() {
 export default function LoginPage() {
 
   const [messages, setMessages] = useState<ChatMsg[]>([
-    { id: 1, from: "bot", text: "Hi! 👋 Welcome to FlyPoomas.", time: now() },
+    { id: 1, from: "bot", text: "Hi! 👋 Welcome to Tripcod.", time: now() },
     { id: 2, from: "bot", text: "Please enter your email address to sign in.", time: now() },
   ]);
   const [step, setStep] = useState<Step>("email");
@@ -142,7 +142,7 @@ export default function LoginPage() {
           </a>
           <div className="wa-avatar">✈️</div>
           <div className="wa-header-info">
-            <div className="wa-contact-name">FlyPoomas</div>
+            <div className="wa-contact-name">Tripcod</div>
             <div className="wa-contact-status">Online</div>
           </div>
           <div className="wa-header-icons">
@@ -275,12 +275,12 @@ export default function LoginPage() {
       <div className="wa-desktop-fallback">
         <div className="wa-desktop-card">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/logo.png" alt="FlyPoomas" className="login-brand-logo" width="72" height="68" />
+          <img src="/logo.png" alt="Tripcod" className="login-brand-logo" width="180" height="63" />
           <h1 className="login-title">Welcome back</h1>
-          <p className="login-intro">Sign in to continue to your FlyPoomas account.</p>
+          <p className="login-intro">Sign in to continue to your Tripcod account.</p>
           <DesktopLoginForm />
           <p className="login-signup-prompt">
-            New to FlyPoomas? <a href="/signup">Create an account</a>
+            New to Tripcod? <a href="/signup">Create an account</a>
           </p>
         </div>
       </div>
@@ -333,7 +333,7 @@ function DesktopLoginForm() {
       <label className="login-field">Password
         <input type="password" name="password" autoComplete="current-password" value={pass} onChange={(e) => setPass(e.target.value)} required />
       </label>
-      <a href={`/forgot-password${email ? `?email=${encodeURIComponent(email.trim())}` : ""}`} style={{ alignSelf: "flex-end", marginTop: -6, fontSize: 13, color: "#E31E24", fontWeight: 600 }}>Forgot password?</a>
+      <a href={`/forgot-password${email ? `?email=${encodeURIComponent(email.trim())}` : ""}`} style={{ alignSelf: "flex-end", marginTop: -6, fontSize: 13, color: "#4B4D4F", fontWeight: 600 }}>Forgot password?</a>
       <button
         type="submit" disabled={loading} className="login-submit"
       >

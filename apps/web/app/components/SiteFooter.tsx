@@ -28,6 +28,24 @@ const columns = [
   },
 ];
 
+const socials = [
+  {
+    label: "Instagram",
+    href: "https://www.instagram.com/tripcod_",
+    icon: <><rect x="3" y="3" width="18" height="18" rx="5" /><circle cx="12" cy="12" r="4" /><circle cx="17.5" cy="6.5" r=".6" fill="currentColor" /></>,
+  },
+  {
+    label: "Facebook",
+    href: "https://www.facebook.com/share/16HLRp3aWu/",
+    icon: <path d="M14 8h3V4h-3a4 4 0 0 0-4 4v3H7v4h3v6h4v-6h3l1-4h-4V8Z" />,
+  },
+  {
+    label: "YouTube",
+    href: "https://www.youtube.com/@tripcod",
+    icon: <><rect x="2.5" y="5.5" width="19" height="13" rx="4" /><path d="m10 9.5 5 2.5-5 2.5v-5Z" fill="currentColor" /></>,
+  },
+];
+
 const perks = ["Agent-only fares", "Commission on every booking", "Sub-agents & staff logins", "Wallet & credit limits"];
 
 export default function SiteFooter() {
@@ -38,8 +56,8 @@ export default function SiteFooter() {
       <div className="site-footer-inner">
         <section className="footer-agent-cta" aria-labelledby="footer-agent-title">
           <div className="footer-agent-copy">
-            <span className="footer-agent-kicker">FlyPoomas for Agents</span>
-            <h2 id="footer-agent-title">Run your travel agency on FlyPoomas</h2>
+            <span className="footer-agent-kicker">Tripcod for Agents</span>
+            <h2 id="footer-agent-title">Run your travel agency on Tripcod</h2>
             <ul className="footer-agent-perks">
               {perks.map((perk) => (
                 <li key={perk}>
@@ -62,8 +80,7 @@ export default function SiteFooter() {
           <div className="footer-brand">
             <a href="/" className="footer-logo-link">
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src="/logo.png" alt="" height={32} />
-              <span>FlyPoomas</span>
+              <img src="/logo-light.png" alt="Tripcod Travel Solutions" height={44} />
             </a>
             <p>Book flights, hotels and travel insurance at the best prices — India, the Gulf and beyond.</p>
             <div className="footer-trust">
@@ -76,6 +93,15 @@ export default function SiteFooter() {
                 Instant e-tickets
               </span>
             </div>
+            <ul className="footer-social" aria-label="Follow Tripcod">
+              {socials.map((social) => (
+                <li key={social.label}>
+                  <a href={social.href} target="_blank" rel="noopener" aria-label={social.label}>
+                    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{social.icon}</svg>
+                  </a>
+                </li>
+              ))}
+            </ul>
           </div>
 
           <nav className="footer-columns" aria-label="Footer">
@@ -93,7 +119,7 @@ export default function SiteFooter() {
         </div>
 
         <div className="footer-bottom">
-          <span>© {year} FlyPoomas. All rights reserved.</span>
+          <span>© {year} Tripcod. All rights reserved.</span>
           <span className="footer-bottom-note">Fares are subject to availability until ticketed.</span>
           <span className="footer-credits">
             <span>Built by team <a href="https://aiingo.com" target="_blank" rel="noopener">aiingo.com</a></span>

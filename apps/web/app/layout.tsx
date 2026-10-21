@@ -4,17 +4,17 @@ import SiteNav from "./components/SiteNav";
 import SiteFooter from "./components/SiteFooter";
 
 export const metadata: Metadata = {
-  title: "FlyPoomas",
-  description: "Book flights at best prices — India, Gulf & beyond",
+  title: "Tripcod Travel Solutions",
+  description: "Flights, hotels, visas and holiday packages — every destination tells a story. Let yours begin today.",
   manifest: "/manifest.json",
-  appleWebApp: { capable: true, statusBarStyle: "default", title: "FlyPoomas" },
+  appleWebApp: { capable: true, statusBarStyle: "default", title: "Tripcod" },
 };
 
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   maximumScale: 5,
-  themeColor: "#E31E24",
+  themeColor: "#4B4D4F",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
@@ -32,8 +32,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <header className="site-header">
           <a href="/" className="site-logo-link">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/logo.png" alt="" height={34} className="site-logo" />
-            <span className="site-brand-name">FlyPoomas</span>
+            <img src="/logo.png" alt="Tripcod Travel Solutions" height={34} className="site-logo" />
           </a>
           <SiteNav />
         </header>

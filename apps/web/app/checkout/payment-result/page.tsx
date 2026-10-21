@@ -91,7 +91,7 @@ function NomodPaymentResult() {
             ? "Your payment has been received. We're confirming your seat with the airline — this usually takes under a minute."
             : failed
               ? "No charge was confirmed. You can return to checkout and try again."
-              : "Nomod has returned you to FlyPoomas. Keep this page open while we verify the payment securely."}
+              : "Nomod has returned you to Tripcod. Keep this page open while we verify the payment securely."}
         </p>
         {ticketed || bookingFailed ? (
           <div style={{ display: "flex", gap: 10, justifyContent: "center", flexWrap: "wrap" }}>
@@ -110,6 +110,6 @@ function NomodPaymentResult() {
 }
 
 const button: React.CSSProperties = {
-  display: "inline-block", background: "#e31e24", color: "#fff", textDecoration: "none",
+  display: "inline-block", background: "#4B4D4F", color: "#fff", textDecoration: "none",
   borderRadius: 10, padding: "12px 20px", fontWeight: 800, fontSize: 14,
 };

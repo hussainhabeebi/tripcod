@@ -1,17 +1,16 @@
-// POOMAS Traveldays brand palette
+// Tripcod Travel Solutions brand palette (from the Tripcod logo)
 // Applied as CSS custom properties — override per-tenant via server-side injection
 export const BRAND = {
-  red:    "#E31E24",
-  orange: "#F7941D",
-  yellow: "#F5C518",
-  dark:   "#1A1A1A",
-  white:  "#FFFFFF",
+  charcoal:     "#4B4D4F",
+  charcoalDark: "#2F3032",
+  amber:        "#FFB005",
+  white:        "#FFFFFF",
 } as const;
 
 export const DEFAULT_THEME = {
-  primaryColor:   BRAND.red,
-  secondaryColor: BRAND.orange,
-  accentColor:    BRAND.yellow,
+  primaryColor:   BRAND.charcoal,
+  secondaryColor: BRAND.amber,
+  accentColor:    BRAND.amber,
   fontFamily:     "Inter",
   borderRadius:   "8px",
 } as const;

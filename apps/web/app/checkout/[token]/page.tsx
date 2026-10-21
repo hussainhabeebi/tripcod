@@ -106,7 +106,7 @@ export default async function CheckoutPage({ params }: CheckoutPageProps) {
               </div>
             </div>
             <div style={{ textAlign: "right" }}>
-              <div style={{ fontSize: 22, fontWeight: 800, color: "#E31E24" }}>
+              <div style={{ fontSize: 22, fontWeight: 800, color: "#4B4D4F" }}>
                 {symbol}{parseFloat(booking.totalAmount).toLocaleString("en-IN")}
               </div>
               <div style={{ fontSize: 12, color: "#94a3b8" }}>{booking.currency} · all-in</div>

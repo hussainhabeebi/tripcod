@@ -50,9 +50,9 @@ export default function AccountPage() {
       <main className="account-entry-page">
         <section className="account-entry-card" aria-labelledby="account-entry-title">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img className="account-entry-logo" src="/logo.png" alt="" width="64" height="60" />
-          <p className="account-entry-eyebrow">WELCOME TO FLYPOOMAS</p>
-          <h1 id="account-entry-title">Your FlyPoomas account</h1>
+          <img className="account-entry-logo" src="/logo.png" alt="Tripcod" width="160" height="56" />
+          <p className="account-entry-eyebrow">WELCOME TO TRIPCOD</p>
+          <h1 id="account-entry-title">Your Tripcod account</h1>
           <p className="account-entry-intro">Manage your bookings, saved travellers, wallet and travel details in one place.</p>
           <div className="account-entry-actions"><a href="/login?next=/account" className="account-entry-primary">Sign in</a><a href="/signup?next=/account" className="account-entry-secondary">Create account</a></div>
           <div className="account-entry-benefits" aria-label="Your account can help you">
@@ -130,7 +130,7 @@ const h2: React.CSSProperties = { margin: "0 0 10px", fontSize: 16, fontWeight: 
 const muted: React.CSSProperties = { margin: "0 0 10px", color: "#64748b", fontSize: 13 };
 const label: React.CSSProperties = { display: "flex", flexDirection: "column", gap: 5, fontSize: 13, fontWeight: 600, color: "#334155" };
 const input: React.CSSProperties = { padding: "11px 12px", border: "1.5px solid #e2e8f0", borderRadius: 10, fontSize: 15, fontFamily: "inherit", fontWeight: 400 };
-const btn: React.CSSProperties = { display: "inline-block", background: "#E31E24", color: "#fff", borderRadius: 10, padding: "10px 14px", fontWeight: 800, fontSize: 14, textDecoration: "none", fontFamily: "inherit" };
+const btn: React.CSSProperties = { display: "inline-block", background: "#4B4D4F", color: "#fff", borderRadius: 10, padding: "10px 14px", fontWeight: 800, fontSize: 14, textDecoration: "none", fontFamily: "inherit" };
 const btn2: React.CSSProperties = { ...btn, background: "#fff", color: "#0f172a", border: "1.5px solid #e2e8f0" };
 const tile: React.CSSProperties = { ...card, display: "flex", flexDirection: "column", gap: 2, textDecoration: "none", color: "#0f172a", fontSize: 14 };
 const box: React.CSSProperties = { padding: "10px 14px", borderRadius: 10, fontSize: 14, marginBottom: 12 };
