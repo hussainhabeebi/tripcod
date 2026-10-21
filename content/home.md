@@ -35,6 +35,8 @@ For us, travel is more than movement it’s transformation. That’s why we craf
 
 [Learn More](https://tripcod.com/about-us)
 
+<!-- Image: "Our team on a mountain trek" (not yet added to the repo). -->
+
 ---
 
 ## Our Trusted Services
