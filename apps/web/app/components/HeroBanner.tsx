@@ -2,20 +2,24 @@
 
 import { useEffect, useRef, useState } from "react";
 
-const SLIDES = [
+type Slide = { image: string; eyebrow: string; title: string; sub: string; cta: string; href?: string; secondary?: { label: string; href: string } };
+
+const SLIDES: Slide[] = [
   {
     image: "/hero/airplane-wing-clouds.webp",
+    eyebrow: "Tripcod Travel Solutions",
+    title: "Every Destination Tells a Story — Let Yours Begin Today",
+    sub: "Your story begins here. From serenity to adventure, we make every journey unforgettable.",
+    cta: "Explore Destinations",
+    href: "/destinations",
+    secondary: { label: "About More", href: "/about-us" },
+  },
+  {
+    image: "/hero/kerala-backwaters.webp",
     eyebrow: "India ↔ Gulf specialists",
     title: "Your next journey starts here",
     sub: "Compare live fares, share passenger details securely and complete your booking in minutes.",
     cta: "Search live flights",
-  },
-  {
-    image: "/hero/kerala-backwaters.webp",
-    eyebrow: "Smart flight comparison",
-    title: "Three better choices. Zero confusion.",
-    sub: "See the best overall, lowest fare and fastest journey—with baggage and duration included.",
-    cta: "Find my best flight",
   },
   {
     image: "/hero/dubai-skyline.webp",
@@ -23,6 +27,7 @@ const SLIDES = [
     title: "Gulf, India and the world",
     sub: "Book confidently with secure checkout, WhatsApp updates and human support when you need it.",
     cta: "Explore destinations",
+    href: "/destinations",
   },
 ];
 
@@ -71,7 +76,10 @@ export default function HeroBanner({ banners }: { banners: unknown[] }) {
         <div className="hero-badge">{slide.eyebrow}</div>
         <h1 className="hero-title">{slide.title}</h1>
         <p className="hero-subtitle">{slide.sub}</p>
-        <a className="hero-cta" href="#flight-search">{slide.cta} <span>→</span></a>
+        <div className="hero-cta-row">
+          <a className="hero-cta" href={slide.href ?? "#flight-search"}>{slide.cta} <span>→</span></a>
+          {slide.secondary && <a className="hero-cta hero-cta-ghost" href={slide.secondary.href}>{slide.secondary.label}</a>}
+        </div>
         <div className="hero-dots">
           {SLIDES.map((_, i) => (
             <button key={i} className={i === idx ? "hero-dot hero-dot-active" : "hero-dot"}

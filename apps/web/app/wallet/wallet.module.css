@@ -41,7 +41,7 @@
 .actionCard, .panel, .signInCard { min-width: 0; background: #fff; border: 1px solid #dfe5ee; border-radius: 17px; box-shadow: 0 4px 18px rgba(18,37,64,.045); }
 .actionCard { display: flex; flex-direction: column; gap: 24px; padding: 25px; }
 .cardTitle { display: flex; gap: 15px; align-items: flex-start; }
-.sectionIcon, .infoIcon, .transactionIcon { display: inline-grid; place-items: center; flex: none; width: 42px; height: 42px; border-radius: 11px; color: #2F3032; background: #fff0f2; }
+.sectionIcon, .infoIcon, .transactionIcon { display: inline-grid; place-items: center; flex: none; width: 42px; height: 42px; border-radius: 11px; color: #2F3032; background: var(--color-accent-soft); }
 .cardTitle h2, .panelHeading h2 { margin: 0 0 5px; font-size: 18px; line-height: 1.3; letter-spacing: -.02em; }
 .cardTitle p, .panelHeading p { margin: 0; color: #61718a; font-size: 13px; line-height: 1.55; }
 .actionForm { display: flex; gap: 9px; margin-top: auto; }
@@ -54,7 +54,7 @@
 .secondaryButton:hover { background: #f8fafc; }
 .primaryButton:focus-visible, .secondaryButton:focus-visible, .subtleButton:focus-visible, .cancelButton:focus-visible { outline: 2px solid #2F3032; outline-offset: 2px; }
 .infoStrip { display: flex; align-items: center; gap: 16px; min-height: 84px; margin: 22px 0; padding: 20px 26px; border-radius: 15px; background: #152238; color: #fff; }
-.infoIcon { background: #452036; color: #ffc6d1; }
+.infoIcon { background: var(--color-primary-dark); color: var(--color-accent); }
 .infoStrip h2 { margin: 0 0 4px; font-size: 15px; }
 .infoStrip p { margin: 0; color: #cfd8e5; font-size: 13px; line-height: 1.5; }
 .panel { margin-top: 20px; overflow: hidden; }
@@ -70,7 +70,7 @@
 .subtleButton:hover, .cancelButton:hover:not(:disabled) { background: #f7f9fc; }
 .transactionIcon { width: 39px; height: 39px; }
 .creditIcon { color: #07865a; background: #e9f9f0; }
-.debitIcon { color: #2F3032; background: #fff0f2; }
+.debitIcon { color: #2F3032; background: var(--color-accent-soft); }
 .transactionDetails strong { font-size: 14px; }
 .transactionAmount { margin-left: auto; font-size: 16px; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .credit { color: #07865a; }

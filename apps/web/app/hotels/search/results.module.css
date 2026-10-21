@@ -27,7 +27,7 @@
 .stay { margin: 6px 0 0; font-size: 12px; color: #64748b; }
 .book { display: inline-flex; align-items: center; justify-content: center; gap: 12px; min-height: 44px; padding: 0 22px; border-radius: 9px; background: var(--color-primary); color: white; font-weight: 700; font-size: 13px; text-decoration: none; transition: background .2s; }
 .book:hover { background: #2F3032; }
-.newSearch:hover { background: #fff3f3; }
+.newSearch:hover { background: var(--color-accent-soft); }
 .book:focus-visible, .newSearch:focus-visible { outline: 3px solid #10243e; outline-offset: 3px; }
 .unavailable { font-size: 12px; color: #64748b; }
 .empty { padding: 40px 24px; border: 1px solid #e0e6ee; border-radius: 16px; text-align: center; color: #64748b; background: white; overflow-wrap: anywhere; }

@@ -1,3 +1,5 @@
+import { CONTACT } from "../lib/tripcod-content";
+
 const PORTAL_URL = (process.env.NEXT_PUBLIC_PORTAL_URL ?? "https://portal.flypoomas.com").replace(/\/+$/, "");
 
 const columns = [
@@ -17,6 +19,13 @@ const columns = [
       { label: "Find a booking", href: "/trips/find" },
       { label: "Wallet", href: "/wallet" },
       { label: "My account", href: "/account" },
+    ],
+  },
+  {
+    title: "Company",
+    links: [
+      { label: "About Us", href: "/about-us" },
+      { label: "Destinations", href: "/destinations" },
     ],
   },
   {
@@ -82,7 +91,7 @@ export default function SiteFooter() {
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src="/logo-light.png" alt="Tripcod Travel Solutions" height={44} />
             </a>
-            <p>Book flights, hotels and travel insurance at the best prices — India, the Gulf and beyond.</p>
+            <p>Making your travel dreams come true since 2023. Flights, hotels, visas and holiday packages — India, the Gulf and beyond.</p>
             <div className="footer-trust">
               <span>
                 <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2" /><path d="M8 11V7a4 4 0 0 1 8 0v4" /></svg>
@@ -102,6 +111,17 @@ export default function SiteFooter() {
                 </li>
               ))}
             </ul>
+            <address className="footer-contact">
+              {CONTACT.offices.map((o) => (
+                <p key={o.label}><strong>{o.label}:</strong> {o.address}</p>
+              ))}
+              <p>
+                {CONTACT.phones.map((ph, i) => (
+                  <span key={ph.href}>{i > 0 && " · "}<a href={ph.href}>{ph.label}</a></span>
+                ))}
+              </p>
+              <p><a href={`mailto:${CONTACT.email}`}>{CONTACT.email}</a></p>
+            </address>
           </div>
 
           <nav className="footer-columns" aria-label="Footer">

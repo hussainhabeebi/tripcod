@@ -73,7 +73,11 @@ export default function SiteNav() {
         ? "trips"
         : pathname === "/wallet" || pathname.startsWith("/wallet/")
           ? "wallet"
-          : null;
+          : pathname === "/destinations"
+            ? "destinations"
+            : pathname === "/about-us"
+              ? "about"
+              : null;
 
   function navClass(item: string) {
     return active === item ? "nav-link nav-link-active" : "nav-link";
@@ -92,6 +96,8 @@ export default function SiteNav() {
     { key: "insurance", label: "Insurance", href: "/insurance", icon: <><path d="M12 3 4 6v6c0 4.5 3.4 8.2 8 9 4.6-.8 8-4.5 8-9V6l-8-3Z" /><path d="m9 12 2 2 4-4" /></> },
     { key: "trips", label: "My Trips", href: "/trips", icon: <><rect x="3" y="7" width="18" height="14" rx="2" /><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M3 13h18m-10 0v2h2v-2" /></> },
     { key: "wallet", label: "Wallet", href: "/wallet", icon: <><rect x="3" y="5" width="18" height="16" rx="2" /><path d="M3 9h18m-5 6h2" /></> },
+    { key: "destinations", label: "Destinations", href: "/destinations", icon: <><path d="M12 21s-7-6.1-7-11.5a7 7 0 0 1 14 0C19 14.9 12 21 12 21Z" /><circle cx="12" cy="9.5" r="2.5" /></> },
+    { key: "about", label: "About Us", href: "/about-us", icon: <><circle cx="12" cy="12" r="9" /><path d="M12 11v5M12 8h.01" /></> },
   ];
 
   function navigationItems() {

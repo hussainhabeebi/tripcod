@@ -1,6 +1,8 @@
 import SearchWidget from "./components/SearchWidget";
 import HeroBanner from "./components/HeroBanner";
 import PopularRoutes from "./components/PopularRoutes";
+import { AboutPreview, GallerySection, PopularDestinationsSection, ServicesSection, TestimonialsSection } from "./components/TripcodSections";
+import { POPULAR_DESTINATIONS, whatsappLink } from "./lib/tripcod-content";
 import type { ReactNode } from "react";
 
 const benefits = [
@@ -76,6 +78,10 @@ export default function HomePage() {
         </div>
       </div>
 
+      <AboutPreview />
+      <ServicesSection />
+      <PopularDestinationsSection destinations={POPULAR_DESTINATIONS} />
+
       {/* Deals section */}
       <section className="home-shell deal-cards-section" style={{ paddingTop: 48 }}>
         <div className="section-heading-row">
@@ -140,6 +146,9 @@ export default function HomePage() {
         </div>
       </section>
 
+      <TestimonialsSection />
+      <GallerySection />
+
       <section className="journey-section">
         <div className="home-shell">
           <div className="section-kicker light">Simple from search to ticket</div>
@@ -161,12 +170,12 @@ export default function HomePage() {
             <h2>Continue with our travel assistant</h2>
             <p>Share your route on WhatsApp and move directly from flight selection to secure checkout.</p>
           </div>
-          <a href="https://wa.me/" aria-label="Continue on WhatsApp">Continue on WhatsApp <span>→</span></a>
+          <a href={whatsappLink("Hi Tripcod, I need help planning a trip.")} target="_blank" rel="noopener" aria-label="Continue on WhatsApp">Continue on WhatsApp <span>→</span></a>
         </div>
       </section>
 
       {/* Floating WhatsApp */}
-      <a href="https://wa.me/" className="wa-float" aria-label="Chat on WhatsApp">
+      <a href={whatsappLink("Hi Tripcod, I need help planning a trip.")} target="_blank" rel="noopener" className="wa-float" aria-label="Chat on WhatsApp">
         <span className="wa-float-icon">💬</span>
         <span className="wa-float-label">Need help?</span>
       </a>
