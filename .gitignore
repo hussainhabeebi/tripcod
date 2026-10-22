@@ -12,3 +12,6 @@ coverage/
 .nyc_output/
 prisma/generated/
 *.tsbuildinfo
+
+# OpenNext Cloudflare build output
+.open-next/
