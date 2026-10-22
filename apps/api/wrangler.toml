@@ -2,7 +2,7 @@ name = "tripcod-api"
 main = "src/index.ts"
 compatibility_date = "2024-11-01"
 compatibility_flags = ["nodejs_compat"]
-# account_id comes from the CLOUDFLARE_ACCOUNT_ID env var (GitHub secret) or `wrangler login`.
+account_id = "b8b329ebb6f75b4e4ddc90426a593c5e"
 workers_dev = false
 
 # ── Custom Domain ────────────────────────────────────────────────
