@@ -4,26 +4,26 @@ import { tenants, users, tenantSupplierConfigs, markupRules } from "./schema/ind
 const db = createDb(process.env.DATABASE_URL!);
 
 async function seed() {
-  console.log("🌱 Seeding POOMAS platform...");
+  console.log("🌱 Seeding Tripcod platform...");
 
-  // Platform tenant (POOMAS Traveldays itself)
+  // Platform tenant (Tripcod Travel Solutions itself)
   const [platformTenant] = await db
     .insert(tenants)
     .values({
-      name:           "POOMAS Traveldays",
-      slug:           "poomas",
+      name:           "Tripcod Travel Solutions",
+      slug:           "tripcod",
       status:         "ACTIVE",
       plan:           "ENTERPRISE",
       region:         "INDIA",
       defaultCurrency: "INR",
       defaultLanguage: "en",
-      companyName:    "POOMAS Traveldays",
+      companyName:    "Tripcod Travel Solutions",
       tagline:        "Your Trusted Travel Partner",
-      primaryColor:   "#E31E24",
-      secondaryColor: "#F7941D",
-      accentColor:    "#F5C518",
+      primaryColor:   "#4B4D4F",
+      secondaryColor: "#FFB005",
+      accentColor:    "#FFB005",
       showPoweredBy:  false,
-      supportEmail:   "support@flypoomas.com",
+      supportEmail:   "support@tripcod.com",
       allowB2C:       true,
       allowB2B:       true,
       allowWhatsApp:  true,
@@ -85,8 +85,8 @@ async function seed() {
   // Super-admin user
   await db.insert(users).values({
     tenantId:      platformTenant.id,
-    email:         process.env.PLATFORM_ADMIN_EMAIL ?? "admin@flypoomas.com",
-    name:          "POOMAS Admin",
+    email:         process.env.PLATFORM_ADMIN_EMAIL ?? "admin@tripcod.com",
+    name:          "Tripcod Admin",
     role:          "SUPER_ADMIN",
     emailVerified: true,
     isActive:      true,

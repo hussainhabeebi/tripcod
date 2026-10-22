@@ -1,6 +1,6 @@
 import { CONTACT } from "../lib/tripcod-content";
 
-const PORTAL_URL = (process.env.NEXT_PUBLIC_PORTAL_URL ?? "https://portal.flypoomas.com").replace(/\/+$/, "");
+const PORTAL_URL = (process.env.NEXT_PUBLIC_PORTAL_URL ?? "https://portal.tripcod.com").replace(/\/+$/, "");
 
 const columns = [
   {

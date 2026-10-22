@@ -4,7 +4,7 @@ import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { saveGuestToken } from "../../lib/customer-api";
 
-const API = process.env.NEXT_PUBLIC_API_URL ?? "https://api.flypoomas.com";
+const API = process.env.NEXT_PUBLIC_API_URL ?? "https://api.tripcod.com";
 
 export default function NomodPaymentResultPage() {
   return (
@@ -34,7 +34,7 @@ function NomodPaymentResult() {
       attempts += 1;
       try {
         const res = await fetch(`${API}/api/payments/${encodeURIComponent(bookingId)}`, {
-          headers: { "x-tenant-slug": "poomas", "X-Checkout-Token": token },
+          headers: { "x-tenant-slug": "tripcod", "X-Checkout-Token": token },
           cache: "no-store",
         });
         const data = await res.json() as { payment?: { status?: string }; tripToken?: string; booking?: { status?: string; pnr?: string | null; hasAccount?: boolean } };

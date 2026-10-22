@@ -103,13 +103,13 @@ const emptyGuest = (): Guest => ({ title: "Mr", firstName: "", lastName: "", pan
 
 function getToken(): string {
   try {
-    const match = document.cookie.match(/(?:^|;\s*)poomas_token=([^;]+)/);
+    const match = document.cookie.match(/(?:^|;\s*)tripcod_token=([^;]+)/);
     return match ? decodeURIComponent(match[1]) : "";
   } catch { return ""; }
 }
 
 export default function HotelBookPage() {
-  const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "https://api.flypoomas.com";
+  const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "https://api.tripcod.com";
 
   const [hotel,       setHotel]       = useState<HotelInfo | null>(null);
   const [prebooking,  setPrebooking]  = useState(false);
@@ -153,7 +153,7 @@ export default function HotelBookPage() {
   async function fetchSavedPassengers(t: string) {
     try {
       const res = await fetch(`${apiUrl}/api/profile/passengers`, {
-        headers: { "Authorization": `Bearer ${t}`, "x-tenant-slug": "poomas" },
+        headers: { "Authorization": `Bearer ${t}`, "x-tenant-slug": "tripcod" },
       });
       if (res.ok) {
         const d = await res.json() as { passengers: SavedPassenger[] };
@@ -175,12 +175,12 @@ export default function HotelBookPage() {
     try {
       const res = await fetch(`${apiUrl}/api/auth/login`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", "x-tenant-slug": "poomas" },
+        headers: { "Content-Type": "application/json", "x-tenant-slug": "tripcod" },
         body: JSON.stringify({ email: loginEmail.trim(), password: loginPassword }),
       });
       const d = await res.json() as any;
       if (!res.ok) throw new Error(errorText(d.error, "Login failed"));
-      document.cookie = `poomas_token=${d.token}; Path=/; SameSite=Lax; Secure`;
+      document.cookie = `tripcod_token=${d.token}; Path=/; SameSite=Lax; Secure`;
       setToken(d.token);
       setShowLogin(false);
       await fetchSavedPassengers(d.token);
@@ -236,7 +236,7 @@ export default function HotelBookPage() {
     setPrebooking(true);
     fetch(`${apiUrl}/api/hotels/review`, {
       method:  "POST",
-      headers: { "Content-Type": "application/json", "x-tenant-slug": "poomas" },
+      headers: { "Content-Type": "application/json", "x-tenant-slug": "tripcod" },
       body: JSON.stringify({
         correlationId: info.correlationId, hid: info.hid, optionId,
         checkIn: info.checkIn, checkOut: info.checkOut,
@@ -286,7 +286,7 @@ export default function HotelBookPage() {
     while (Date.now() - started < 180_000) {
       await new Promise((r) => setTimeout(r, 5000));
       try {
-        const res = await fetch(`${apiUrl}/api/hotels/bookings/${encodeURIComponent(bookingId)}`, { headers: { "x-tenant-slug": "poomas" } });
+        const res = await fetch(`${apiUrl}/api/hotels/bookings/${encodeURIComponent(bookingId)}`, { headers: { "x-tenant-slug": "tripcod" } });
         const d = await res.json().catch(() => ({}));
         if (res.ok) {
           setConfirmation((c: any) => ({ ...c, status: d.status, details: d, pending: d.pending }));
@@ -310,7 +310,7 @@ export default function HotelBookPage() {
     try {
       const res = await fetch(`${apiUrl}/api/hotels/book`, {
         method:  "POST",
-        headers: { "Content-Type": "application/json", "x-tenant-slug": "poomas" },
+        headers: { "Content-Type": "application/json", "x-tenant-slug": "tripcod" },
         body: JSON.stringify({
           bookingId:    review.bookingId,
           amount:       review.option.pricing.totalPrice,

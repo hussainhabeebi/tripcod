@@ -1,5 +1,5 @@
-import type { Db } from "@poomas/db";
-import { supplierApiLogs } from "@poomas/db/schema";
+import type { Db } from "@tripcod/db";
+import { supplierApiLogs } from "@tripcod/db/schema";
 
 export interface SupplierCallLog {
   tenantId:       string;

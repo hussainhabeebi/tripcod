@@ -2,7 +2,7 @@
 import { useEffect, useState, type FormEvent } from "react";
 import styles from "./wallet.module.css";
 
-const API = process.env.NEXT_PUBLIC_API_URL ?? "https://api.flypoomas.com";
+const API = process.env.NEXT_PUBLIC_API_URL ?? "https://api.tripcod.com";
 
 interface Tx { id: string; type: string; amount: string; note: string | null; createdAt: string }
 interface Coupon { id: string; code: string; amount: string; status: string; expiresAt: string; redeemedAt: string | null }
@@ -34,7 +34,7 @@ function transactionIcon(type: string) {
 }
 
 function readToken() {
-  const m = document.cookie.match(/(?:^|;\s*)poomas_token=([^;]+)/);
+  const m = document.cookie.match(/(?:^|;\s*)tripcod_token=([^;]+)/);
   return m ? decodeURIComponent(m[1]) : "";
 }
 
@@ -55,7 +55,7 @@ export default function WalletPage() {
   async function call<T>(path: string, init?: RequestInit): Promise<T> {
     const res = await fetch(`${API}/api/profile/wallet${path}`, {
       ...init,
-      headers: { "Content-Type": "application/json", "x-tenant-slug": "poomas", Authorization: `Bearer ${token ?? readToken()}` },
+      headers: { "Content-Type": "application/json", "x-tenant-slug": "tripcod", Authorization: `Bearer ${token ?? readToken()}` },
     });
     const data = await res.json().catch(() => ({}));
     if (res.status === 401 || res.status === 403) { setToken(""); throw new Error("Please sign in again."); }

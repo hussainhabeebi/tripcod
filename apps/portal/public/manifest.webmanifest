@@ -1,14 +1,14 @@
 {
-  "name": "FlyPoomas Agent Portal",
-  "short_name": "FlyPoomas Agent",
+  "name": "Tripcod Agent Portal",
+  "short_name": "Tripcod Agent",
   "description": "Book flights, manage your wallet, sub-agents and customers",
   "start_url": "/dashboard",
   "scope": "/",
   "display": "standalone",
   "background_color": "#f5f7fb",
-  "theme_color": "#111827",
+  "theme_color": "#4B4D4F",
   "icons": [
-    { "src": "/logo.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
-    { "src": "/logo.png", "sizes": "512x512", "type": "image/png", "purpose": "any" }
+    { "src": "/icon.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icon.png", "sizes": "512x512", "type": "image/png", "purpose": "any" }
   ]
 }

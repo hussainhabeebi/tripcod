@@ -1,6 +1,6 @@
 *, *::before, *::after { box-sizing: border-box; }
 :root {
-  --primary: #E31E24; --primary-dark: #b9151a; --ink: #0f172a; --muted: #64748b; --line: #e5e7eb; --bg: #f5f7fb;
+  --primary: #4B4D4F; --primary-dark: #2F3032; --ink: #0f172a; --muted: #64748b; --line: #e5e7eb; --bg: #f5f7fb;
   --side: #111827; --ok: #15803d; --warn: #b45309; --bad: #b91c1c; --radius: 12px;
 }
 body { margin: 0; font-family: Inter, system-ui, -apple-system, sans-serif; color: var(--ink); background: var(--bg); -webkit-font-smoothing: antialiased; -webkit-tap-highlight-color: transparent; }

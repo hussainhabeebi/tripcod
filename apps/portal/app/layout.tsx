@@ -2,11 +2,11 @@ import type { Metadata, Viewport } from "next";
 import "./portal.css";
 
 export const metadata: Metadata = {
-  title: "FlyPoomas Agent Portal",
+  title: "Tripcod Agent Portal",
   description: "Book flights, manage your wallet, sub-agents and customers",
   manifest: "/manifest.webmanifest",
-  appleWebApp: { capable: true, statusBarStyle: "default", title: "FlyPoomas Agent" },
-  icons: { icon: "/logo.png", apple: "/logo.png" },
+  appleWebApp: { capable: true, statusBarStyle: "default", title: "Tripcod Agent" },
+  icons: { icon: "/icon.png", apple: "/icon.png" },
 };
 
 export const viewport: Viewport = {

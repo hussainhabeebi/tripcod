@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { supplierApiLogs, supplierExchanges } from "@poomas/db/schema";
+import { supplierApiLogs, supplierExchanges } from "@tripcod/db/schema";
 import { eq, and, desc, gte, inArray, like, lte, or, asc } from "drizzle-orm";
 import { HTTPException } from "hono/http-exception";
 import { buildZip } from "../../lib/zip.js";

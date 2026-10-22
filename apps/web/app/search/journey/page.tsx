@@ -21,7 +21,7 @@ type Fare = {
   tripKey?: string; legIndex?: number; fareIdentifier?: string; sri?: string; msri?: string[]; segments?: Segment[];
 };
 
-const API = process.env.NEXT_PUBLIC_API_URL ?? "https://api.flypoomas.com";
+const API = process.env.NEXT_PUBLIC_API_URL ?? "https://api.tripcod.com";
 const FARE_LABEL: Record<string, string> = {
   PUBLISHED: "Published", SPECIAL_RETURN: "Special Return", TJ_FLEX: "Flex (free cancellation)",
   STUDENT: "Student fare", SENIOR_CITIZEN: "Senior citizen fare",
@@ -90,7 +90,7 @@ function Journey() {
     const c = new AbortController();
     fetch(`${API}/api/search`, {
       method: "POST", signal: c.signal,
-      headers: { "Content-Type": "application/json", "x-tenant-slug": "poomas" },
+      headers: { "Content-Type": "application/json", "x-tenant-slug": "tripcod" },
       body: JSON.stringify({
         origin: first.origin, destination: tripType === "MULTICITY" ? legs[legs.length - 1].destination : first.destination,
         departureDate: first.departureDate, ...(tripType === "ROUNDTRIP" && legs[1] ? { returnDate: legs[1].departureDate } : {}),

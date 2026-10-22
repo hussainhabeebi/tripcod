@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import CheckoutClient from "./CheckoutClient";
 
-const API = process.env.NEXT_PUBLIC_API_URL ?? "https://api.flypoomas.com";
+const API = process.env.NEXT_PUBLIC_API_URL ?? "https://api.tripcod.com";
 
 export type CheckoutPassenger = {
   id: string;
@@ -61,7 +61,7 @@ export default function CheckoutFlow(props: Props) {
     try {
       const res = await fetch(`${API}/api/checkout/session/${props.token}/passport-extract`, {
         method: "POST",
-        headers: { "x-tenant-slug": "poomas", "X-Checkout-Token": props.token },
+        headers: { "x-tenant-slug": "tripcod", "X-Checkout-Token": props.token },
         body: form,
       });
       const data = await res.json() as any;
@@ -102,7 +102,7 @@ export default function CheckoutFlow(props: Props) {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
-          "x-tenant-slug": "poomas",
+          "x-tenant-slug": "tripcod",
           "X-Checkout-Token": props.token,
         },
         body: JSON.stringify({

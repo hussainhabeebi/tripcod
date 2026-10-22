@@ -1,7 +1,7 @@
 import type { MiddlewareHandler } from "hono";
 import type { Env, Variables, TenantContext } from "../types.js";
-import { createDb } from "@poomas/db";
-import { tenants, tenantSupplierConfigs } from "@poomas/db/schema";
+import { createDb } from "@tripcod/db";
+import { tenants, tenantSupplierConfigs } from "@tripcod/db/schema";
 import { eq, and } from "drizzle-orm";
 
 const TENANT_CACHE_TTL = 60;
@@ -9,7 +9,7 @@ const TENANT_CACHE_TTL = 60;
 // Derives tenant_id from the request hostname (subdomain or custom domain).
 // Never trusts X-Tenant-ID header from clients — all tenant derivation is server-side.
 export const resolveTenant: MiddlewareHandler<{ Bindings: Env; Variables: Variables }> = async (c, next) => {
-  // @poomas/db currently uses drizzle-orm/neon-http. That driver must receive the
+  // @tripcod/db currently uses drizzle-orm/neon-http. That driver must receive the
   // actual Neon DATABASE_URL. A Cloudflare Hyperdrive connectionString is a Postgres
   // proxy socket URL and is NOT compatible with neon-http; using it can result in
   // Cloudflare origin/DNS failures before the route handler executes.
@@ -120,11 +120,11 @@ function extractSlug(host: string, platformSlug: string): string {
     return platformSlug;
   }
 
-  if (!host.endsWith(".flypoomas.com") && host !== "flypoomas.com" && host !== "api.flypoomas.com") {
+  if (!host.endsWith(".tripcod.com") && host !== "tripcod.com" && host !== "api.tripcod.com") {
     return "__custom__";
   }
 
-  if (host === "api.flypoomas.com" || host === "flypoomas.com") {
+  if (host === "api.tripcod.com" || host === "tripcod.com") {
     return platformSlug;
   }
 

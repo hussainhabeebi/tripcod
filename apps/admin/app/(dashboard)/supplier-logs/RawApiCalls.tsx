@@ -53,7 +53,7 @@ export function RawApiCalls({ initialScope = "hotel" }: { initialScope?: Scope }
         <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
           {SCOPES.map((s) => (
             <button key={s.key} type="button" onClick={() => setScope(s.key)}
-              style={{ ...pill, background: scope === s.key ? "#E31E24" : "#1e293b", borderColor: scope === s.key ? "#E31E24" : "#334155" }}>{s.label}</button>
+              style={{ ...pill, background: scope === s.key ? "#4B4D4F" : "#1e293b", borderColor: scope === s.key ? "#4B4D4F" : "#334155" }}>{s.label}</button>
           ))}
           <label style={{ color: "#94a3b8", fontSize: 13, display: "flex", gap: 6, alignItems: "center", marginLeft: 6 }}>
             <input type="checkbox" checked={errorsOnly} onChange={(e) => setErrorsOnly(e.target.checked)} /> Errors only

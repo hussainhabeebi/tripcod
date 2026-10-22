@@ -22,8 +22,8 @@ interface Props {
 type Gateway = "RAZORPAY" | "NOMOD";
 type PaymentState = "idle" | "creating" | "paying" | "polling" | "success" | "failed";
 
-const API = process.env.NEXT_PUBLIC_API_URL ?? "https://api.flypoomas.com";
-const TENANT = "poomas";
+const API = process.env.NEXT_PUBLIC_API_URL ?? "https://api.tripcod.com";
+const TENANT = "tripcod";
 
 export default function CheckoutClient({
   bookingId, token, totalAmount, currency, currencySymbol,

@@ -63,7 +63,7 @@ export default function AdminDashboardLayout({ children }: { children: React.Rea
   }, [me, pathname]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function signOut() {
-    document.cookie = "poomas_admin_token=; Path=/; Max-Age=0; SameSite=Lax";
+    document.cookie = "tripcod_admin_token=; Path=/; Max-Age=0; SameSite=Lax";
     router.push("/login");
   }
 
@@ -153,7 +153,7 @@ export default function AdminDashboardLayout({ children }: { children: React.Rea
         .admin-nav-link.active {
           background: rgba(227,30,36,.08);
           color: #f1f5f9;
-          border-left-color: #E31E24;
+          border-left-color: #4B4D4F;
           font-weight: 600;
         }
         .admin-nav-link-icon { font-size: 15px; width: 20px; text-align: center; flex-shrink: 0; }
@@ -220,7 +220,7 @@ export default function AdminDashboardLayout({ children }: { children: React.Rea
           white-space: nowrap;
           transition: color 0.15s;
         }
-        .admin-bottom-nav-link.active { color: #E31E24; }
+        .admin-bottom-nav-link.active { color: #4B4D4F; }
         .admin-bottom-nav-icon { font-size: 18px; line-height: 1; }
 
         @media (max-width: 767px) {
@@ -236,7 +236,7 @@ export default function AdminDashboardLayout({ children }: { children: React.Rea
         <nav className="admin-sidebar">
           <div className="admin-sidebar-header">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/logo.png" alt="POOMAS Admin" />
+            <img src="/logo.png" alt="Tripcod Admin" />
             <div className="role-badge">{me ? me.roleLabel : "Admin"}</div>
             {me?.user.name && <div style={{ color: "#94a3b8", fontSize: 12, marginTop: 6 }}>{me.user.name}</div>}
           </div>

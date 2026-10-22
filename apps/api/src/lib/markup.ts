@@ -1,4 +1,4 @@
-import type { NormalizedFare } from "@poomas/suppliers";
+import type { NormalizedFare } from "@tripcod/suppliers";
 
 interface MarkupRule {
   agentId?:    string | null;

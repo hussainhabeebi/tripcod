@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState, type FormEvent } from "react";
 
-const API = process.env.NEXT_PUBLIC_API_URL ?? "https://api.flypoomas.com";
+const API = process.env.NEXT_PUBLIC_API_URL ?? "https://api.tripcod.com";
 
 export default function ResetPasswordPage() {
   const [token, setToken] = useState("");
@@ -30,7 +30,7 @@ export default function ResetPasswordPage() {
       const d = await res.json().catch(() => ({})) as { token?: string; error?: string; message?: string };
       if (!res.ok || !d.token) throw new Error(d.error ?? d.message ?? "Couldn't change the password.");
       // Signed in with the new password.
-      document.cookie = `poomas_token=${d.token}; Path=/; SameSite=Lax; Secure; Max-Age=86400`;
+      document.cookie = `tripcod_token=${d.token}; Path=/; SameSite=Lax; Secure; Max-Age=86400`;
       window.location.assign("/account?password=reset");
     } catch (err) { setError(err instanceof Error ? err.message : "Couldn't change the password."); setLoading(false); }
   }

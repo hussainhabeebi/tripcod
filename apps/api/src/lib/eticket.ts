@@ -35,7 +35,7 @@ export function renderETicketHtml(data: ETicketData): string {
 
   const depDate  = fmt.format(new Date(data.departureTime));
   const arrDate  = fmt.format(new Date(data.arrivalTime));
-  const color    = data.primaryColor ?? "#E31E24";
+  const color    = data.primaryColor ?? "#4B4D4F";
   const currSym  = data.currency === "INR" ? "₹" : data.currency === "AED" ? "د.إ" : "$";
 
   const passengerRows = data.passengers

@@ -1,4 +1,4 @@
--- POOMAS Platform — initial schema migration
+-- Tripcod Platform — initial schema migration
 -- Generated from Drizzle schema
 
 -- ── Extensions ──────────────────────────────────────────────────────────────
@@ -75,9 +75,9 @@ CREATE TABLE IF NOT EXISTS "tenants" (
   "default_language"     TEXT            NOT NULL DEFAULT 'en',
   "logo_url"             TEXT,
   "favicon_url"          TEXT,
-  "primary_color"        TEXT            NOT NULL DEFAULT '#E31E24',
-  "secondary_color"      TEXT            NOT NULL DEFAULT '#F7941D',
-  "accent_color"         TEXT            NOT NULL DEFAULT '#F5C518',
+  "primary_color"        TEXT            NOT NULL DEFAULT '#4B4D4F',
+  "secondary_color"      TEXT            NOT NULL DEFAULT '#FFB005',
+  "accent_color"         TEXT            NOT NULL DEFAULT '#FFB005',
   "font_family"          TEXT            NOT NULL DEFAULT 'Inter',
   "company_name"         TEXT,
   "tagline"              TEXT,

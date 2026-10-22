@@ -7,7 +7,7 @@ import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import { HTTPException } from "hono/http-exception";
-import { tenantApiKeys } from "@poomas/db/schema";
+import { tenantApiKeys } from "@tripcod/db/schema";
 import { eq, and } from "drizzle-orm";
 import type { Env, Variables } from "../../types.js";
 

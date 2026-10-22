@@ -55,7 +55,7 @@ const TIME_BANDS = [
 export function ChangeDatesAction() {
   function focusDateControls() {
     if (window.matchMedia("(max-width: 900px)").matches) {
-      window.dispatchEvent(new Event("flypoomas:open-date-filters"));
+      window.dispatchEvent(new Event("tripcod:open-date-filters"));
     } else {
       document.querySelector<HTMLButtonElement>("#flight-filter-panel .date-switcher button.active, #flight-filter-panel .date-switcher button")?.focus();
     }
@@ -89,8 +89,8 @@ export default function SearchResultControls({ origin, destination, departureDat
 
   useEffect(() => {
     const openDates = () => setMobileOpen(true);
-    window.addEventListener("flypoomas:open-date-filters", openDates);
-    return () => window.removeEventListener("flypoomas:open-date-filters", openDates);
+    window.addEventListener("tripcod:open-date-filters", openDates);
+    return () => window.removeEventListener("tripcod:open-date-filters", openDates);
   }, []);
 
   useEffect(() => {

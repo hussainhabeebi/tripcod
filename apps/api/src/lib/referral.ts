@@ -7,8 +7,8 @@
 //   ref_by:<tenant>:<userId>      → { referrerId, code, appliedAt, rewardedAt? }
 //   ref_stats:<tenant>:<userId>   → { joined, rewarded, earned }
 
-import type { Db } from "@poomas/db";
-import { bookings, users } from "@poomas/db/schema";
+import type { Db } from "@tripcod/db";
+import { bookings, users } from "@tripcod/db/schema";
 import { and, eq, inArray } from "drizzle-orm";
 import type { Env } from "../types.js";
 import { creditWallet, getOrCreateCustomerWallet } from "./customer-wallet.js";

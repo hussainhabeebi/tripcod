@@ -3,13 +3,13 @@
 
 import { emailBookingFailed } from "./lib/transactional-emails.js";
 import type { Env } from "./types.js";
-import { createDb } from "@poomas/db";
+import { createDb } from "@tripcod/db";
 import {
   bookings, bookingPassengers, payments, walletAccounts, walletTransactions,
   tenants, tenantSupplierConfigs, leadvyneConfigs,
-} from "@poomas/db/schema";
+} from "@tripcod/db/schema";
 import { eq, and, sql } from "drizzle-orm";
-import { getBookableAdapter, TripjackClient } from "@poomas/suppliers";
+import { getBookableAdapter, TripjackClient } from "@tripcod/suppliers";
 import { normalizeBookingResponse } from "./lib/booking-response.js";
 import { resolveFlightSuppliers } from "./routes/search.js";
 import {
@@ -71,7 +71,7 @@ function queueDb(env: Env) {
   return createDb(env.DATABASE_URL);
 }
 
-// Matches max_retries = 3 on the poomas-bookings consumer (1 try + 3 retries).
+// Matches max_retries = 3 on the tripcod-bookings consumer (1 try + 3 retries).
 const BOOKING_MAX_ATTEMPTS = 4;
 
 export async function handleBookingQueue(
@@ -232,7 +232,7 @@ async function handleInitiatePayment(
         amount:      total,
         currency:    currency,
         reference:   data.bookingId,
-        redirectUrl: `https://${tenant.slug}.flypoomas.com/booking/${data.bookingId}/confirm`,
+        redirectUrl: `https://${tenant.slug}.tripcod.com/booking/${data.bookingId}/confirm`,
         description: `Flight booking ${data.bookingId}`,
       },
     );
@@ -788,9 +788,9 @@ async function bookPaidBooking(
         })),
         totalAmount:  Number(booking.totalAmount),
         currency:     booking.currency,
-        brandName:    tenantRow?.name ?? "POOMAS Traveldays",
+        brandName:    tenantRow?.name ?? "Tripcod Travel Solutions",
         brandLogo:    tenantRow?.logoUrl ?? undefined,
-        primaryColor: tenantRow?.primaryColor ?? "#E31E24",
+        primaryColor: tenantRow?.primaryColor ?? "#4B4D4F",
         supportEmail: tenantRow?.supportEmail ?? undefined,
       });
     }
@@ -855,7 +855,7 @@ async function handleNotifyOtp(
   if (leadvyne?.chatwootBaseUrl && leadvyne.chatwootInboxId && leadvyne.chatwootApiToken) {
     await sendWhatsApp({
       phone:            data.phone,
-      message:          `Your POOMAS OTP is: *${data.otp}*\nValid for 10 minutes. Do not share this with anyone.`,
+      message:          `Your Tripcod OTP is: *${data.otp}*\nValid for 10 minutes. Do not share this with anyone.`,
       chatwootBaseUrl:  leadvyne.chatwootBaseUrl,
       chatwootInboxId:  leadvyne.chatwootInboxId,
       chatwootApiToken: leadvyne.chatwootApiToken,
@@ -915,7 +915,7 @@ async function handleNotifyBookingConfirmation(
       subject: `Booking confirmed — PNR ${booking.pnr ?? ""} · ${booking.origin} → ${booking.destination}`,
       html: emailLayout({
         title: "Your booking is confirmed ✈️", preheader: `PNR ${booking.pnr ?? ""} · ${booking.origin} → ${booking.destination}`,
-        body: `<p>Thank you for booking with ${escapeHtml(tenantRow?.name ?? "FlyPoomas")}. Your e-ticket is attached — keep it handy at the airport with your passport / ID.</p>`,
+        body: `<p>Thank you for booking with ${escapeHtml(tenantRow?.name ?? "Tripcod")}. Your e-ticket is attached — keep it handy at the airport with your passport / ID.</p>`,
         rows: [
           ["PNR (airline reference)", booking.pnr ?? "—"],
           ["Route", `${booking.origin} → ${booking.destination}`],
@@ -934,7 +934,7 @@ async function handleNotifyBookingConfirmation(
   if (booking.contactPhone && leadvyne?.chatwootBaseUrl && leadvyne.chatwootInboxId && leadvyne.chatwootApiToken) {
     try {
       const waMessage = buildBookingConfirmationMessage({
-        brandName:    tenantRow?.name ?? "POOMAS",
+        brandName:    tenantRow?.name ?? "Tripcod",
         pnr:          booking.pnr ?? "",
         origin:       fd.origin as string,
         destination:  fd.destination as string,

@@ -85,7 +85,7 @@ export default function AccountPage() {
         <h2 style={h2}>Profile</h2>
         <form onSubmit={(e: FormEvent) => { e.preventDefault(); run(async () => {
           await apiCall("/api/profile/account", { method: "PUT", body: JSON.stringify({ name: name.trim(), phone: phone.trim() || null, whatsappOptIn: whatsapp }) });
-          setNotice("Profile saved."); await load(); window.dispatchEvent(new Event("poomas:profile-updated"));
+          setNotice("Profile saved."); await load(); window.dispatchEvent(new Event("tripcod:profile-updated"));
         }); }} style={{ display: "flex", flexDirection: "column", gap: 10 }}>
           <label style={label}>Email<input value={account.email ?? ""} disabled style={{ ...input, background: "#f8fafc" }} /></label>
           <label style={label}>Full name<input required minLength={2} value={name} onChange={(e) => setName(e.target.value)} style={input} /></label>
