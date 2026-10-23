@@ -3,6 +3,7 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { SeatPicker, seatCss, type SegmentSeatMap } from "./SeatPicker";
 import { ScanDocument, type ScannedTraveller } from "../components/ScanDocument";
+import BookingProgress from "../components/BookingProgress";
 import SocialSignIn from "./SocialSignIn";
 import { bookingError } from "./booking-error";
 import { passengerNameProblem } from "./passenger-names";
@@ -820,7 +821,7 @@ export default function BookPage() {
         <i>🔒</i>
       </header>
 
-      <p className="checkoutProgress">{reviewing ? "Step 2 of 2 · Review" : "Step 1 of 2 · Traveller details"}</p>
+      <BookingProgress current={reviewing ? 3 : 2} />
 
       {fareExpired && (
         <div className="err" role="alert">

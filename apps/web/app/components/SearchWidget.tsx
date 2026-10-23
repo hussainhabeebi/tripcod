@@ -82,16 +82,17 @@ function AirportInput({
   id, label, value, onChange, placeholder, tabIndex,
 }: {
   id: string; label: string; value: Airport | null;
-  onChange: (a: Airport) => void; placeholder: string; tabIndex?: number;
+  onChange: (a: Airport | null) => void; placeholder: string; tabIndex?: number;
 }) {
   const displayVal = value ? `${value.city} (${value.code})` : "";
   const [query, setQuery] = useState(displayVal);
   const [open,  setOpen]  = useState(false);
+  const [activeIndex, setActiveIndex] = useState(-1);
   const wrapRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    setQuery(value ? `${value.city} (${value.code})` : "");
+    if (value) setQuery(`${value.city} (${value.code})`);
   }, [value]);
 
   useEffect(() => {
@@ -105,7 +106,7 @@ function AirportInput({
     return () => document.removeEventListener("mousedown", onOutside);
   }, [value]);
 
-  const q = query.toLowerCase().trim();
+  const q = query === displayVal ? "" : query.toLowerCase().trim();
   const matches = q
     ? AIRPORTS.filter(
         (a) =>
@@ -117,6 +118,7 @@ function AirportInput({
   function pick(a: Airport) {
     onChange(a);
     setQuery(`${a.city} (${a.code})`);
+    setActiveIndex(-1);
     setOpen(false);
   }
 
@@ -132,15 +134,28 @@ function AirportInput({
         autoComplete="off"
         inputMode="text"
         tabIndex={tabIndex}
-        onFocus={() => { setQuery(""); setOpen(true); }}
-        onChange={(e) => { setQuery(e.target.value); setOpen(true); }}
+        role="combobox" aria-autocomplete="list" aria-expanded={open}
+        aria-controls={`${id}-options`} aria-activedescendant={open && activeIndex >= 0 && matches[activeIndex] ? `${id}-${matches[activeIndex].code}` : undefined}
+        onFocus={() => { setOpen(true); setActiveIndex(-1); inputRef.current?.select(); }}
+        onBlur={() => { setOpen(false); setQuery(value ? `${value.city} (${value.code})` : ""); }}
+        onChange={(e) => { setQuery(e.target.value); onChange(null); setOpen(true); setActiveIndex(-1); }}
+        onKeyDown={(e) => {
+          if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+            e.preventDefault(); setOpen(true);
+            setActiveIndex((i) => e.key === "ArrowDown" ? Math.min(i + 1, matches.length - 1) : Math.max(0, i - 1));
+          } else if (e.key === "Enter" && open) {
+            e.preventDefault(); if (matches[activeIndex]) pick(matches[activeIndex]);
+          } else if (e.key === "Escape") { setOpen(false); setActiveIndex(-1); }
+        }}
         required
       />
+      {value && <button type="button" className="airport-clear" aria-label={`Clear ${label.toLowerCase()} airport`} onClick={() => { onChange(null); setQuery(""); inputRef.current?.focus(); }}>×</button>}
+      {open && matches.length === 0 && <div className="airport-empty" role="status">No matching airports. Try a city or airport code.</div>}
       {open && matches.length > 0 && (
-        <ul className="airport-dropdown">
+        <ul className="airport-dropdown" role="listbox" id={`${id}-options`} aria-label={`${label} airports`}>
           {matches.map((a) => (
             <li
-              key={a.code}
+              key={a.code} id={`${id}-${a.code}`} role="option" aria-selected={matches[activeIndex]?.code === a.code}
               onMouseDown={(e) => { e.preventDefault(); pick(a); }}
               onTouchEnd={(e) => { e.preventDefault(); pick(a); }}
             >
@@ -173,6 +188,7 @@ export default function SearchWidget() {
   const paxRef = useRef<HTMLDivElement>(null);
   const [cabinClass,    setCabinClass]    = useState<(typeof CABIN_CLASSES)[number]>("Economy");
   const [currency,      setCurrencyState] = useState<CurrencyCode>("INR");
+  const [searchError, setSearchError] = useState("");
   const [searching,     setSearching]     = useState(false);
   const [searchStage,   setSearchStage]   = useState(0);
   const [directOnly,    setDirectOnly]    = useState(false);
@@ -185,8 +201,9 @@ export default function SearchWidget() {
     function onOutside(e: MouseEvent) {
       if (paxRef.current && !paxRef.current.contains(e.target as Node)) setPaxOpen(false);
     }
-    document.addEventListener("mousedown", onOutside);
-    return () => document.removeEventListener("mousedown", onOutside);
+    const onEscape = (e: KeyboardEvent) => { if (e.key === "Escape") setPaxOpen(false); };
+    document.addEventListener("mousedown", onOutside); document.addEventListener("keydown", onEscape);
+    return () => { document.removeEventListener("mousedown", onOutside); document.removeEventListener("keydown", onEscape); };
   }, []);
 
   const SEARCH_STAGES = ["Checking live fares", "Comparing airlines", "Finding your best options"];
@@ -245,9 +262,13 @@ export default function SearchWidget() {
 
   function handleSearch(e: React.FormEvent) {
     e.preventDefault();
-    if (!origin || !dest) return;
+    if (searching) return;
+    setSearchError("");
+    if (!origin || !dest) { setSearchError("Choose an origin and destination from the airport suggestions."); return; }
+    if (origin.code === dest.code) { setSearchError("Choose different departure and arrival airports."); return; }
     const multi = tripType === "Multi-city";
-    if (multi && extraLegs.some((l) => !l.origin || !l.dest || !l.date)) return;
+    if (multi && extraLegs.some((l) => !l.origin || !l.dest || !l.date)) { setSearchError("Choose airports and a date for every flight."); return; }
+    if (multi && extraLegs.some((l) => l.origin?.code === l.dest?.code)) { setSearchError("Each flight needs different departure and arrival airports."); return; }
     const params = new URLSearchParams({
       origin:        origin.code,
       destination:   multi ? extraLegs[extraLegs.length - 1].dest!.code : dest.code,
@@ -277,12 +298,12 @@ export default function SearchWidget() {
 
   return (
     <div className="search-widget">
-      <AiTripSearch onApply={applyAi} onSearchNow={() => formRef.current?.requestSubmit()} />
+      <details className="flight-ai-search"><summary>Prefer to describe your trip? Try our AI search <span aria-hidden="true">↗</span></summary><AiTripSearch onApply={applyAi} onSearchNow={() => formRef.current?.requestSubmit()} /></details>
       {/* Top bar: trip type + passengers */}
       <div className="trip-tabs">
         {(["One Way", "Round Trip", "Multi-city"] as TripType[]).map((t) => (
           <button
-            key={t} type="button"
+            key={t} type="button" aria-pressed={t === tripType}
             onClick={() => setTripType(t)}
             className={t === tripType ? "trip-tab trip-tab-active" : "trip-tab trip-tab-inactive"}
           >
@@ -294,13 +315,13 @@ export default function SearchWidget() {
             type="button"
             className="passengers-select"
             onClick={() => setPaxOpen((v) => !v)}
-            aria-label="Passengers"
+            aria-label="Travellers" aria-expanded={paxOpen} aria-controls="traveller-picker"
             style={{ cursor: "pointer", textAlign: "left" }}
           >
-            {adults + children + infants} Pax {children + infants > 0 ? `· ${adults}A${children > 0 ? ` ${children}C` : ""}${infants > 0 ? ` ${infants}I` : ""}` : adults === 1 ? "Adult" : "Adults"}
+            {adults + children + infants} traveller{adults + children + infants === 1 ? "" : "s"} · {cabinClass}
           </button>
           {paxOpen && (
-            <div style={{ position: "absolute", top: "calc(100% + 6px)", left: 0, zIndex: 50, background: "#fff", border: "1px solid #d0d5dd", borderRadius: 14, padding: "14px 16px", minWidth: 220, boxShadow: "0 8px 24px rgba(0,0,0,.12)" }}>
+            <div id="traveller-picker" className="traveller-picker" style={{ position: "absolute", top: "calc(100% + 6px)", left: 0, zIndex: 50, background: "#fff", border: "1px solid #d0d5dd", borderRadius: 14, padding: "14px 16px", minWidth: 220, boxShadow: "0 8px 24px rgba(0,0,0,.12)" }}>
               {([
                 // Airline rules: max 9 seats (adults + children); infants sit on an adult's lap, 1 per adult.
                 { label: "Adults", sub: "12+ years", val: adults, set: (n: number) => { setAdults(n); setInfants((i) => Math.min(i, n)); }, min: 1, max: 9 - children },
@@ -313,9 +334,9 @@ export default function SearchWidget() {
                     <div style={{ fontSize: 12, color: "#667085" }}>{sub}</div>
                   </div>
                   <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                    <button type="button" onClick={() => (set as (n: number) => void)(Math.max(min, val - 1))} disabled={val <= min} style={{ width: 32, height: 32, borderRadius: "50%", border: "1px solid #d0d5dd", background: val <= min ? "#f9fafb" : "#fff", fontWeight: 800, fontSize: 18, cursor: val <= min ? "default" : "pointer", color: val <= min ? "#d0d5dd" : "#111" }}>−</button>
+                    <button type="button" aria-label={`Remove ${label.toLowerCase()}`} onClick={() => (set as (n: number) => void)(Math.max(min, val - 1))} disabled={val <= min} style={{ width: 32, height: 32, borderRadius: "50%", border: "1px solid #d0d5dd", background: val <= min ? "#f9fafb" : "#fff", fontWeight: 800, fontSize: 18, cursor: val <= min ? "default" : "pointer", color: val <= min ? "#d0d5dd" : "#111" }}>−</button>
                     <span style={{ minWidth: 18, textAlign: "center", fontWeight: 700 }}>{val}</span>
-                    <button type="button" onClick={() => (set as (n: number) => void)(Math.min(max, val + 1))} disabled={val >= max} style={{ width: 32, height: 32, borderRadius: "50%", border: "1px solid #d0d5dd", background: val >= max ? "#f9fafb" : "#fff", fontWeight: 800, fontSize: 18, cursor: val >= max ? "default" : "pointer", color: val >= max ? "#d0d5dd" : "#111" }}>+</button>
+                    <button type="button" aria-label={`Add ${label.toLowerCase()}`} onClick={() => (set as (n: number) => void)(Math.min(max, val + 1))} disabled={val >= max} style={{ width: 32, height: 32, borderRadius: "50%", border: "1px solid #d0d5dd", background: val >= max ? "#f9fafb" : "#fff", fontWeight: 800, fontSize: 18, cursor: val >= max ? "default" : "pointer", color: val >= max ? "#d0d5dd" : "#111" }}>+</button>
                   </div>
                 </div>
               ))}
@@ -354,6 +375,7 @@ export default function SearchWidget() {
         </div>
       </div>
 
+      {searchError && <p className="flight-validation" role="alert">{searchError}</p>}
       <form ref={formRef} onSubmit={handleSearch} aria-busy={searching}>
         <div className={tripType === "Multi-city" ? "sw-grid sw-grid-multicity" : "sw-grid"}>
           {tripType === "Multi-city" && <div className="sw-flight-label">Flight 1</div>}
@@ -361,14 +383,14 @@ export default function SearchWidget() {
           <div className="sw-route-row">
             <AirportInput
               id="sw-origin" label="From" value={origin}
-              onChange={setOrigin} placeholder="City or airport" tabIndex={1}
+              onChange={setOrigin} placeholder="City or airport"
             />
             <button type="button" className="swap-btn" onClick={swap} aria-label="Swap airports">
               ⇄
             </button>
             <AirportInput
               id="sw-dest" label="To" value={dest}
-              onChange={setDest} placeholder="City or airport" tabIndex={2}
+              onChange={setDest} placeholder="City or airport"
             />
           </div>
 
@@ -379,7 +401,7 @@ export default function SearchWidget() {
               <input
                 id="sw-depart" className="search-input" type="date"
                 value={departDate} onChange={(e) => setDepartDate(e.target.value)}
-                required min={today} tabIndex={3}
+                required min={today}
               />
             </div>
 
@@ -389,7 +411,7 @@ export default function SearchWidget() {
                 <input
                   id="sw-return" className="search-input" type="date"
                   value={returnDate} onChange={(e) => setReturnDate(e.target.value)}
-                  required min={departDate || today} tabIndex={4}
+                  required min={departDate || today}
                 />
               </div>
             ) : (
@@ -398,7 +420,7 @@ export default function SearchWidget() {
                 <select
                   id="sw-class" className="search-input" value={cabinClass}
                   onChange={(e) => setCabinClass(e.target.value as typeof cabinClass)}
-                  tabIndex={4}
+
                 >
                   {CABIN_CLASSES.map((c) => <option key={c}>{c}</option>)}
                 </select>
@@ -442,6 +464,7 @@ export default function SearchWidget() {
 
           {/* Extras bar: direct-flights + special fares + cabin (always) */}
           <div className="sw-extras-bar">
+            {tripType === "Round Trip" && <label className="flight-cabin-label">Cabin class <select className="special-fare-select" value={cabinClass} onChange={(e) => setCabinClass(e.target.value as typeof cabinClass)}>{CABIN_CLASSES.map((c) => <option key={c}>{c}</option>)}</select></label>}
             <label className={`toggle-pill${directOnly ? " on" : ""}`}>
               <input type="checkbox" checked={directOnly} onChange={(e) => setDirectOnly(e.target.checked)} />
               <span className="toggle-pill-icon">✈</span> Direct flights only
@@ -457,7 +480,7 @@ export default function SearchWidget() {
           </div>
 
           {/* Search button */}
-          <button type="submit" className={searching ? "search-btn search-btn-loading" : "search-btn"} tabIndex={5} disabled={searching}>
+          <button type="submit" className={searching ? "search-btn search-btn-loading" : "search-btn"} disabled={searching}>
             {searching ? <><span className="search-spinner" /> {SEARCH_STAGES[searchStage]}</> : <>Search live flights <span aria-hidden="true">→</span></>}
           </button>
         </div>

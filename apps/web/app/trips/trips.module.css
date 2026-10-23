@@ -74,3 +74,13 @@
   .cardFoot .secondaryAction { width: 100%; }
   .message { padding: 28px 18px; }
 }
+
+/* Flight design system */
+.page { background:var(--background); color:var(--text-primary); }
+.hero { height:170px; background:var(--brand-primary); border-top:4px solid var(--brand-secondary); }
+.heroImage,.hero::after { display:none; }
+.heroContent { padding:28px 32px; }
+.card,.message { border-color:var(--border); box-shadow:none; border-radius:20px; }
+.primaryAction { background:var(--brand-secondary); color:var(--text-primary); border-color:var(--brand-secondary); }
+.filter { min-height:44px; }
+@media(max-width:600px) { .hero { height:145px; }.heroContent { padding:22px; } }

@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
+import "./flight-experience.css";
 import SiteNav from "./components/SiteNav";
 import SiteFooter from "./components/SiteFooter";
 
@@ -29,6 +30,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         />
       </head>
       <body>
+        <a className="skip-link" href="#main-content">Skip to content</a>
         <header className="site-header">
           <a href="/" className="site-logo-link">
             {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -36,7 +38,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           </a>
           <SiteNav />
         </header>
-        {children}
+        <div id="main-content" tabIndex={-1}>{children}</div>
         <SiteFooter />
       </body>
     </html>

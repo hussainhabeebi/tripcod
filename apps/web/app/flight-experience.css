@@ -1,0 +1,161 @@
+/* Tripcod flight experience. Logo pixels: charcoal #4B4D4F, amber #FFB005. */
+:root {
+  --brand-primary:#4B4D4F; --brand-secondary:#FFB005; --brand-accent:#FFB005;
+  --background:#F7F7F3; --surface:#FFFFFF; --text-primary:#252729; --text-secondary:#626568;
+  --border:#DFE1DB; --success:#176947; --warning:#815400; --error:#B42318;
+  --color-accent-soft:#FFF7E0; --radius-lg:20px;
+}
+body { background:var(--background); color:var(--text-primary); }
+button,input,select,textarea { font-family:inherit; }
+button,a,input,select,summary { touch-action:manipulation; }
+:where(a,button,input,select,textarea,summary):focus-visible { outline:3px solid #815400; outline-offset:3px; }
+.skip-link { position:fixed; left:16px; top:-100px; z-index:200; background:var(--brand-primary); color:white; padding:14px; border-radius:10px; }
+.skip-link:focus { top:10px; }
+.site-header { min-height:82px; padding:12px max(24px,calc((100vw - 1240px)/2)); border-color:var(--border); background:#fff; }
+.site-logo { height:46px; width:auto; }
+.site-nav { gap:20px; }
+.nav-link { min-height:44px; display:inline-flex; align-items:center; gap:6px; }
+.nav-more { position:relative; color:var(--text-secondary); font-size:14px; }
+.nav-more summary { cursor:pointer; padding:12px; list-style:none; }
+.nav-more > div { position:absolute; top:100%; right:0; width:220px; border:1px solid var(--border); border-radius:14px; background:white; box-shadow:0 12px 30px #25272915; padding:8px; }
+.nav-more .nav-link { display:flex; padding:10px; }
+.flight-home { padding-bottom:60px; }
+.flight-intro { max-width:1240px; margin:auto; display:grid; grid-template-columns:1.2fr 1fr; gap:48px; align-items:center; padding:58px 24px 76px; }
+.flight-eyebrow { font-size:10px; font-weight:800; letter-spacing:.17em; margin:0 0 16px; color:var(--text-secondary); }
+.flight-intro h1 { font-size:clamp(36px,4.3vw,62px); line-height:1.08; font-weight:600; letter-spacing:-.055em; margin:0; }
+.flight-intro h1 em { font-style:normal; position:relative; text-decoration:underline; text-decoration-color:var(--brand-secondary); text-decoration-thickness:5px; text-underline-offset:7px; }
+.flight-intro-text { color:var(--text-secondary); font-size:16px; line-height:1.7; margin:26px 0 18px; }
+.flight-intro-note { font-size:12px; color:var(--text-secondary); display:flex; align-items:center; gap:10px; }
+.flight-intro-note > span { border:1px solid var(--border); border-radius:50%; width:32px; height:32px; display:grid; place-items:center; }
+.flight-intro-art { position:relative; height:300px; border-radius:120px 24px 24px 24px; overflow:hidden; background:var(--brand-primary); }
+.flight-intro-art img { width:100%; height:100%; object-fit:cover; }
+.flight-intro-art::after { content:""; position:absolute; inset:50% 0 0; background:linear-gradient(transparent,#252729b0); }
+.flight-art-caption { position:absolute; bottom:24px; left:26px; color:white; z-index:1; font-size:13px; }
+.flight-art-mark { position:absolute; right:20px; top:20px; width:50px; height:50px; border-radius:50%; background:var(--brand-secondary); display:grid; place-items:center; font-size:12px; font-weight:800; transform:rotate(10deg); }
+.flight-search-shell { max-width:1192px; margin:-24px auto 0; padding:30px; background:var(--surface); border:1px solid var(--border); border-top:4px solid var(--brand-secondary); border-radius:24px; box-shadow:0 12px 36px #25272908; position:relative; scroll-margin-top:100px; }
+.flight-search-title { display:flex; align-items:center; justify-content:space-between; gap:16px; margin-bottom:22px; }
+.flight-search-title .flight-eyebrow { margin-bottom:6px; }
+.flight-search-title h2 { font-size:25px; letter-spacing:-.035em; margin:0; }
+.flight-search-title > span { color:var(--text-secondary); font-size:12px; }
+.flight-home .search-widget { margin:0; padding:0; box-shadow:none; background:transparent; border:0; }
+.flight-ai-search { margin-bottom:18px; border-bottom:1px solid var(--border); padding-bottom:14px; }
+.flight-ai-search > summary { font-size:12px; color:var(--text-secondary); cursor:pointer; width:fit-content; padding:6px 0; }
+.flight-ai-search[open] > summary { margin-bottom:12px; }
+.flight-home .trip-tabs { gap:8px; margin-bottom:20px; }
+.flight-home .trip-tab { min-height:44px; border-radius:10px; font-size:12px; padding:10px 16px; }
+.flight-home .trip-tab-active { background:var(--brand-primary); border-color:var(--brand-primary); color:white; }
+.flight-home .currency-pills { margin-left:auto; }
+.flight-home .sw-grid { display:grid; grid-template-columns:minmax(0,1.3fr) minmax(0,1fr); gap:16px; align-items:end; }
+.flight-home .sw-route-row { display:grid; grid-template-columns:minmax(0,1fr) 40px minmax(0,1fr); gap:8px; min-width:0; }
+.flight-home .sw-extras-row { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; min-width:0; }
+.flight-home .airport-wrap,.flight-home .search-field { min-width:0; position:relative; }
+.flight-home .airport-wrap label,.flight-home .search-field label { display:block; color:var(--text-secondary); font-size:11px; text-transform:none; letter-spacing:0; margin-bottom:7px; }
+.flight-home .search-input { border:1px solid var(--border); border-radius:12px; font-size:15px; min-height:58px; background-color:#FAFAF7; color:var(--text-primary); }
+.flight-home .airport-wrap .search-input { padding-right:36px; }
+.flight-home .search-input:focus { background-color:white; border-color:var(--brand-primary); }
+.flight-home .swap-btn { height:44px; min-height:44px; margin-bottom:7px; border-radius:50%; background:white; border:1px solid var(--border); }
+.airport-clear { position:absolute; right:6px; bottom:8px; border:0; background:transparent; color:var(--text-secondary); width:32px; height:42px; font-size:20px; cursor:pointer; }
+.airport-dropdown { z-index:35; max-height:280px; overflow:auto; }
+.airport-dropdown [aria-selected="true"] { background:var(--color-accent-soft); outline:1px solid var(--brand-secondary); outline-offset:-1px; }
+.airport-empty { position:absolute; top:100%; background:white; padding:16px; border:1px solid var(--border); z-index:35; font-size:13px; border-radius:12px; width:100%; }
+.flight-home .sw-extras-bar { grid-column:1; display:flex; flex-wrap:wrap; gap:8px; margin:0; }
+.flight-cabin-label { font-size:12px; display:flex; gap:8px; align-items:center; }
+.flight-home .search-btn { grid-column:2; justify-self:end; width:100%; max-width:260px; border-radius:12px; min-height:54px; background:var(--brand-secondary); color:var(--text-primary); box-shadow:none; }
+.flight-home .search-btn:hover { background:#FFC144; }
+.flight-home .search-shortcuts { margin:18px 0 0; color:var(--text-secondary); border-top:1px solid var(--border); padding-top:16px; display:flex; flex-wrap:wrap; gap:18px; font-size:11px; }
+.flight-home .sw-multicity { grid-column:1 / -1; }
+.flight-home .sw-leg-row { display:grid; grid-template-columns:minmax(0,1fr) 40px minmax(0,1fr) minmax(0,1fr) 100px; gap:10px; padding:18px 0; border-top:1px solid var(--border); }
+.flight-home .sw-flight-label { grid-column:1 / -1; }
+.flight-validation { border:1px solid #E5AAA5; color:var(--error); background:#FFF4F2; padding:12px; border-radius:10px; font-size:13px; }
+.flight-confidence { max-width:1192px; margin:36px auto 56px; display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:32px; }
+.flight-confidence article { padding:18px 0; }
+.flight-confidence article > span { font-size:11px; color:#815400; border:1px solid #D6BB76; width:32px; height:32px; border-radius:50%; display:grid; place-items:center; }
+.flight-confidence h2 { font-size:17px; letter-spacing:-.025em; margin:16px 0 10px; }
+.flight-confidence p { color:var(--text-secondary); font-size:13px; line-height:1.8; margin:0; max-width:330px; }
+.flight-manage,.flight-assistance { max-width:1192px; margin:0 auto 32px; display:flex; align-items:center; justify-content:space-between; gap:24px; border:1px solid var(--border); border-radius:22px; padding:36px; }
+.flight-manage { background:white; }
+.flight-manage h2,.flight-assistance h2 { margin:0; font-size:28px; letter-spacing:-.04em; }
+.flight-manage p:not(.flight-eyebrow),.flight-assistance p:not(.flight-eyebrow) { font-size:13px; line-height:1.7; color:var(--text-secondary); }
+.flight-manage-actions { display:flex; flex-direction:column; gap:16px; align-items:center; flex-shrink:0; }
+.flight-manage-actions > a:not(.flight-primary) { color:var(--text-primary); font-size:12px; text-underline-offset:4px; }
+.flight-primary { display:inline-flex; align-items:center; justify-content:center; gap:28px; min-height:48px; padding:14px 22px; border-radius:10px; text-decoration:none; background:var(--brand-secondary); color:var(--text-primary); font-size:13px; font-weight:750; }
+.flight-assistance { background:var(--brand-primary); color:white; border:0; padding:44px 36px; }
+.flight-assistance .flight-eyebrow,.flight-assistance p:not(.flight-eyebrow) { color:#E0E2DF; }
+.flight-assistance h2 { font-size:34px; line-height:1.15; }
+.flight-results-page { color:var(--text-primary); }
+.flight-results-page .search-page-header { background:var(--brand-primary); border:0; border-radius:22px; box-shadow:none; }
+.flight-results-page .search-page-header::before,.flight-results-page .search-page-header::after { display:none; }
+.flight-results-page .search-page-summary { padding:28px; }
+.flight-results-page .search-page-summary h1 { color:white; letter-spacing:-.04em; }
+.flight-results-page .results-meta { color:#E1E3E0; }
+.flight-results-page .search-page-modify-link { background:white; color:var(--text-primary); border:0; }
+.flight-results-page .filter-sidebar,.flight-results-page .fare-card-v2 { border:1px solid var(--border); border-radius:18px; box-shadow:none; }
+.flight-results-page .fare-card-v2 { transition:border-color .15s,box-shadow .15s; }
+.flight-results-page .fare-card-v2:focus-within { border-color:#815400; box-shadow:0 0 0 2px var(--color-accent-soft); }
+.flight-results-page .fare-card-v2-time { color:var(--text-primary); }
+.flight-results-page .fare-card-v2-book { background:var(--brand-secondary); color:var(--text-primary); min-height:44px; border-radius:10px; }
+.flight-results-page .sort-tab.active { background:var(--color-accent-soft); color:var(--text-primary); border-color:var(--brand-secondary); }
+.sort-explanation { font-size:11px; color:var(--text-secondary); line-height:1.6; margin:10px 0 18px; }
+.booking-progress { padding:20px 0; }
+.booking-progress ol { list-style:none; margin:0; padding:0; display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:8px; }
+.booking-progress li { display:flex; flex-direction:column; gap:8px; color:var(--text-secondary); position:relative; font-size:11px; }
+.booking-progress li > span { display:grid; place-items:center; width:30px; height:30px; border:1px solid var(--border); background:white; border-radius:50%; font-weight:750; }
+.booking-progress li[aria-current] > span { background:var(--brand-secondary); border-color:var(--brand-secondary); color:var(--text-primary); }
+.booking-progress li[data-complete="true"] > span { background:var(--brand-primary); border-color:var(--brand-primary); color:white; }
+.booking-progress li[aria-current] b { color:var(--text-primary); }
+.ck .card { border-color:var(--border); border-radius:18px; box-shadow:none; }
+.ck .pay button { background:var(--brand-secondary); color:var(--text-primary); }
+.ck header { top:82px; }
+.ck .grid input:focus,.ck .grid select:focus { outline:2px solid #815400; outline-offset:2px; box-shadow:none; }
+@media(max-width:1240px) { .flight-search-shell,.flight-confidence,.flight-manage,.flight-assistance { margin-left:24px; margin-right:24px; } }
+@media(max-width:900px) {
+  .site-header { padding:10px 20px; min-height:70px; }.site-logo { height:38px; }.ck header { top:70px; }
+  .flight-intro { gap:24px; padding-top:36px; padding-bottom:60px; }.flight-intro-art { height:270px; }
+  .flight-home .sw-grid { grid-template-columns:1fr; }.flight-home .sw-extras-bar,.flight-home .search-btn { grid-column:1; }.flight-home .search-btn { max-width:none; }
+  .flight-search-shell { padding:24px; }.flight-confidence { gap:24px; }
+  .flight-results-page .filter-sidebar.open { position:fixed; bottom:0; top:auto; left:0; right:0; width:100%; max-height:85dvh; overflow-y:auto; border-radius:22px 22px 0 0; padding-bottom:calc(24px + env(safe-area-inset-bottom)); z-index:120; }
+  .filter-backdrop { z-index:110; }.flight-results-page .filter-apply { min-height:48px; }
+}
+@media(max-width:600px) {
+  .site-header { min-height:64px; padding:10px 16px; }.site-logo { height:32px; }.site-nav { gap:10px; }.ck header { top:64px; }
+  .flight-intro { display:block; padding:30px 20px 52px; }.flight-intro h1 { font-size:38px; }.flight-intro-text { font-size:14px; margin:22px 0 0; }.flight-intro-art,.flight-intro-note { display:none; }
+  .flight-search-shell { margin:-22px 12px 0; padding:20px 16px; border-radius:18px; scroll-margin-top:80px; }.flight-search-title > span { display:none; }.flight-search-title h2 { font-size:23px; }
+  .flight-home .trip-tabs { gap:6px; }.flight-home .trip-tab { padding:10px 12px; }.flight-home .currency-pills { margin-left:0; }.flight-home .search-input { font-size:16px; min-height:56px; }
+  .flight-home .sw-route-row { grid-template-columns:minmax(0,1fr); position:relative; gap:14px; }.flight-home .swap-btn { position:absolute; right:12px; top:56px; width:40px; z-index:3; transform:rotate(90deg); }
+  .flight-home .sw-extras-row { gap:8px; }.flight-home .search-btn { font-size:15px; }.flight-home .sw-leg-row { display:flex; flex-direction:column; align-items:stretch; gap:12px; }.sw-grid-multicity .sw-leg-direction,.sw-leg-class { display:none; }
+  .flight-home .traveller-picker { left:0!important; min-width:240px!important; }.flight-home .search-shortcuts { gap:10px; font-size:10px; }
+  .flight-confidence { grid-template-columns:1fr; margin:24px 20px 32px; gap:0; }.flight-confidence article { display:grid; grid-template-columns:32px 1fr; gap:0 14px; padding:20px 0; border-bottom:1px solid var(--border); }.flight-confidence h2 { margin:4px 0 8px; }.flight-confidence p { grid-column:2; max-width:none; }
+  .flight-manage,.flight-assistance { flex-direction:column; align-items:flex-start; margin:0 12px 20px; padding:26px 22px; border-radius:18px; }.flight-manage h2 { font-size:25px; }.flight-manage-actions { width:100%; align-items:stretch; }.flight-manage-actions > a:not(.flight-primary) { text-align:center; padding:8px; }.flight-assistance h2 { font-size:29px; }.flight-assistance > a { width:100%; }
+  .booking-progress li { font-size:10px; }.booking-progress ol { gap:6px; }.booking-progress li b { line-height:1.5; max-width:70px; }
+  .flight-results-page .search-page-summary { padding:22px 18px; }.flight-results-page .sort-tabs { flex-wrap:wrap; }.flight-results-page .sort-tab { min-height:44px; font-size:12px; }.flight-results-page .results-count-badge { width:100%; margin:6px 0; }
+}
+@media(max-width:359px) { .site-logo { height:26px; }.site-nav { gap:5px; }.nav-currency select { max-width:64px; }.home-mobile-menu summary { padding:6px; }.flight-intro h1 { font-size:33px; }.flight-home .trip-tab { padding:9px; font-size:11px; } }
+@media(prefers-reduced-motion:reduce) { *,*::before,*::after { animation:none!important; transition:none!important; scroll-behavior:auto!important; } }
+.flight-timeline { list-style:none; padding:24px; margin:0; border-top:1px solid var(--border); }
+.flight-timeline li { position:relative; display:flex; gap:16px; padding:0 0 24px; font-size:13px; }
+.flight-timeline li:last-child { padding-bottom:0; }
+.flight-timeline-marker { width:10px; height:10px; border:2px solid #815400; border-radius:50%; flex-shrink:0; margin-top:4px; }
+.flight-timeline li:not(:last-child)::after { content:""; position:absolute; left:4px; top:17px; bottom:2px; width:1px; background:var(--border); }
+.flight-timeline p { margin:6px 0; color:var(--text-secondary); line-height:1.5; }.flight-timeline small { color:#815400; }
+.flight-rule-action { padding:0 24px 20px; }
+.flight-payment-result { background:var(--background)!important; min-height:70vh!important; }
+.flight-payment-result > section { border-color:var(--border)!important; border-top:4px solid var(--brand-secondary)!important; box-shadow:none!important; border-radius:22px!important; }
+.flight-payment { color:var(--text-primary); }
+/* Match the existing shared-header selector specificity. */
+body .site-header { min-height:82px; padding:12px max(24px,calc((100vw - 1240px)/2)); box-shadow:none; }
+body .site-header .site-logo { height:46px; }
+body .site-nav-links .nav-more .nav-link { display:flex; width:100%; }
+body .site-nav-links .nav-link { min-height:44px; color:var(--text-primary); }
+@media(max-width:1023px) {
+  body .site-header { min-height:70px; padding:10px 20px; }
+  body .site-header .site-logo { height:38px; }
+  .ck header { top:70px; }
+}
+@media(max-width:600px) {
+  body .site-header { min-height:64px; padding:10px 16px; }
+  body .site-header .site-logo { height:32px; }
+  .ck header { top:64px; }
+}
+@media(max-width:359px) { body .site-header { padding-inline:12px; } body .site-header .site-logo { height:26px; } }
+.mobile-sort-options { display:none; }
+@media(max-width:900px) { .mobile-sort-options { display:block; }.mobile-sort-options .stops-btn-row { flex-wrap:wrap; } }
