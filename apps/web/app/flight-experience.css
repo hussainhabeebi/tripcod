@@ -179,3 +179,19 @@ body .site-nav-links .nav-link { min-height:44px; color:var(--text-primary); }
 .flight-results-page .time-band-title { color:var(--text-secondary); font-size:11px; }
 .flight-results-page .fare-variant-book { background:var(--brand-secondary); color:var(--text-primary); min-height:44px; }
 .ck .saveCheck input { flex:none; }
+
+/* Hero imagery uses the existing flight-first layout, with explicit slide controls. */
+.flight-slider-controls { display:flex; align-items:center; gap:4px; margin-top:22px; }
+.flight-slider-controls button { width:44px; height:44px; border:1px solid var(--border); border-radius:50%; background:white; color:var(--brand-primary); cursor:pointer; font:inherit; }
+.flight-slider-controls button:hover { border-color:var(--brand-primary); }
+.flight-slider-controls button:focus-visible { outline:3px solid var(--brand-secondary); outline-offset:3px; }
+.flight-slider-controls .flight-slide-dot { border:0; background:transparent; display:grid; place-items:center; }
+.flight-slide-dot span { width:8px; height:8px; border-radius:50%; background:#a8a9aa; }
+.flight-slide-dot[aria-pressed="true"] span { width:22px; border-radius:8px; background:var(--brand-secondary); }
+.flight-slider-controls .flight-slider-play { width:auto; padding:0 12px; border-radius:22px; font-size:12px; }
+.flight-intro-art img[hidden] { display:none; }
+@media(max-width:767px) {
+  .flight-intro .flight-intro-art { display:block; height:210px; margin-top:24px; border-radius:54px 18px 18px 18px; }
+  .flight-art-caption { left:20px; bottom:18px; font-size:12px; max-width:calc(100% - 40px); }
+  .flight-art-mark { width:40px; height:40px; right:14px; top:14px; }
+}
