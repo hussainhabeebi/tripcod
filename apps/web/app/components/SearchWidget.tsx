@@ -315,7 +315,7 @@ export default function SearchWidget() {
             type="button"
             className="passengers-select"
             onClick={() => setPaxOpen((v) => !v)}
-            aria-label="Travellers" aria-expanded={paxOpen} aria-controls="traveller-picker"
+            aria-expanded={paxOpen} aria-controls="traveller-picker"
             style={{ cursor: "pointer", textAlign: "left" }}
           >
             {adults + children + infants} traveller{adults + children + infants === 1 ? "" : "s"} · {cabinClass}

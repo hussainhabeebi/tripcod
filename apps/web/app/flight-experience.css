@@ -104,7 +104,7 @@ button,a,input,select,summary { touch-action:manipulation; }
 .booking-progress li[data-complete="true"] > span { background:var(--brand-primary); border-color:var(--brand-primary); color:white; }
 .booking-progress li[aria-current] b { color:var(--text-primary); }
 .ck .card { border-color:var(--border); border-radius:18px; box-shadow:none; }
-.ck .pay button { background:var(--brand-secondary); color:var(--text-primary); }
+.ck .pay > button { background:var(--brand-secondary); color:var(--text-primary); }
 .ck header { top:82px; }
 .ck .grid input:focus,.ck .grid select:focus { outline:2px solid #815400; outline-offset:2px; box-shadow:none; }
 @media(max-width:1240px) { .flight-search-shell,.flight-confidence,.flight-manage,.flight-assistance { margin-left:24px; margin-right:24px; } }
@@ -159,3 +159,23 @@ body .site-nav-links .nav-link { min-height:44px; color:var(--text-primary); }
 @media(max-width:359px) { body .site-header { padding-inline:12px; } body .site-header .site-logo { height:26px; } }
 .mobile-sort-options { display:none; }
 @media(max-width:900px) { .mobile-sort-options { display:block; }.mobile-sort-options .stops-btn-row { flex-wrap:wrap; } }
+/* Corrections from browser verification. */
+.flight-results-page .fare-rules button { min-height:44px; padding:10px 4px; }
+.flight-results-page .fare-variant input[type="radio"],.flight-results-page .filter-option input { min-width:24px; width:24px; min-height:24px; height:24px; }
+.ck .saveCheck { min-height:44px; }.ck .saveCheck input { width:24px; height:24px; }
+.ck header h1 { margin:0; font-size:16px; line-height:1.4; }
+.ck .grid input { scroll-margin-block:110px 160px; }
+.flight-token-checkout { background:var(--background)!important; color:var(--text-primary); }
+.flight-token-checkout .panel { border-color:var(--border); box-shadow:none; }
+.flight-token-checkout .primary { background:var(--brand-secondary); color:var(--text-primary); min-height:48px; }
+.flight-token-checkout .booking-progress { padding-top:0; }
+@media(max-width:600px) { .flight-token-checkout .field input,.flight-token-checkout .field select { font-size:16px; min-height:48px; } }
+.footer-bottom,.footer-bottom-note { color:#ADB8C8; }
+.footer-brand img { height:44px; width:auto; }
+.flight-results-page :is(.fare-card-v2-flight-num,.fare-card-v2-airport,.fare-card-v2-stops-label,.fare-card-v2-price-note,.fare-variant-perks) { color:var(--text-secondary); }
+.flight-results-page .fare-card-v2-stops-label.nonstop,.flight-results-page .tag-refundable { color:var(--success); }
+.flight-results-page .fare-variants-seats { color:#815400; }
+
+.flight-results-page .time-band-title { color:var(--text-secondary); font-size:11px; }
+.flight-results-page .fare-variant-book { background:var(--brand-secondary); color:var(--text-primary); min-height:44px; }
+.ck .saveCheck input { flex:none; }

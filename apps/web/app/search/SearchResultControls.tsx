@@ -1,7 +1,9 @@
 "use client";
 
-import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { navigateSearch } from "../lib/search-navigation";
+
+import { useSearchParams } from "next/navigation";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 type Props = {
   origin: string;
@@ -65,13 +67,12 @@ export function ChangeDatesAction() {
 }
 
 export default function SearchResultControls({ origin, destination, departureDate, fares = [] }: Props) {
-  const router = useRouter();
   const current = useSearchParams();
   const panelRef = useRef<HTMLElement>(null);
-  const [isPending, startTransition] = useTransition();
   const [mobileOpen, setMobileOpen] = useState(false);
   const currentQuery = current.toString();
   const [pendingQuery, setPendingQuery] = useState<string | null>(null);
+  const isPending = !mobileOpen && pendingQuery !== null;
   const visible = useMemo(() => new URLSearchParams(pendingQuery ?? currentQuery), [pendingQuery, currentQuery]);
   const today = isoDate(new Date()); // Same UTC day boundary as the homepage search date input.
   const [windowStart, setWindowStart] = useState(() => {
@@ -101,7 +102,7 @@ export default function SearchResultControls({ origin, destination, departureDat
     document.body.style.overflow = "hidden";
     panelRef.current?.querySelector<HTMLButtonElement>(".filter-close")?.focus();
     const close = (e: KeyboardEvent) => {
-      if (e.key === "Escape") { e.preventDefault(); setMobileOpen(false); }
+      if (e.key === "Escape") { e.preventDefault(); setMobileOpen(false); setPendingQuery(null); }
       if (e.key !== "Tab") return;
       const items = Array.from(panelRef.current?.querySelectorAll<HTMLElement>('a[href],button:not(:disabled),input:not(:disabled),select:not(:disabled)') ?? []).filter((el) => el.getClientRects().length);
       const first = items[0], last = items.at(-1);
@@ -121,8 +122,10 @@ export default function SearchResultControls({ origin, destination, departureDat
     });
     next.delete("all");
     setPendingQuery(next.toString());
-    startTransition(() => router.push(`/search?${next.toString()}`));
+    if (!mobileOpen) navigateSearch(`/search?${next.toString()}`);
   }
+
+  function closeFilters() { setMobileOpen(false); setPendingQuery(null); }
 
   function resetFilters() {
     if (RESULT_FILTER_KEYS.some((key) => visible.has(key))) {
@@ -166,7 +169,7 @@ export default function SearchResultControls({ origin, destination, departureDat
     <button type="button" className="mobile-filter-toggle" aria-expanded={mobileOpen} aria-controls="flight-filter-panel" onClick={() => setMobileOpen(true)}>
       <span aria-hidden="true">☷</span> Filters
     </button>
-    {mobileOpen && <button type="button" className="filter-backdrop" aria-label="Close filters" onClick={() => setMobileOpen(false)} />}
+    {mobileOpen && <button type="button" className="filter-backdrop" aria-label="Close filters" onClick={closeFilters} />}
     <aside ref={panelRef} role={mobileOpen ? "dialog" : undefined} aria-modal={mobileOpen ? true : undefined} id="flight-filter-panel" className={`filter-sidebar${mobileOpen ? " open" : ""}`} aria-label="Flight filters">
       <div className="mobile-sort-options filter-section"><div className="filter-section-label">Sort flights</div><div className="stops-btn-row">
         {[['best','Recommended'],['price','Cheapest'],['duration','Fastest']].map(([value,label]) => <button key={value} type="button" className={`stops-btn${(visible.get("sort") ?? "best") === value ? " active" : ""}`} aria-pressed={(visible.get("sort") ?? "best") === value} onClick={() => update({sort:value})}>{label}</button>)}
@@ -176,11 +179,11 @@ export default function SearchResultControls({ origin, destination, departureDat
         <span>Filters</span>
         <div className="filter-sidebar-actions">
           <a href="#" onClick={(e) => { e.preventDefault(); resetFilters(); }}>Reset all</a>
-          <button type="button" className="filter-close" aria-label="Close filters" onClick={() => setMobileOpen(false)}>×</button>
+          <button type="button" className="filter-close" aria-label="Close filters" onClick={closeFilters}>×</button>
         </div>
       </div>
 
-      {(isPending || pendingQuery !== null) && <div className="result-refresh" role="status"><span /> Updating flights…</div>}
+      {isPending && <div className="result-refresh" role="status"><span /> Updating flights…</div>}
       <div className="filter-section-label">Travel dates</div>
       <div className="date-navigation">
         <button type="button" className="date-range-arrow" aria-label="Previous travel dates" disabled={windowStart <= today} onClick={() => setWindowStart(moveDate(windowStart, -1))}>‹</button>
@@ -283,7 +286,7 @@ export default function SearchResultControls({ origin, destination, departureDat
         </div>
       )}
 
-      <button type="button" className="filter-apply" onClick={() => setMobileOpen(false)}>Show flights</button>
+      <button type="button" className="filter-apply" onClick={() => { if (pendingQuery !== null) { setMobileOpen(false); navigateSearch(`/search?${pendingQuery}`); } else closeFilters(); }}>Show flights</button>
     </aside>
     </>
   );

@@ -89,7 +89,7 @@ export default function SiteFooter() {
           <div className="footer-brand">
             <a href="/" className="footer-logo-link">
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src="/logo-light.png" alt="Tripcod Travel Solutions" height={44} />
+              <img src="/logo-light.png" alt="Tripcod Travel Solutions" width={720} height={252} />
             </a>
             <p>Making your travel dreams come true since 2023. Flights, hotels, visas and holiday packages — India, the Gulf and beyond.</p>
             <div className="footer-trust">

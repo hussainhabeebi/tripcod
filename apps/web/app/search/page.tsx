@@ -1,3 +1,4 @@
+import { flightClock, flightHour, flightDay } from "../lib/flight-clock";
 import { rankRecommended } from "../lib/flight-ranking";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
@@ -232,7 +233,7 @@ export default async function SearchResultsPage({ searchParams }: SearchPageProp
               })}
               <span className="results-count-badge">{groups.length} flight{groups.length === 1 ? "" : "s"}</span>
           </nav>
-          <p className="sort-explanation">Recommended balances relative price (62%), duration (28%) and stops (0.1 per stop). Ranks returned fares; verify availability and conditions before booking.</p>
+          <p className="sort-explanation">Times are local to each airport. Recommended balances relative price (62%), duration (28%) and stops (0.1 per stop). Ranks returned fares; verify availability and conditions before booking.</p>
 
           {filteredFares.length === 0 ? (
             <div className="no-results">
@@ -259,7 +260,7 @@ export default async function SearchResultsPage({ searchParams }: SearchPageProp
           ) : (
             <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
               {params.all !== "1" && (
-                <div style={{ fontSize: 12, color: "#94a3b8", fontWeight: 700, marginBottom: 2 }}>Recommended for you</div>
+                <div style={{ fontSize: 12, color: "#626568", fontWeight: 700, marginBottom: 2 }}>Recommended for you</div>
               )}
               {displayFares.map((fare, i) => (
                 <FareCard
@@ -300,15 +301,14 @@ function filterAndSortFares(fares: any[], params: SearchParams): any[] {
     if (airlineFilter.length > 0 && !airlineFilter.includes(fare.airlineName)) return false;
     if (params.maxPrice && params.maxPriceCurrency === fare.currency && (!params.currency || params.currency === fare.currency) && Number.isFinite(Number(params.maxPrice)) && Number(fare.displayPrice ?? fare.totalFare) > Number(params.maxPrice)) return false;
     if (params.arrBand) {
-      const hour = new Date(fare.arrivalTime).getHours();
+      const hour = flightHour(fare.arrivalTime);
       const [start,end] = params.arrBand.split("–").map(Number);
-      if (hour < start || hour >= end) return false;
+      if (hour === null || hour < start || hour >= end) return false;
     }
     if (params.depBand) {
-      const dep = new Date(fare.departureTime);
-      const hour = dep.getHours();
+      const hour = flightHour(fare.departureTime);
       const [start, end] = params.depBand.split("–").map(Number);
-      if (hour < start || hour >= end) return false;
+      if (hour === null || hour < start || hour >= end) return false;
     }
     return true;
   });
@@ -381,10 +381,8 @@ function optionLinkParams(fare: any, options: any[]): Record<string, string> {
 }
 
 function FareCard({ fare, options, requestedCurrency, aedRate, searchId, adults, children = 0, infants = 0 }: { fare: any; options: any[]; requestedCurrency: string | null; aedRate: FxRates; searchId?: string; adults: number; children?: number; infants?: number }) {
-  const dep = new Date(fare.departureTime);
-  const arr = new Date(fare.arrivalTime);
-  const fmt = (d: Date) => d.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: false });
-  const fmtDate = (d: Date) => d.toLocaleDateString("en-IN", { day: "numeric", month: "short", timeZone: "UTC" });
+  const fmt = (value: string) => flightClock(value);
+  const fmtDate = (value: string) => new Date(`${flightDay(value)}T12:00:00Z`).toLocaleDateString("en-IN", { day: "numeric", month: "short", timeZone: "UTC" });
   const fareCurrency = String(fare.currency || requestedCurrency || "INR").toUpperCase();
   const price = Number(fare.displayPrice ?? fare.totalFare ?? 0);
   const shown = inChosenCurrency(price, fareCurrency, requestedCurrency, aedRate);
@@ -393,7 +391,7 @@ function FareCard({ fare, options, requestedCurrency, aedRate, searchId, adults,
   const durationH = Math.floor(fare.duration / 60);
   const durationM = fare.duration % 60;
   const airlineCode = (fare.flightNumber ?? "").slice(0, 2).toUpperCase();
-  const arrNextDay = dep.getUTCDate() !== arr.getUTCDate();
+  const dayDifference = (Date.parse(flightDay(fare.arrivalTime)) - Date.parse(flightDay(fare.departureTime))) / 86400000;
 
   const cabinLabel = String(fare.cabinClass ?? "ECONOMY").replaceAll("_", " ").toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
   const badgeColor = "#4B4D4F";
@@ -418,7 +416,7 @@ function FareCard({ fare, options, requestedCurrency, aedRate, searchId, adults,
         <div className="fare-card-v2-times">
           <div className="fare-card-v2-time-row">
             <div>
-              <div className="fare-card-v2-time">{fmt(dep)}</div>
+              <div className="fare-card-v2-time">{fmt(fare.departureTime)}</div>
               <div className="fare-card-v2-airport">{fare.origin}</div>
             </div>
             <div className="fare-card-v2-duration-bar">
@@ -430,14 +428,14 @@ function FareCard({ fare, options, requestedCurrency, aedRate, searchId, adults,
             </div>
             <div>
               <div className="fare-card-v2-time">
-                {fmt(arr)}
-                {arrNextDay && <sup style={{ fontSize: 10, color: "#f59e0b", marginLeft: 2 }}>+1</sup>}
+                {fmt(fare.arrivalTime)}
+                {dayDifference > 0 && <sup style={{ fontSize: 10, color: "#f59e0b", marginLeft: 2 }}>+{dayDifference}</sup>}
               </div>
               <div className="fare-card-v2-airport">{fare.destination}</div>
             </div>
           </div>
           {fare.layoverAirports?.length > 0 && (
-            <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 4 }}>Via {fare.layoverAirports.join(" · ")}</div>
+            <div style={{ fontSize: 11, color: "#626568", marginTop: 4 }}>Via {fare.layoverAirports.join(" · ")}</div>
           )}
         </div>
 
@@ -466,7 +464,7 @@ function FareCard({ fare, options, requestedCurrency, aedRate, searchId, adults,
               Select flight
             </a>
           ) : (
-            <span style={{ fontSize: 11, color: "#94a3b8" }}>Not bookable online</span>
+            <span style={{ fontSize: 11, color: "#626568" }}>Not bookable online</span>
           )}
         </div>
       </div>
@@ -493,14 +491,14 @@ function FareCard({ fare, options, requestedCurrency, aedRate, searchId, adults,
 
       <details className="fare-card-v2-details">
         <summary className="fare-card-v2-expand-row">
-          <span className="fare-card-v2-supplier">{fmtDate(dep)}</span>
+          <span className="fare-card-v2-supplier">{fmtDate(fare.departureTime)}</span>
           <span className="fare-card-v2-expand-btn">Details <span className="fare-card-v2-expand-indicator" aria-hidden="true">⌄</span></span>
         </summary>
         {Array.isArray(fare.segments) && fare.segments.length > 0 && <ol className="flight-timeline" aria-label="Journey segments">
           {fare.segments.map((segment: any, index: number) => <li key={`${segment.flightNumber}-${index}`}>
             <span className="flight-timeline-marker" aria-hidden="true" />
-            <div><strong>{segment.origin} → {segment.destination}</strong><p>{segment.airlineName || segment.airline} · {segment.flightNumber}</p><p>{fmtDate(new Date(segment.departureTime))} · {fmt(new Date(segment.departureTime))} → {fmt(new Date(segment.arrivalTime))}</p>
-            {index < fare.segments.length - 1 && <small>Connection at {segment.destination} · Next departure {fmt(new Date(fare.segments[index + 1].departureTime))}</small>}</div>
+            <div><strong>{segment.origin} → {segment.destination}</strong><p>{segment.airlineName || segment.airline} · {segment.flightNumber}</p><p>{fmtDate(segment.departureTime)} · {fmt(segment.departureTime)} → {fmt(segment.arrivalTime)}</p>
+            {index < fare.segments.length - 1 && <small>Connection at {segment.destination} · Next departure {fmt(fare.segments[index + 1].departureTime)}</small>}</div>
           </li>)}
         </ol>}
         <div className="fare-card-v2-detail">

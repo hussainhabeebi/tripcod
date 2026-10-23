@@ -19,6 +19,8 @@ const urls=[];
 let query="";
 const navPath=require.resolve('next/navigation');
 require.cache[navPath]={id:navPath,filename:navPath,loaded:true,exports:{useRouter:()=>({push:u=>urls.push(u),prefetch:()=>{}}),useSearchParams:()=>new URLSearchParams(query)}};
+const navigationPath=require.resolve('../app/lib/search-navigation.ts');
+require.cache[navigationPath]={id:navigationPath,filename:navigationPath,loaded:true,exports:{navigateSearch:u=>urls.push(u)}};
 const SearchWidget=require('../app/components/SearchWidget.tsx').default;
 let root;
 const click=async el=>act(async()=>el.dispatchEvent(new MouseEvent('click',{bubbles:true})));
@@ -54,7 +56,7 @@ test('multi-city sends every selected segment through the existing legs paramete
  await cleanup();
 });
 test('traveller counts enforce one infant per adult and Escape closes the picker',async()=>{
- await mount();await click(document.querySelector('[aria-label="Travellers"]'));
+ await mount();await click(document.querySelector('.passengers-select'));
  const addInfant=document.querySelector('[aria-label="Add infants"]');await click(addInfant);assert.equal(addInfant.disabled,true);
  await click(document.querySelector('[aria-label="Add adults"]'));assert.equal(addInfant.disabled,false);
  await click(addInfant);await click(document.querySelector('[aria-label="Remove adults"]'));
@@ -80,5 +82,15 @@ test('filter reset removes active filters while retaining route, travellers and 
  await click(document.querySelector('.mobile-filter-toggle'));assert.equal(document.body.style.overflow,'hidden');
  assert.equal(document.querySelector('[role=dialog]').getAttribute('aria-modal'),'true');
  await key(document,'Escape');assert.equal(document.querySelector('[role=dialog]'),null);assert.equal(document.body.style.overflow,'');
+ await cleanup();query='';
+});
+test('mobile filters batch changes until Apply and closing discards the draft',async()=>{
+ query='origin=COK&destination=DXB&departureDate=2027-01-10&adults=1';urls.length=0;
+ const Controls=require('../app/search/SearchResultControls.tsx').default;
+ await act(async()=>{root=createRoot(document.getElementById('root'));root.render(React.createElement(Controls,{origin:'COK',destination:'DXB',departureDate:'2027-01-10'}));});
+ await click(document.querySelector('.mobile-filter-toggle'));await click(button('Nonstop'));assert.equal(urls.length,0);
+ await click(document.querySelector('.filter-close'));assert.equal(button('Nonstop').getAttribute('aria-pressed'),'false');
+ await click(document.querySelector('.mobile-filter-toggle'));await click(button('Nonstop'));await click(button('Show flights'));
+ assert.equal(new URL(urls[0],'https://example.test').searchParams.get('stops'),'0');
  await cleanup();query='';
 });

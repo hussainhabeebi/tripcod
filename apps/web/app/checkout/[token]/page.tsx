@@ -70,7 +70,7 @@ export default async function CheckoutPage({ params }: CheckoutPageProps) {
   const expiresAt = meta.tokenExpiresAt;
 
   return (
-    <main style={{ minHeight: "100vh", background: "#f8fafc", padding: "24px 16px" }}>
+    <main className="flight-token-checkout" style={{ minHeight: "100vh", background: "#f8fafc", padding: "24px 16px" }}>
       <div style={{ maxWidth: 760, margin: "0 auto" }}>
 
         {/* Header */}
@@ -81,7 +81,7 @@ export default async function CheckoutPage({ params }: CheckoutPageProps) {
               Complete Your Booking
             </h1>
           </div>
-          <p style={{ margin: 0, color: "#64748b", fontSize: 14 }}>
+          <p style={{ margin: 0, color: "#626568", fontSize: 14 }}>
             {booking.origin} → {booking.destination}
           </p>
         </div>
@@ -95,11 +95,11 @@ export default async function CheckoutPage({ params }: CheckoutPageProps) {
                 {booking.origin} → {booking.destination}
               </div>
               {fd.airlineName != null && (
-                <div style={{ fontSize: 13, color: "#64748b", marginTop: 2 }}>
+                <div style={{ fontSize: 13, color: "#626568", marginTop: 2 }}>
                   {String(fd.airlineName)} · {fd.flightNumber ? String(fd.flightNumber) : ""}
                 </div>
               )}
-              <div style={{ fontSize: 13, color: "#64748b", marginTop: 4 }}>
+              <div style={{ fontSize: 13, color: "#626568", marginTop: 4 }}>
                 {booking.adultCount} adult{booking.adultCount !== 1 ? "s" : ""}
                 {booking.childCount > 0 ? ` · ${booking.childCount} child` : ""}
                 {booking.infantCount > 0 ? ` · ${booking.infantCount} infant` : ""}
@@ -109,7 +109,7 @@ export default async function CheckoutPage({ params }: CheckoutPageProps) {
               <div style={{ fontSize: 22, fontWeight: 800, color: "#4B4D4F" }}>
                 {symbol}{parseFloat(booking.totalAmount).toLocaleString("en-IN")}
               </div>
-              <div style={{ fontSize: 12, color: "#94a3b8" }}>{booking.currency} · all-in</div>
+              <div style={{ fontSize: 12, color: "#626568" }}>{booking.currency} · all-in</div>
             </div>
           </div>
 
@@ -136,7 +136,7 @@ export default async function CheckoutPage({ params }: CheckoutPageProps) {
 
 function SectionTitle({ children }: { children: React.ReactNode }) {
   return (
-    <div style={{ fontSize: 12, fontWeight: 700, color: "#94a3b8", textTransform: "uppercase",
+    <div style={{ fontSize: 12, fontWeight: 700, color: "#626568", textTransform: "uppercase",
       letterSpacing: "0.05em", marginBottom: 14 }}>{children}</div>
   );
 }

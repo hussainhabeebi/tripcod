@@ -1,5 +1,7 @@
 # Tripcod flight UX implementation
 
+**Final review update:** browser QA is now available. See [the final verification report](qa-tripcod/README.md) for all seven viewport checks, screenshots, measured Lighthouse results, additional corrections and remaining baseline booking failures. The implementation-stage verification notes below describe the earlier state and are superseded by that report.
+
 Review branch: `codex/premium-flight-ux`  
 Base: `0375431a5d716fdce44faf0b2ac1568a46422b33`  
 Production deployment: **not performed**. No merge requested or performed.

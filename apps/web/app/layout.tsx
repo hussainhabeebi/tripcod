@@ -34,7 +34,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <header className="site-header">
           <a href="/" className="site-logo-link">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/logo.png" alt="Tripcod Travel Solutions" height={34} className="site-logo" />
+            <img src="/logo.png" alt="Tripcod Travel Solutions" width={720} height={252} className="site-logo" />
           </a>
           <SiteNav />
         </header>

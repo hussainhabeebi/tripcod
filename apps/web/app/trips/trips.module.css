@@ -84,3 +84,6 @@
 .primaryAction { background:var(--brand-secondary); color:var(--text-primary); border-color:var(--brand-secondary); }
 .filter { min-height:44px; }
 @media(max-width:600px) { .hero { height:145px; }.heroContent { padding:22px; } }
+
+/* Keep every trip filter visible on narrow screens. */
+.filters { flex-wrap:wrap; overflow:visible; margin-right:0; }
