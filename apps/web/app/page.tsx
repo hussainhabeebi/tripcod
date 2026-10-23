@@ -1,3 +1,4 @@
+import HeroBanner from "./components/HeroBanner";
 import SearchWidget from "./components/SearchWidget";
 import { whatsappLink } from "./lib/tripcod-content";
 
@@ -8,19 +9,7 @@ const benefits = [
 ];
 export default function HomePage() {
   return <main className="flight-home">
-    <section className="flight-intro">
-      <div className="flight-intro-copy">
-        <p className="flight-eyebrow">TRIPCOD / YOUR NEXT DEPARTURE</p>
-        <h1>Good journeys<br />start with <em>better choices.</em></h1>
-        <p className="flight-intro-text">Find your flight. Compare the details. Travel your way.<br />India, the Gulf and wherever comes next.</p>
-        <div className="flight-intro-note"><span aria-hidden="true">✈</span> One way, return or a journey with more stops.</div>
-      </div>
-      <div className="flight-intro-art" aria-hidden="true">
-        <img src="/hero/airplane-wing-clouds.webp" alt="" width="900" height="600" fetchPriority="high" />
-        <span className="flight-art-caption">A new perspective awaits.</span>
-        <span className="flight-art-mark">T / C</span>
-      </div>
-    </section>
+    <HeroBanner />
     <section id="flight-search" className="flight-search-shell" aria-labelledby="flight-search-heading">
       <div className="flight-search-title"><div><p className="flight-eyebrow">LET’S GET YOU THERE</p><h2 id="flight-search-heading">Where are you flying?</h2></div><span>Search · Compare · Book</span></div>
       <SearchWidget />
