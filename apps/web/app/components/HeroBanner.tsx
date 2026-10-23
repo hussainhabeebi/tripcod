@@ -32,7 +32,7 @@ export default function HeroBanner() {
   }
 
   return <section className="flight-hero" aria-label="Travel inspiration" aria-roledescription="carousel"
-    onFocusCapture={(e) => { if (!(e.target as HTMLElement).closest(".flight-slider-play")) setPlaying(false); }} onMouseEnter={() => setPlaying(false)} onTouchStart={(e) => { touchX.current = e.touches[0]?.clientX ?? null; }}
+    onFocusCapture={() => setPlaying(false)} onMouseEnter={() => setPlaying(false)} onTouchStart={(e) => { touchX.current = e.touches[0]?.clientX ?? null; }}
       onTouchEnd={(e) => {
         if (touchX.current == null) return;
         const distance = (e.changedTouches[0]?.clientX ?? touchX.current) - touchX.current;
@@ -53,8 +53,6 @@ export default function HeroBanner() {
           <span aria-hidden="true" />
         </button>)}
         <button type="button" onClick={() => move(1)} aria-label="Next slide">→</button>
-        <button type="button" className="flight-slider-play" onClick={() => setPlaying((value) => !value)}
-          aria-label={playing ? "Pause slideshow" : "Play slideshow"}>{playing ? "Pause" : "Play"}</button>
       </div>
     </div>
     <div className="flight-hero-scenes">
