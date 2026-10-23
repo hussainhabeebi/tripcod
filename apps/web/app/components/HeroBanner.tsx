@@ -10,8 +10,16 @@ const SLIDES = [
 
 export default function HeroBanner() {
   const [idx, setIdx] = useState(0);
-  const [playing, setPlaying] = useState(false);
+  const [playing, setPlaying] = useState(true);
   const touchX = useRef<number | null>(null);
+
+  useEffect(() => {
+    const media = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const stop = () => { if (media.matches) setPlaying(false); };
+    stop();
+    media.addEventListener("change", stop);
+    return () => media.removeEventListener("change", stop);
+  }, []);
 
   useEffect(() => {
     if (!playing) return;
@@ -23,13 +31,21 @@ export default function HeroBanner() {
     setIdx((i) => (i + delta + SLIDES.length) % SLIDES.length);
   }
 
-  return <section className="flight-intro" aria-label="Travel inspiration" aria-roledescription="carousel"
-    onFocusCapture={(e) => { if (!(e.target as HTMLElement).closest(".flight-slider-play")) setPlaying(false); }} onMouseEnter={() => setPlaying(false)}>
-    <div className="flight-intro-copy">
+  return <section className="flight-hero" aria-label="Travel inspiration" aria-roledescription="carousel"
+    onFocusCapture={(e) => { if (!(e.target as HTMLElement).closest(".flight-slider-play")) setPlaying(false); }} onMouseEnter={() => setPlaying(false)} onTouchStart={(e) => { touchX.current = e.touches[0]?.clientX ?? null; }}
+      onTouchEnd={(e) => {
+        if (touchX.current == null) return;
+        const distance = (e.changedTouches[0]?.clientX ?? touchX.current) - touchX.current;
+        if (Math.abs(distance) > 45) { setPlaying(false); move(distance > 0 ? -1 : 1); }
+        touchX.current = null;
+      }} onTouchCancel={() => { touchX.current = null; }}>
+    <div className="flight-hero-copy">
       <p className="flight-eyebrow">TRIPCOD / YOUR NEXT DEPARTURE</p>
       <h1>Good journeys<br />start with <em>better choices.</em></h1>
       <p className="flight-intro-text">Find your flight. Compare the details. Travel your way.<br />India, the Gulf and wherever comes next.</p>
+      <a className="flight-hero-cta" href="#flight-search">Find your flight <span aria-hidden="true">↗</span></a>
       <div className="flight-intro-note"><span aria-hidden="true">✈</span> One way, return or a journey with more stops.</div>
+      <p className="flight-hero-caption" aria-live={playing ? "off" : "polite"}>{SLIDES[idx].caption}</p>
       <div className="flight-slider-controls" aria-label="Hero slideshow controls">
         <button type="button" onClick={() => move(-1)} aria-label="Previous slide">←</button>
         {SLIDES.map((slide, i) => <button key={slide.image} type="button" className="flight-slide-dot"
@@ -41,17 +57,10 @@ export default function HeroBanner() {
           aria-label={playing ? "Pause slideshow" : "Play slideshow"}>{playing ? "Pause" : "Play"}</button>
       </div>
     </div>
-    <div className="flight-intro-art" onTouchStart={(e) => { touchX.current = e.touches[0]?.clientX ?? null; }}
-      onTouchEnd={(e) => {
-        if (touchX.current == null) return;
-        const distance = (e.changedTouches[0]?.clientX ?? touchX.current) - touchX.current;
-        if (Math.abs(distance) > 45) { setPlaying(false); move(distance > 0 ? -1 : 1); }
-        touchX.current = null;
-      }} onTouchCancel={() => { touchX.current = null; }}>
+    <div className="flight-hero-scenes">
       {SLIDES.map((slide, i) => <img key={slide.image} src={slide.image} alt="" width="1672" height="941"
-        hidden={i !== idx} loading={i === 0 ? "eager" : "lazy"} fetchPriority={i === 0 ? "high" : "auto"} />)}
-      <span className="flight-art-caption" aria-live={playing ? "off" : "polite"}>{SLIDES[idx].caption}</span>
-      <span className="flight-art-mark" aria-hidden="true">T / C</span>
+        className={i === idx ? "flight-hero-scene is-active" : "flight-hero-scene"} aria-hidden={i !== idx} loading={i === 0 ? "eager" : "lazy"} fetchPriority={i === 0 ? "high" : "auto"} />)}
+
     </div>
   </section>;
 }

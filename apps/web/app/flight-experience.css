@@ -180,18 +180,37 @@ body .site-nav-links .nav-link { min-height:44px; color:var(--text-primary); }
 .flight-results-page .fare-variant-book { background:var(--brand-secondary); color:var(--text-primary); min-height:44px; }
 .ck .saveCheck input { flex:none; }
 
-/* Hero imagery uses the existing flight-first layout, with explicit slide controls. */
-.flight-slider-controls { display:flex; align-items:center; gap:4px; margin-top:22px; }
-.flight-slider-controls button { width:44px; height:44px; border:1px solid var(--border); border-radius:50%; background:white; color:var(--brand-primary); cursor:pointer; font:inherit; }
-.flight-slider-controls button:hover { border-color:var(--brand-primary); }
-.flight-slider-controls button:focus-visible { outline:3px solid var(--brand-secondary); outline-offset:3px; }
+/* Immersive homepage hero; search remains the next distinct section. */
+.flight-hero { position:relative; isolation:isolate; min-height:600px; display:flex; align-items:center; background:#4B4D4F; color:white; overflow:hidden; }
+.flight-hero-scenes { position:absolute; inset:0; z-index:-2; }
+.flight-hero-scene { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; object-position:center; opacity:0; transition:opacity .65s ease; }
+.flight-hero-scene.is-active { opacity:1; }
+.flight-hero::after { content:""; position:absolute; inset:0; z-index:-1; background:linear-gradient(90deg,rgba(19,22,24,.92) 0%,rgba(19,22,24,.8) 40%,rgba(19,22,24,.12) 100%); pointer-events:none; }
+.flight-hero-copy { width:100%; max-width:1240px; margin:auto; padding:64px 24px 72px; }
+.flight-hero .flight-eyebrow { color:#FFB005; }
+.flight-hero h1 { max-width:650px; font-size:clamp(38px,4.3vw,62px); line-height:1.08; font-weight:600; letter-spacing:-.045em; margin:0; color:white; }
+.flight-hero h1 em { font-style:normal; color:#FFB005; }
+.flight-hero .flight-intro-text { color:#fff; max-width:540px; margin:24px 0; }
+.flight-hero .flight-intro-note { color:#fff; margin-top:20px; }
+.flight-hero .flight-intro-note > span { border-color:#ffffff70; }
+.flight-hero-cta { display:inline-flex; gap:36px; align-items:center; min-height:48px; padding:12px 22px; border-radius:12px; background:#FFB005; color:#242628; font-size:14px; font-weight:700; text-decoration:none; }
+.flight-hero-cta:hover { background:#ffc147; }
+.flight-hero-caption { color:#fff; font-size:12px; margin:28px 0 0; }
+.flight-slider-controls { display:flex; align-items:center; gap:4px; margin-top:12px; }
+.flight-slider-controls button { flex:none; width:44px; height:44px; border:1px solid #ffffff80; border-radius:50%; background:#4B4D4F; color:white; cursor:pointer; font:inherit; }
+.flight-slider-controls button:hover { border-color:#FFB005; }
+.flight-slider-controls button:focus-visible,.flight-hero-cta:focus-visible { outline:3px solid #FFB005; outline-offset:4px; }
 .flight-slider-controls .flight-slide-dot { border:0; background:transparent; display:grid; place-items:center; }
-.flight-slide-dot span { width:8px; height:8px; border-radius:50%; background:#a8a9aa; }
-.flight-slide-dot[aria-pressed="true"] span { width:22px; border-radius:8px; background:var(--brand-secondary); }
+.flight-slide-dot span { width:8px; height:8px; border-radius:50%; background:#fff; }
+.flight-slide-dot[aria-pressed="true"] span { width:22px; border-radius:8px; background:#FFB005; }
 .flight-slider-controls .flight-slider-play { width:auto; padding:0 12px; border-radius:22px; font-size:12px; }
-.flight-intro-art img[hidden] { display:none; }
 @media(max-width:767px) {
-  .flight-intro .flight-intro-art { display:block; height:210px; margin-top:24px; border-radius:54px 18px 18px 18px; }
-  .flight-art-caption { left:20px; bottom:18px; font-size:12px; max-width:calc(100% - 40px); }
-  .flight-art-mark { width:40px; height:40px; right:14px; top:14px; }
+  .flight-hero { min-height:580px; }
+  .flight-hero-copy { padding:44px 20px; }
+  .flight-hero h1 { font-size:clamp(34px,7.8vw,48px); max-width:520px; }
+  .flight-hero .flight-intro-text { font-size:14px; margin:22px 0; }
+  .flight-hero::after { background:linear-gradient(90deg,rgba(19,22,24,.88),rgba(19,22,24,.68)); }
+  .flight-hero-scene { object-position:62% center; }
+  .flight-hero .flight-intro-note { display:flex; font-size:11px; }
 }
+@media(prefers-reduced-motion:reduce) { .flight-hero-scene { transition:none; } }
