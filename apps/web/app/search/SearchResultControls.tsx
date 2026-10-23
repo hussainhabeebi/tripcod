@@ -1,7 +1,9 @@
 "use client";
 
-import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { navigateSearch } from "../lib/search-navigation";
+
+import { useSearchParams } from "next/navigation";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 type Props = {
   origin: string;
@@ -43,7 +45,7 @@ function moveDate(value: string, days: number) {
   return isoDate(date);
 }
 
-const RESULT_FILTER_KEYS = ["stops", "depBand", "refundable", "baggage", "airlines"] as const;
+const RESULT_FILTER_KEYS = ["stops", "depBand", "arrBand", "maxPrice", "maxPriceCurrency", "refundable", "baggage", "airlines"] as const;
 
 const TIME_BANDS = [
   { label: "Early morning", range: "00–06", sub: "12am–6am" },
@@ -65,12 +67,12 @@ export function ChangeDatesAction() {
 }
 
 export default function SearchResultControls({ origin, destination, departureDate, fares = [] }: Props) {
-  const router = useRouter();
   const current = useSearchParams();
-  const [isPending, startTransition] = useTransition();
+  const panelRef = useRef<HTMLElement>(null);
   const [mobileOpen, setMobileOpen] = useState(false);
   const currentQuery = current.toString();
   const [pendingQuery, setPendingQuery] = useState<string | null>(null);
+  const isPending = !mobileOpen && pendingQuery !== null;
   const visible = useMemo(() => new URLSearchParams(pendingQuery ?? currentQuery), [pendingQuery, currentQuery]);
   const today = isoDate(new Date()); // Same UTC day boundary as the homepage search date input.
   const [windowStart, setWindowStart] = useState(() => {
@@ -94,7 +96,22 @@ export default function SearchResultControls({ origin, destination, departureDat
   }, []);
 
   useEffect(() => {
-    if (mobileOpen) document.querySelector<HTMLButtonElement>("#flight-filter-panel .date-switcher button.active, #flight-filter-panel .date-switcher button")?.focus();
+    if (!mobileOpen) return;
+    const previous = document.activeElement as HTMLElement | null;
+    const oldOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    panelRef.current?.querySelector<HTMLButtonElement>(".filter-close")?.focus();
+    const close = (e: KeyboardEvent) => {
+      if (e.key === "Escape") { e.preventDefault(); setMobileOpen(false); setPendingQuery(null); }
+      if (e.key !== "Tab") return;
+      const items = Array.from(panelRef.current?.querySelectorAll<HTMLElement>('a[href],button:not(:disabled),input:not(:disabled),select:not(:disabled)') ?? []).filter((el) => el.getClientRects().length);
+      const first = items[0], last = items.at(-1);
+      if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last?.focus(); }
+      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first?.focus(); }
+    };
+    const resize = () => { if (window.innerWidth > 900) setMobileOpen(false); };
+    document.addEventListener("keydown", close); window.addEventListener("resize", resize);
+    return () => { document.body.style.overflow = oldOverflow; document.removeEventListener("keydown", close); window.removeEventListener("resize", resize); previous?.focus(); };
   }, [mobileOpen]);
 
   function update(updates: Record<string, string | null>) {
@@ -105,8 +122,10 @@ export default function SearchResultControls({ origin, destination, departureDat
     });
     next.delete("all");
     setPendingQuery(next.toString());
-    startTransition(() => router.push(`/search?${next.toString()}`));
+    if (!mobileOpen) navigateSearch(`/search?${next.toString()}`);
   }
+
+  function closeFilters() { setMobileOpen(false); setPendingQuery(null); }
 
   function resetFilters() {
     if (RESULT_FILTER_KEYS.some((key) => visible.has(key))) {
@@ -120,6 +139,12 @@ export default function SearchResultControls({ origin, destination, departureDat
   const refundable  = visible.get("refundable") === "1";
   const baggage     = visible.get("baggage") === "1";
   const depBand     = visible.get("depBand");
+  const arrBand = visible.get("arrBand");
+  const fareCurrencies = [...new Set(fares.map((f) => f.currency))];
+  const prices = fares.map((f) => Number(f.displayPrice ?? f.totalFare)).filter((n) => Number.isFinite(n) && n > 0);
+  const priceCurrency = fareCurrencies.length === 1 ? fareCurrencies[0] : null;
+  const priceFilterSupported = priceCurrency && prices.length > 0 && (!visible.get("currency") || visible.get("currency") === priceCurrency);
+  const maxPrice = visible.get("maxPrice") ?? "";
   const airlines    = (visible.get("airlines") ?? "").split(",").filter(Boolean);
 
   // Derive unique airlines from fares
@@ -144,18 +169,21 @@ export default function SearchResultControls({ origin, destination, departureDat
     <button type="button" className="mobile-filter-toggle" aria-expanded={mobileOpen} aria-controls="flight-filter-panel" onClick={() => setMobileOpen(true)}>
       <span aria-hidden="true">☷</span> Filters
     </button>
-    {mobileOpen && <button type="button" className="filter-backdrop" aria-label="Close filters" onClick={() => setMobileOpen(false)} />}
-    <aside id="flight-filter-panel" className={`filter-sidebar${mobileOpen ? " open" : ""}`} aria-label="Flight filters">
+    {mobileOpen && <button type="button" className="filter-backdrop" aria-label="Close filters" onClick={closeFilters} />}
+    <aside ref={panelRef} role={mobileOpen ? "dialog" : undefined} aria-modal={mobileOpen ? true : undefined} id="flight-filter-panel" className={`filter-sidebar${mobileOpen ? " open" : ""}`} aria-label="Flight filters">
+      <div className="mobile-sort-options filter-section"><div className="filter-section-label">Sort flights</div><div className="stops-btn-row">
+        {[['best','Recommended'],['price','Cheapest'],['duration','Fastest']].map(([value,label]) => <button key={value} type="button" className={`stops-btn${(visible.get("sort") ?? "best") === value ? " active" : ""}`} aria-pressed={(visible.get("sort") ?? "best") === value} onClick={() => update({sort:value})}>{label}</button>)}
+      </div></div>
       {/* Date strip */}
       <div className="filter-sidebar-title">
         <span>Filters</span>
         <div className="filter-sidebar-actions">
           <a href="#" onClick={(e) => { e.preventDefault(); resetFilters(); }}>Reset all</a>
-          <button type="button" className="filter-close" aria-label="Close filters" onClick={() => setMobileOpen(false)}>×</button>
+          <button type="button" className="filter-close" aria-label="Close filters" onClick={closeFilters}>×</button>
         </div>
       </div>
 
-      {(isPending || pendingQuery !== null) && <div className="result-refresh" role="status"><span /> Updating flights…</div>}
+      {isPending && <div className="result-refresh" role="status"><span /> Updating flights…</div>}
       <div className="filter-section-label">Travel dates</div>
       <div className="date-navigation">
         <button type="button" className="date-range-arrow" aria-label="Previous travel dates" disabled={windowStart <= today} onClick={() => setWindowStart(moveDate(windowStart, -1))}>‹</button>
@@ -201,7 +229,7 @@ export default function SearchResultControls({ origin, destination, departureDat
           {([{ label: "Any", val: null }, { label: "Nonstop", val: "0" }, { label: "1 stop", val: "1" }] as const).map(({ label, val }) => (
             <button
               key={label} type="button"
-              className={`stops-btn${stops === val || (val === null && !stops) ? " active" : ""}`}
+              aria-pressed={stops === val || (val === null && !stops)} className={`stops-btn${stops === val || (val === null && !stops) ? " active" : ""}`}
               onClick={() => update({ stops: val })}
             >
               {label}
@@ -217,7 +245,7 @@ export default function SearchResultControls({ origin, destination, departureDat
           {TIME_BANDS.map((band) => (
             <button
               key={band.range} type="button"
-              className={`time-band${depBand === band.range ? " active" : ""}`}
+              aria-pressed={depBand === band.range} className={`time-band${depBand === band.range ? " active" : ""}`}
               onClick={() => update({ depBand: depBand === band.range ? null : band.range })}
             >
               <span className="time-band-title">{band.label}</span>
@@ -227,6 +255,10 @@ export default function SearchResultControls({ origin, destination, departureDat
         </div>
       </div>
 
+      <div className="filter-section"><div className="filter-section-label">Arrival time</div><div className="time-bands">
+        {TIME_BANDS.map((band) => <button key={band.range} type="button" className={`time-band${arrBand === band.range ? " active" : ""}`} aria-pressed={arrBand === band.range} onClick={() => update({arrBand:arrBand === band.range ? null : band.range})}><span className="time-band-title">{band.label}</span>{band.sub}</button>)}
+      </div></div>
+      {priceFilterSupported && <div className="filter-section"><label className="filter-section-label" htmlFor="flight-max-price">Maximum total · {priceCurrency}</label><select id="flight-max-price" className="search-input" value={maxPrice} onChange={(e) => update({maxPrice:e.target.value || null, maxPriceCurrency:e.target.value ? priceCurrency : null})}><option value="">Any price</option>{[...new Set(prices)].sort((a,b)=>a-b).map((amount) => <option key={amount} value={amount}>Up to {amount.toLocaleString()} {priceCurrency}</option>)}</select></div>}
       {/* Fare options */}
       <div className="filter-section">
         <div className="filter-section-label">Fare options</div>
@@ -254,7 +286,7 @@ export default function SearchResultControls({ origin, destination, departureDat
         </div>
       )}
 
-      <button type="button" className="filter-apply" onClick={() => setMobileOpen(false)}>Show flights</button>
+      <button type="button" className="filter-apply" onClick={() => { if (pendingQuery !== null) { setMobileOpen(false); navigateSearch(`/search?${pendingQuery}`); } else closeFilters(); }}>Show flights</button>
     </aside>
     </>
   );

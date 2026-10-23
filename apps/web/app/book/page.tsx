@@ -3,6 +3,8 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { SeatPicker, seatCss, type SegmentSeatMap } from "./SeatPicker";
 import { ScanDocument, type ScannedTraveller } from "../components/ScanDocument";
+import { flightClock } from "../lib/flight-clock";
+import BookingProgress from "../components/BookingProgress";
 import SocialSignIn from "./SocialSignIn";
 import { bookingError } from "./booking-error";
 import { passengerNameProblem } from "./passenger-names";
@@ -525,8 +527,7 @@ export default function BookPage() {
     setPassengers((p) => p.map((x, n) => n === i ? { ...x, seat: { ...x.seat, [key]: code } } : x));
   const picks = (m: Record<string, string>) => Object.entries(m).filter(([, c]) => c).map(([key, code]) => ({ key, code }));
 
-  const t = (s?: string) =>
-    s ? new Date(s).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: false }) : "--:--";
+  const t = flightClock;
 
   async function startNomodPayment(bookingId: string, checkoutToken: string) {
     const res = await fetch(`${apiUrl}/api/payments/checkout`, {
@@ -764,7 +765,7 @@ export default function BookPage() {
     const until = new Date(held.heldUntil);
     const payLater = `/pay?${new URLSearchParams({ b: held.bookingId, t: held.checkoutToken })}`;
     return (
-      <main className="ck success"><style>{css}{checkoutCss}</style>
+      <main className="ck success"><style>{css + checkoutCss}</style>
         <div className="ok">🔒</div>
         <h1>Your fare is on hold</h1>
         {held.pnr && <p style={{ fontSize: 22, fontWeight: 800 }}>PNR: <span style={{ color: "#4B4D4F" }}>{held.pnr}</span></p>}
@@ -788,7 +789,7 @@ export default function BookPage() {
 
   if (confirmation) {
     return (
-      <main className="ck success"><style>{css}{checkoutCss}</style>
+      <main className="ck success"><style>{css + checkoutCss}</style>
         <div className="ok">✓</div>
         <h1>{["CONFIRMED", "TICKETED"].includes(confirmation.status) && confirmation.pnr ? "Booking confirmed" : "Booking request received"}</h1>
         {confirmation.warningCode === "BOOKING_SAVE_PENDING" && <p>The supplier accepted your request, but we couldn't save all details. Do not book again. Contact support with your booking reference.</p>}
@@ -813,14 +814,14 @@ export default function BookPage() {
   }
 
   return (
-    <main className="ck"><style>{css}{checkoutCss}</style>
+    <main className="ck"><style>{css + checkoutCss}</style>
       <header>
         <button type="button" aria-label={reviewing ? "Edit traveller details" : "Back to results"} disabled={submitting} onClick={() => reviewing ? setReviewing(false) : history.back()}>‹</button>
-        <div><b>{reviewing ? "Review your booking" : "Complete your booking"}</b><span>{reviewing ? "Check names and contact details" : "Continue as a guest — no account required"}</span></div>
+        <div><h1>{reviewing ? "Review your booking" : "Complete your booking"}</h1><span>{reviewing ? "Check names and contact details" : "Continue as a guest — no account required"}</span></div>
         <i>🔒</i>
       </header>
 
-      <p className="checkoutProgress">{reviewing ? "Step 2 of 2 · Review" : "Step 1 of 2 · Traveller details"}</p>
+      <BookingProgress current={reviewing ? 3 : 2} />
 
       {fareExpired && (
         <div className="err" role="alert">

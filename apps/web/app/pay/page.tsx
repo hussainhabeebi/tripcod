@@ -3,6 +3,7 @@
 // Pay for a held fare (hold now, pay later). Opened from the hold email /
 // WhatsApp link: /pay?b=<bookingId>&t=<checkout token>.
 
+import BookingProgress from "../components/BookingProgress";
 import { useEffect, useState } from "react";
 
 const API = process.env.NEXT_PUBLIC_API_URL ?? "https://api.tripcod.com";
@@ -52,7 +53,8 @@ export default function PayHeldFarePage() {
   const payable = held && held.status === "HELD" && !held.expired;
 
   return (
-    <main className="page-container" style={{ maxWidth: 520, padding: "36px 16px 48px" }}>
+    <main className="page-container flight-payment" style={{ maxWidth: 520, padding: "36px 16px 48px" }}>
+      <BookingProgress current={4} />
       <h1 style={{ margin: "0 0 6px", fontSize: 24 }}>Pay for your held fare</h1>
       {!held && !error && <p style={{ color: "#64748b" }}>Loading…</p>}
       {held && (

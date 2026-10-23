@@ -1,0 +1,1566 @@
+{
+  "measured": true,
+  "productionBuild": true,
+  "browser": "153.0.8010.0",
+  "mockSupplier": true,
+  "externalFontsBlocked": true,
+  "device": "Lighthouse mobile default emulation/throttling",
+  "runs": {
+    "home": {
+      "version": "13.5.0",
+      "fetchTime": "2026-10-23T12:51:55.300Z",
+      "scores": {
+        "performance": 93,
+        "accessibility": 100,
+        "best-practices": 100
+      },
+      "warnings": [],
+      "failedAudits": {
+        "first-contentful-paint": {
+          "title": "First Contentful Paint",
+          "score": 0.97,
+          "displayValue": "1.4 s"
+        },
+        "largest-contentful-paint": {
+          "title": "Largest Contentful Paint",
+          "score": 0.75,
+          "displayValue": "3.1 s"
+        },
+        "total-blocking-time": {
+          "title": "Total Blocking Time",
+          "score": 0.98,
+          "displayValue": "110 ms"
+        },
+        "max-potential-fid": {
+          "title": "Max Potential First Input Delay",
+          "score": 0.83,
+          "displayValue": "150 ms"
+        },
+        "interactive": {
+          "title": "Time to Interactive",
+          "score": 0.95,
+          "displayValue": "3.1 s"
+        },
+        "unused-css-rules": {
+          "title": "Reduce unused CSS",
+          "score": 0,
+          "displayValue": "Est savings of 18 KiB",
+          "details": {
+            "type": "opportunity",
+            "headings": [
+              {
+                "key": "url",
+                "valueType": "url",
+                "label": "URL"
+              },
+              {
+                "key": "totalBytes",
+                "valueType": "bytes",
+                "label": "Transfer Size"
+              },
+              {
+                "key": "wastedBytes",
+                "valueType": "bytes",
+                "label": "Est Savings"
+              }
+            ],
+            "items": [
+              {
+                "url": "http://127.0.0.1:4789/_next/static/css/187c401110fbe3fa.css",
+                "wastedBytes": 18464,
+                "wastedPercent": 88.17872083495062,
+                "totalBytes": 20939
+              }
+            ],
+            "overallSavingsMs": 150,
+            "overallSavingsBytes": 18464,
+            "sortedBy": [
+              "wastedBytes"
+            ],
+            "debugData": {
+              "type": "debugdata",
+              "metricSavings": {
+                "FCP": 0,
+                "LCP": 150
+              }
+            }
+          }
+        },
+        "unused-javascript": {
+          "title": "Reduce unused JavaScript",
+          "score": 0,
+          "displayValue": "Est savings of 21 KiB",
+          "details": {
+            "type": "opportunity",
+            "headings": [
+              {
+                "key": "url",
+                "valueType": "url",
+                "subItemsHeading": {
+                  "key": "source",
+                  "valueType": "code"
+                },
+                "label": "URL"
+              },
+              {
+                "key": "totalBytes",
+                "valueType": "bytes",
+                "subItemsHeading": {
+                  "key": "sourceBytes"
+                },
+                "label": "Transfer Size"
+              },
+              {
+                "key": "wastedBytes",
+                "valueType": "bytes",
+                "subItemsHeading": {
+                  "key": "sourceWastedBytes"
+                },
+                "label": "Est Savings"
+              }
+            ],
+            "items": [
+              {
+                "url": "http://127.0.0.1:4789/_next/static/chunks/552-2c7d6447a9fe1db8.js",
+                "totalBytes": 46135,
+                "wastedBytes": 21717,
+                "wastedPercent": 47.0729825288786
+              }
+            ],
+            "overallSavingsMs": 150,
+            "overallSavingsBytes": 21717,
+            "sortedBy": [
+              "wastedBytes"
+            ],
+            "debugData": {
+              "type": "debugdata",
+              "metricSavings": {
+                "FCP": 0,
+                "LCP": 150
+              }
+            }
+          }
+        },
+        "image-delivery-insight": {
+          "title": "Improve image delivery",
+          "score": 0.5,
+          "displayValue": "Est savings of 75 KiB",
+          "details": {
+            "type": "table",
+            "headings": [
+              {
+                "key": "node",
+                "valueType": "node",
+                "label": ""
+              },
+              {
+                "key": "url",
+                "valueType": "url",
+                "label": "URL",
+                "subItemsHeading": {
+                  "key": "reason",
+                  "valueType": "text"
+                }
+              },
+              {
+                "key": "totalBytes",
+                "valueType": "bytes",
+                "label": "Resource Size"
+              },
+              {
+                "key": "wastedBytes",
+                "valueType": "bytes",
+                "label": "Est Savings",
+                "subItemsHeading": {
+                  "key": "wastedBytes",
+                  "valueType": "bytes"
+                }
+              }
+            ],
+            "items": [
+              {
+                "node": {
+                  "type": "node",
+                  "lhId": "page-2-IMG",
+                  "path": "2,HTML,1,BODY,2,HEADER,0,A,0,IMG",
+                  "selector": "body > header.site-header > a.site-logo-link > img.site-logo",
+                  "boundingRect": {
+                    "top": 16,
+                    "bottom": 48,
+                    "left": 12,
+                    "right": 103,
+                    "width": 91,
+                    "height": 32
+                  },
+                  "snippet": "<img src=\"/logo.png\" alt=\"Tripcod Travel Solutions\" width=\"720\" height=\"252\" class=\"site-logo\">",
+                  "nodeLabel": "Tripcod Travel Solutions"
+                },
+                "url": "http://127.0.0.1:4789/logo.png",
+                "totalBytes": 45330,
+                "wastedBytes": 43837,
+                "subItems": {
+                  "type": "subitems",
+                  "items": [
+                    {
+                      "reason": "Using a modern image format (WebP, AVIF) or increasing the image compression could improve this image's download size.",
+                      "wastedBytes": 15090
+                    },
+                    {
+                      "reason": "This image file is larger than it needs to be (720x252) for its displayed dimensions (160x56). Use responsive images to reduce the image download size.",
+                      "wastedBytes": 43092
+                    }
+                  ]
+                }
+              },
+              {
+                "node": {
+                  "type": "node",
+                  "lhId": "page-3-IMG",
+                  "path": "2,HTML,1,BODY,4,FOOTER,0,DIV,1,DIV,0,DIV,0,A,0,IMG",
+                  "selector": "div.footer-main > div.footer-brand > a.footer-logo-link > img",
+                  "boundingRect": {
+                    "top": 2683,
+                    "bottom": 2727,
+                    "left": 16,
+                    "right": 142,
+                    "width": 126,
+                    "height": 44
+                  },
+                  "snippet": "<img src=\"/logo-light.png\" alt=\"Tripcod Travel Solutions\" width=\"720\" height=\"252\">",
+                  "nodeLabel": "Tripcod Travel Solutions"
+                },
+                "url": "http://127.0.0.1:4789/logo-light.png",
+                "totalBytes": 36232,
+                "wastedBytes": 33409,
+                "subItems": {
+                  "type": "subitems",
+                  "items": [
+                    {
+                      "reason": "Using a modern image format (WebP, AVIF) or increasing the image compression could improve this image's download size.",
+                      "wastedBytes": 5992
+                    },
+                    {
+                      "reason": "This image file is larger than it needs to be (720x252) for its displayed dimensions (220x77). Use responsive images to reduce the image download size.",
+                      "wastedBytes": 32850
+                    }
+                  ]
+                }
+              }
+            ],
+            "debugData": {
+              "type": "debugdata",
+              "wastedBytes": 77246
+            }
+          }
+        },
+        "legacy-javascript-insight": {
+          "title": "Legacy JavaScript",
+          "score": 0.5,
+          "displayValue": "Est savings of 12 KiB",
+          "details": {
+            "type": "table",
+            "headings": [
+              {
+                "key": "url",
+                "valueType": "url",
+                "subItemsHeading": {
+                  "key": "location",
+                  "valueType": "source-location"
+                },
+                "label": "URL"
+              },
+              {
+                "key": null,
+                "valueType": "code",
+                "subItemsHeading": {
+                  "key": "signal"
+                },
+                "label": ""
+              },
+              {
+                "key": "wastedBytes",
+                "valueType": "bytes",
+                "label": "Wasted bytes"
+              }
+            ],
+            "items": [
+              {
+                "url": "http://127.0.0.1:4789/_next/static/chunks/552-2c7d6447a9fe1db8.js",
+                "wastedBytes": 11833,
+                "subItems": {
+                  "type": "subitems",
+                  "items": [
+                    {
+                      "signal": "Array.prototype.at",
+                      "location": {
+                        "type": "source-location",
+                        "url": "http://127.0.0.1:4789/_next/static/chunks/552-2c7d6447a9fe1db8.js",
+                        "urlProvider": "network",
+                        "line": 0,
+                        "column": 97709
+                      }
+                    },
+                    {
+                      "signal": "Array.prototype.flat",
+                      "location": {
+                        "type": "source-location",
+                        "url": "http://127.0.0.1:4789/_next/static/chunks/552-2c7d6447a9fe1db8.js",
+                        "urlProvider": "network",
+                        "line": 0,
+                        "column": 97097
+                      }
+                    },
+                    {
+                      "signal": "Array.prototype.flatMap",
+                      "location": {
+                        "type": "source-location",
+                        "url": "http://127.0.0.1:4789/_next/static/chunks/552-2c7d6447a9fe1db8.js",
+                        "urlProvider": "network",
+                        "line": 0,
+                        "column": 97210
+                      }
+                    },
+                    {
+                      "signal": "Object.fromEntries",
+                      "location": {
+                        "type": "source-location",
+                        "url": "http://127.0.0.1:4789/_next/static/chunks/552-2c7d6447a9fe1db8.js",
+                        "urlProvider": "network",
+                        "line": 0,
+                        "column": 97586
+                      }
+                    },
+                    {
+                      "signal": "Object.hasOwn",
+                      "location": {
+                        "type": "source-location",
+                        "url": "http://127.0.0.1:4789/_next/static/chunks/552-2c7d6447a9fe1db8.js",
+                        "urlProvider": "network",
+                        "line": 0,
+                        "column": 97844
+                      }
+                    },
+                    {
+                      "signal": "String.prototype.trimEnd",
+                      "location": {
+                        "type": "source-location",
+                        "url": "http://127.0.0.1:4789/_next/static/chunks/552-2c7d6447a9fe1db8.js",
+                        "urlProvider": "network",
+                        "line": 0,
+                        "column": 96839
+                      }
+                    },
+                    {
+                      "signal": "String.prototype.trimStart",
+                      "location": {
+                        "type": "source-location",
+                        "url": "http://127.0.0.1:4789/_next/static/chunks/552-2c7d6447a9fe1db8.js",
+                        "urlProvider": "network",
+                        "line": 0,
+                        "column": 96754
+                      }
+                    }
+                  ]
+                }
+              }
+            ],
+            "debugData": {
+              "type": "debugdata",
+              "wastedBytes": 11833
+            }
+          }
+        },
+        "network-dependency-tree-insight": {
+          "title": "Network dependency tree",
+          "score": 0,
+          "details": {
+            "type": "list",
+            "items": [
+              {
+                "type": "list-section",
+                "value": {
+                  "type": "network-tree",
+                  "chains": {
+                    "4DFC0F7DC988A5A4DA67BB778E37184B": {
+                      "url": "http://127.0.0.1:4789/",
+                      "navStartToEndTime": 77,
+                      "transferSize": 9034,
+                      "isLongest": true,
+                      "children": {
+                        "88.5": {
+                          "url": "http://127.0.0.1:4789/_next/static/css/187c401110fbe3fa.css",
+                          "navStartToEndTime": 118,
+                          "transferSize": 21305,
+                          "isLongest": true,
+                          "children": {}
+                        },
+                        "88.6": {
+                          "url": "http://127.0.0.1:4789/_next/static/css/3d15afbfeaf25193.css",
+                          "navStartToEndTime": 110,
+                          "transferSize": 4531,
+                          "children": {}
+                        }
+                      }
+                    }
+                  },
+                  "longestChain": {
+                    "duration": 118
+                  }
+                }
+              },
+              {
+                "type": "list-section",
+                "title": "Preconnected origins",
+                "description": "[preconnect](https://developer.chrome.com/docs/lighthouse/performance/uses-rel-preconnect/) hints help the browser establish a connection earlier in the page load, saving time when the first request for that origin is made. The following are the origins that the page preconnected to.",
+                "value": {
+                  "type": "table",
+                  "headings": [
+                    {
+                      "key": "origin",
+                      "valueType": "text",
+                      "subItemsHeading": {
+                        "key": "warning"
+                      },
+                      "label": "Origin"
+                    },
+                    {
+                      "key": "source",
+                      "valueType": "node",
+                      "label": "Source"
+                    }
+                  ],
+                  "items": [
+                    {
+                      "origin": "https://images.unsplash.com/",
+                      "source": {
+                        "type": "node",
+                        "lhId": "page-1-LINK",
+                        "path": "2,HTML,0,HEAD,13,LINK",
+                        "selector": "head > link",
+                        "boundingRect": {
+                          "top": 0,
+                          "bottom": 0,
+                          "left": 0,
+                          "right": 0,
+                          "width": 0,
+                          "height": 0
+                        },
+                        "snippet": "<link rel=\"preconnect\" href=\"https://images.unsplash.com\" crossorigin=\"anonymous\">",
+                        "nodeLabel": "head > link"
+                      },
+                      "subItems": {
+                        "type": "subitems",
+                        "items": [
+                          {
+                            "warning": "Unused preconnect. Only use preconnect for origins that the page is likely to request."
+                          }
+                        ]
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "type": "list-section",
+                "title": "Preconnect candidates",
+                "description": "Add [preconnect](https://developer.chrome.com/docs/lighthouse/performance/uses-rel-preconnect/) hints to your most important origins, but try to use no more than 4.",
+                "value": {
+                  "type": "text",
+                  "value": "No additional origins are good candidates for preconnecting"
+                }
+              }
+            ]
+          }
+        },
+        "render-blocking-insight": {
+          "title": "Render-blocking requests",
+          "score": 0,
+          "displayValue": "Est savings of 300 ms",
+          "details": {
+            "type": "table",
+            "headings": [
+              {
+                "key": "url",
+                "valueType": "url",
+                "label": "URL"
+              },
+              {
+                "key": "totalBytes",
+                "valueType": "bytes",
+                "label": "Transfer Size"
+              },
+              {
+                "key": "wastedMs",
+                "valueType": "timespanMs",
+                "label": "Duration"
+              }
+            ],
+            "items": [
+              {
+                "url": "http://127.0.0.1:4789/_next/static/css/187c401110fbe3fa.css",
+                "totalBytes": 21305,
+                "wastedMs": 314
+              },
+              {
+                "url": "http://127.0.0.1:4789/_next/static/css/3d15afbfeaf25193.css",
+                "totalBytes": 4531,
+                "wastedMs": 314
+              }
+            ]
+          }
+        }
+      }
+    },
+    "results": {
+      "version": "13.5.0",
+      "fetchTime": "2026-10-23T12:52:02.443Z",
+      "scores": {
+        "performance": 97,
+        "accessibility": 100,
+        "best-practices": 100
+      },
+      "warnings": [],
+      "failedAudits": {
+        "first-contentful-paint": {
+          "title": "First Contentful Paint",
+          "score": 0.95,
+          "displayValue": "1.5 s"
+        },
+        "largest-contentful-paint": {
+          "title": "Largest Contentful Paint",
+          "score": 0.89,
+          "displayValue": "2.5 s"
+        },
+        "max-potential-fid": {
+          "title": "Max Potential First Input Delay",
+          "score": 0.81,
+          "displayValue": "160 ms"
+        },
+        "interactive": {
+          "title": "Time to Interactive",
+          "score": 0.98,
+          "displayValue": "2.6 s"
+        },
+        "unused-css-rules": {
+          "title": "Reduce unused CSS",
+          "score": 0,
+          "displayValue": "Est savings of 16 KiB",
+          "details": {
+            "type": "opportunity",
+            "headings": [
+              {
+                "key": "url",
+                "valueType": "url",
+                "label": "URL"
+              },
+              {
+                "key": "totalBytes",
+                "valueType": "bytes",
+                "label": "Transfer Size"
+              },
+              {
+                "key": "wastedBytes",
+                "valueType": "bytes",
+                "label": "Est Savings"
+              }
+            ],
+            "items": [
+              {
+                "url": "http://127.0.0.1:4789/_next/static/css/187c401110fbe3fa.css",
+                "wastedBytes": 16584,
+                "wastedPercent": 79.19955147280804,
+                "totalBytes": 20939
+              }
+            ],
+            "overallSavingsMs": 150,
+            "overallSavingsBytes": 16584,
+            "sortedBy": [
+              "wastedBytes"
+            ],
+            "debugData": {
+              "type": "debugdata",
+              "metricSavings": {
+                "FCP": 0,
+                "LCP": 150
+              }
+            }
+          }
+        },
+        "unused-javascript": {
+          "title": "Reduce unused JavaScript",
+          "score": 0.5,
+          "displayValue": "Est savings of 21 KiB",
+          "details": {
+            "type": "opportunity",
+            "headings": [
+              {
+                "key": "url",
+                "valueType": "url",
+                "subItemsHeading": {
+                  "key": "source",
+                  "valueType": "code"
+                },
+                "label": "URL"
+              },
+              {
+                "key": "totalBytes",
+                "valueType": "bytes",
+                "subItemsHeading": {
+                  "key": "sourceBytes"
+                },
+                "label": "Transfer Size"
+              },
+              {
+                "key": "wastedBytes",
+                "valueType": "bytes",
+                "subItemsHeading": {
+                  "key": "sourceWastedBytes"
+                },
+                "label": "Est Savings"
+              }
+            ],
+            "items": [
+              {
+                "url": "http://127.0.0.1:4789/_next/static/chunks/552-2c7d6447a9fe1db8.js",
+                "totalBytes": 46135,
+                "wastedBytes": 21653,
+                "wastedPercent": 46.93477985465685
+              }
+            ],
+            "overallSavingsMs": 0,
+            "overallSavingsBytes": 21653,
+            "sortedBy": [
+              "wastedBytes"
+            ],
+            "debugData": {
+              "type": "debugdata",
+              "metricSavings": {
+                "FCP": 0,
+                "LCP": 0
+              }
+            }
+          }
+        },
+        "image-delivery-insight": {
+          "title": "Improve image delivery",
+          "score": 0.5,
+          "displayValue": "Est savings of 75 KiB",
+          "details": {
+            "type": "table",
+            "headings": [
+              {
+                "key": "node",
+                "valueType": "node",
+                "label": ""
+              },
+              {
+                "key": "url",
+                "valueType": "url",
+                "label": "URL",
+                "subItemsHeading": {
+                  "key": "reason",
+                  "valueType": "text"
+                }
+              },
+              {
+                "key": "totalBytes",
+                "valueType": "bytes",
+                "label": "Resource Size"
+              },
+              {
+                "key": "wastedBytes",
+                "valueType": "bytes",
+                "label": "Est Savings",
+                "subItemsHeading": {
+                  "key": "wastedBytes",
+                  "valueType": "bytes"
+                }
+              }
+            ],
+            "items": [
+              {
+                "node": {
+                  "type": "node",
+                  "lhId": "page-2-IMG",
+                  "path": "1,HTML,1,BODY,2,HEADER,0,A,0,IMG",
+                  "selector": "body > header.site-header > a.site-logo-link > img.site-logo",
+                  "boundingRect": {
+                    "top": 16,
+                    "bottom": 48,
+                    "left": 12,
+                    "right": 103,
+                    "width": 91,
+                    "height": 32
+                  },
+                  "snippet": "<img src=\"/logo.png\" alt=\"Tripcod Travel Solutions\" width=\"720\" height=\"252\" class=\"site-logo\">",
+                  "nodeLabel": "Tripcod Travel Solutions"
+                },
+                "url": "http://127.0.0.1:4789/logo.png",
+                "totalBytes": 45330,
+                "wastedBytes": 43837,
+                "subItems": {
+                  "type": "subitems",
+                  "items": [
+                    {
+                      "reason": "Using a modern image format (WebP, AVIF) or increasing the image compression could improve this image's download size.",
+                      "wastedBytes": 15090
+                    },
+                    {
+                      "reason": "This image file is larger than it needs to be (720x252) for its displayed dimensions (160x56). Use responsive images to reduce the image download size.",
+                      "wastedBytes": 43092
+                    }
+                  ]
+                }
+              },
+              {
+                "node": {
+                  "type": "node",
+                  "lhId": "page-3-IMG",
+                  "path": "1,HTML,1,BODY,4,FOOTER,0,DIV,1,DIV,0,DIV,0,A,0,IMG",
+                  "selector": "div.footer-main > div.footer-brand > a.footer-logo-link > img",
+                  "boundingRect": {
+                    "top": 1885,
+                    "bottom": 1929,
+                    "left": 16,
+                    "right": 142,
+                    "width": 126,
+                    "height": 44
+                  },
+                  "snippet": "<img src=\"/logo-light.png\" alt=\"Tripcod Travel Solutions\" width=\"720\" height=\"252\">",
+                  "nodeLabel": "Tripcod Travel Solutions"
+                },
+                "url": "http://127.0.0.1:4789/logo-light.png",
+                "totalBytes": 36232,
+                "wastedBytes": 33409,
+                "subItems": {
+                  "type": "subitems",
+                  "items": [
+                    {
+                      "reason": "Using a modern image format (WebP, AVIF) or increasing the image compression could improve this image's download size.",
+                      "wastedBytes": 5992
+                    },
+                    {
+                      "reason": "This image file is larger than it needs to be (720x252) for its displayed dimensions (220x77). Use responsive images to reduce the image download size.",
+                      "wastedBytes": 32850
+                    }
+                  ]
+                }
+              }
+            ],
+            "debugData": {
+              "type": "debugdata",
+              "wastedBytes": 77246
+            }
+          }
+        },
+        "legacy-javascript-insight": {
+          "title": "Legacy JavaScript",
+          "score": 0.5,
+          "displayValue": "Est savings of 12 KiB",
+          "details": {
+            "type": "table",
+            "headings": [
+              {
+                "key": "url",
+                "valueType": "url",
+                "subItemsHeading": {
+                  "key": "location",
+                  "valueType": "source-location"
+                },
+                "label": "URL"
+              },
+              {
+                "key": null,
+                "valueType": "code",
+                "subItemsHeading": {
+                  "key": "signal"
+                },
+                "label": ""
+              },
+              {
+                "key": "wastedBytes",
+                "valueType": "bytes",
+                "label": "Wasted bytes"
+              }
+            ],
+            "items": [
+              {
+                "url": "http://127.0.0.1:4789/_next/static/chunks/552-2c7d6447a9fe1db8.js",
+                "wastedBytes": 11833,
+                "subItems": {
+                  "type": "subitems",
+                  "items": [
+                    {
+                      "signal": "Array.prototype.at",
+                      "location": {
+                        "type": "source-location",
+                        "url": "http://127.0.0.1:4789/_next/static/chunks/552-2c7d6447a9fe1db8.js",
+                        "urlProvider": "network",
+                        "line": 0,
+                        "column": 97709
+                      }
+                    },
+                    {
+                      "signal": "Array.prototype.flat",
+                      "location": {
+                        "type": "source-location",
+                        "url": "http://127.0.0.1:4789/_next/static/chunks/552-2c7d6447a9fe1db8.js",
+                        "urlProvider": "network",
+                        "line": 0,
+                        "column": 97097
+                      }
+                    },
+                    {
+                      "signal": "Array.prototype.flatMap",
+                      "location": {
+                        "type": "source-location",
+                        "url": "http://127.0.0.1:4789/_next/static/chunks/552-2c7d6447a9fe1db8.js",
+                        "urlProvider": "network",
+                        "line": 0,
+                        "column": 97210
+                      }
+                    },
+                    {
+                      "signal": "Object.fromEntries",
+                      "location": {
+                        "type": "source-location",
+                        "url": "http://127.0.0.1:4789/_next/static/chunks/552-2c7d6447a9fe1db8.js",
+                        "urlProvider": "network",
+                        "line": 0,
+                        "column": 97586
+                      }
+                    },
+                    {
+                      "signal": "Object.hasOwn",
+                      "location": {
+                        "type": "source-location",
+                        "url": "http://127.0.0.1:4789/_next/static/chunks/552-2c7d6447a9fe1db8.js",
+                        "urlProvider": "network",
+                        "line": 0,
+                        "column": 97844
+                      }
+                    },
+                    {
+                      "signal": "String.prototype.trimEnd",
+                      "location": {
+                        "type": "source-location",
+                        "url": "http://127.0.0.1:4789/_next/static/chunks/552-2c7d6447a9fe1db8.js",
+                        "urlProvider": "network",
+                        "line": 0,
+                        "column": 96839
+                      }
+                    },
+                    {
+                      "signal": "String.prototype.trimStart",
+                      "location": {
+                        "type": "source-location",
+                        "url": "http://127.0.0.1:4789/_next/static/chunks/552-2c7d6447a9fe1db8.js",
+                        "urlProvider": "network",
+                        "line": 0,
+                        "column": 96754
+                      }
+                    }
+                  ]
+                }
+              }
+            ],
+            "debugData": {
+              "type": "debugdata",
+              "wastedBytes": 11833
+            }
+          }
+        },
+        "network-dependency-tree-insight": {
+          "title": "Network dependency tree",
+          "score": 0,
+          "details": {
+            "type": "list",
+            "items": [
+              {
+                "type": "list-section",
+                "value": {
+                  "type": "network-tree",
+                  "chains": {
+                    "D9F7CF086377E29059CEE50A7A5ED2F0": {
+                      "url": "http://127.0.0.1:4789/search?origin=COK&destination=DXB&departureDate=2027-01-10&adults=1&cabinClass=ECONOMY&tripType=ONEWAY&currency=INR",
+                      "navStartToEndTime": 244,
+                      "transferSize": 20260,
+                      "isLongest": true,
+                      "children": {
+                        "137.4": {
+                          "url": "http://127.0.0.1:4789/_next/static/css/187c401110fbe3fa.css",
+                          "navStartToEndTime": 194,
+                          "transferSize": 21305,
+                          "children": {}
+                        },
+                        "137.5": {
+                          "url": "http://127.0.0.1:4789/_next/static/css/3d15afbfeaf25193.css",
+                          "navStartToEndTime": 187,
+                          "transferSize": 4531,
+                          "children": {}
+                        }
+                      }
+                    }
+                  },
+                  "longestChain": {
+                    "duration": 244
+                  }
+                }
+              },
+              {
+                "type": "list-section",
+                "title": "Preconnected origins",
+                "description": "[preconnect](https://developer.chrome.com/docs/lighthouse/performance/uses-rel-preconnect/) hints help the browser establish a connection earlier in the page load, saving time when the first request for that origin is made. The following are the origins that the page preconnected to.",
+                "value": {
+                  "type": "table",
+                  "headings": [
+                    {
+                      "key": "origin",
+                      "valueType": "text",
+                      "subItemsHeading": {
+                        "key": "warning"
+                      },
+                      "label": "Origin"
+                    },
+                    {
+                      "key": "source",
+                      "valueType": "node",
+                      "label": "Source"
+                    }
+                  ],
+                  "items": [
+                    {
+                      "origin": "https://images.unsplash.com/",
+                      "source": {
+                        "type": "node",
+                        "lhId": "page-1-LINK",
+                        "path": "1,HTML,0,HEAD,9,LINK",
+                        "selector": "head > link",
+                        "boundingRect": {
+                          "top": 0,
+                          "bottom": 0,
+                          "left": 0,
+                          "right": 0,
+                          "width": 0,
+                          "height": 0
+                        },
+                        "snippet": "<link rel=\"preconnect\" href=\"https://images.unsplash.com\" crossorigin=\"anonymous\">",
+                        "nodeLabel": "head > link"
+                      },
+                      "subItems": {
+                        "type": "subitems",
+                        "items": [
+                          {
+                            "warning": "Unused preconnect. Only use preconnect for origins that the page is likely to request."
+                          }
+                        ]
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "type": "list-section",
+                "title": "Preconnect candidates",
+                "description": "Add [preconnect](https://developer.chrome.com/docs/lighthouse/performance/uses-rel-preconnect/) hints to your most important origins, but try to use no more than 4.",
+                "value": {
+                  "type": "text",
+                  "value": "No additional origins are good candidates for preconnecting"
+                }
+              }
+            ]
+          }
+        },
+        "render-blocking-insight": {
+          "title": "Render-blocking requests",
+          "score": 0.5,
+          "details": {
+            "type": "table",
+            "headings": [
+              {
+                "key": "url",
+                "valueType": "url",
+                "label": "URL"
+              },
+              {
+                "key": "totalBytes",
+                "valueType": "bytes",
+                "label": "Transfer Size"
+              },
+              {
+                "key": "wastedMs",
+                "valueType": "timespanMs",
+                "label": "Duration"
+              }
+            ],
+            "items": [
+              {
+                "url": "http://127.0.0.1:4789/_next/static/css/187c401110fbe3fa.css",
+                "totalBytes": 21305
+              },
+              {
+                "url": "http://127.0.0.1:4789/_next/static/css/3d15afbfeaf25193.css",
+                "totalBytes": 4531
+              }
+            ]
+          }
+        }
+      }
+    },
+    "checkout": {
+      "version": "13.5.0",
+      "fetchTime": "2026-10-23T12:52:10.634Z",
+      "scores": {
+        "performance": 91,
+        "accessibility": 100,
+        "best-practices": 100
+      },
+      "warnings": [],
+      "failedAudits": {
+        "first-contentful-paint": {
+          "title": "First Contentful Paint",
+          "score": 0.97,
+          "displayValue": "1.4 s"
+        },
+        "largest-contentful-paint": {
+          "title": "Largest Contentful Paint",
+          "score": 0.93,
+          "displayValue": "2.3 s"
+        },
+        "max-potential-fid": {
+          "title": "Max Potential First Input Delay",
+          "score": 0.81,
+          "displayValue": "160 ms"
+        },
+        "cumulative-layout-shift": {
+          "title": "Cumulative Layout Shift",
+          "score": 0.72,
+          "displayValue": "0.164",
+          "details": {
+            "type": "debugdata",
+            "items": [
+              {
+                "cumulativeLayoutShiftMainFrame": 0.1638017847000885,
+                "newEngineResultDiffered": false
+              }
+            ]
+          }
+        },
+        "interactive": {
+          "title": "Time to Interactive",
+          "score": 0.99,
+          "displayValue": "2.3 s"
+        },
+        "layout-shifts": {
+          "title": "Avoid large layout shifts",
+          "score": 0,
+          "displayValue": "1 layout shift found",
+          "details": {
+            "type": "table",
+            "headings": [
+              {
+                "key": "node",
+                "valueType": "node",
+                "subItemsHeading": {
+                  "key": "extra"
+                },
+                "label": "Element"
+              },
+              {
+                "key": "score",
+                "valueType": "numeric",
+                "subItemsHeading": {
+                  "key": "cause",
+                  "valueType": "text"
+                },
+                "granularity": 0.001,
+                "label": "Layout shift score"
+              }
+            ],
+            "items": [
+              {
+                "node": {
+                  "type": "node",
+                  "lhId": "page-1-SECTION",
+                  "path": "1,HTML,1,BODY,3,DIV,0,MAIN,0,DIV,4,SECTION",
+                  "selector": "div#main-content > main.flight-token-checkout > div > section.jsx-44b3aa069eb1733f",
+                  "boundingRect": {
+                    "top": 609,
+                    "bottom": 1364,
+                    "left": 16,
+                    "right": 396,
+                    "width": 380,
+                    "height": 755
+                  },
+                  "snippet": "<section class=\"jsx-44b3aa069eb1733f panel\">",
+                  "nodeLabel": "ADULT 1\nPassenger details\n📷 Scan passport\n\nGemini fills the form. The passport …"
+                },
+                "score": 0.1638017847000885
+              }
+            ]
+          }
+        },
+        "unused-css-rules": {
+          "title": "Reduce unused CSS",
+          "score": 0,
+          "displayValue": "Est savings of 19 KiB",
+          "details": {
+            "type": "opportunity",
+            "headings": [
+              {
+                "key": "url",
+                "valueType": "url",
+                "label": "URL"
+              },
+              {
+                "key": "totalBytes",
+                "valueType": "bytes",
+                "label": "Transfer Size"
+              },
+              {
+                "key": "wastedBytes",
+                "valueType": "bytes",
+                "label": "Est Savings"
+              }
+            ],
+            "items": [
+              {
+                "url": "http://127.0.0.1:4789/_next/static/css/187c401110fbe3fa.css",
+                "wastedBytes": 19273,
+                "wastedPercent": 92.04554276102989,
+                "totalBytes": 20939
+              }
+            ],
+            "overallSavingsMs": 150,
+            "overallSavingsBytes": 19273,
+            "sortedBy": [
+              "wastedBytes"
+            ],
+            "debugData": {
+              "type": "debugdata",
+              "metricSavings": {
+                "FCP": 0,
+                "LCP": 150
+              }
+            }
+          }
+        },
+        "unused-javascript": {
+          "title": "Reduce unused JavaScript",
+          "score": 0.5,
+          "displayValue": "Est savings of 21 KiB",
+          "details": {
+            "type": "opportunity",
+            "headings": [
+              {
+                "key": "url",
+                "valueType": "url",
+                "subItemsHeading": {
+                  "key": "source",
+                  "valueType": "code"
+                },
+                "label": "URL"
+              },
+              {
+                "key": "totalBytes",
+                "valueType": "bytes",
+                "subItemsHeading": {
+                  "key": "sourceBytes"
+                },
+                "label": "Transfer Size"
+              },
+              {
+                "key": "wastedBytes",
+                "valueType": "bytes",
+                "subItemsHeading": {
+                  "key": "sourceWastedBytes"
+                },
+                "label": "Est Savings"
+              }
+            ],
+            "items": [
+              {
+                "url": "http://127.0.0.1:4789/_next/static/chunks/552-2c7d6447a9fe1db8.js",
+                "totalBytes": 46135,
+                "wastedBytes": 21712,
+                "wastedPercent": 47.06146563936012
+              }
+            ],
+            "overallSavingsMs": 0,
+            "overallSavingsBytes": 21712,
+            "sortedBy": [
+              "wastedBytes"
+            ],
+            "debugData": {
+              "type": "debugdata",
+              "metricSavings": {
+                "FCP": 0,
+                "LCP": 0
+              }
+            }
+          }
+        },
+        "cls-culprits-insight": {
+          "title": "Layout shift culprits",
+          "score": 0,
+          "details": {
+            "type": "list",
+            "items": [
+              {
+                "type": "table",
+                "headings": [
+                  {
+                    "key": "node",
+                    "valueType": "node",
+                    "subItemsHeading": {
+                      "key": "extra"
+                    },
+                    "label": "Element"
+                  },
+                  {
+                    "key": "score",
+                    "valueType": "numeric",
+                    "subItemsHeading": {
+                      "key": "cause",
+                      "valueType": "text"
+                    },
+                    "granularity": 0.001,
+                    "label": "Layout shift score"
+                  }
+                ],
+                "items": [
+                  {
+                    "node": {
+                      "type": "text",
+                      "value": "Total"
+                    },
+                    "score": 0.1638017847000885
+                  },
+                  {
+                    "node": {
+                      "type": "node",
+                      "lhId": "page-1-SECTION",
+                      "path": "1,HTML,1,BODY,3,DIV,0,MAIN,0,DIV,4,SECTION",
+                      "selector": "div#main-content > main.flight-token-checkout > div > section.jsx-44b3aa069eb1733f",
+                      "boundingRect": {
+                        "top": 609,
+                        "bottom": 1364,
+                        "left": 16,
+                        "right": 396,
+                        "width": 380,
+                        "height": 755
+                      },
+                      "snippet": "<section class=\"jsx-44b3aa069eb1733f panel\">",
+                      "nodeLabel": "ADULT 1\nPassenger details\n📷 Scan passport\n\nGemini fills the form. The passport …"
+                    },
+                    "score": 0.1638017847000885
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        "forced-reflow-insight": {
+          "title": "Forced reflow",
+          "score": 0,
+          "details": {
+            "type": "list",
+            "items": [
+              {
+                "type": "table",
+                "headings": [
+                  {
+                    "key": "source",
+                    "valueType": "source-location",
+                    "label": "Source"
+                  },
+                  {
+                    "key": "reflowTime",
+                    "valueType": "ms",
+                    "granularity": 1,
+                    "label": "Total reflow time"
+                  }
+                ],
+                "items": [
+                  {
+                    "source": {
+                      "type": "text",
+                      "value": "[unattributed]"
+                    },
+                    "reflowTime": 34.718
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        "image-delivery-insight": {
+          "title": "Improve image delivery",
+          "score": 0.5,
+          "displayValue": "Est savings of 75 KiB",
+          "details": {
+            "type": "table",
+            "headings": [
+              {
+                "key": "node",
+                "valueType": "node",
+                "label": ""
+              },
+              {
+                "key": "url",
+                "valueType": "url",
+                "label": "URL",
+                "subItemsHeading": {
+                  "key": "reason",
+                  "valueType": "text"
+                }
+              },
+              {
+                "key": "totalBytes",
+                "valueType": "bytes",
+                "label": "Resource Size"
+              },
+              {
+                "key": "wastedBytes",
+                "valueType": "bytes",
+                "label": "Est Savings",
+                "subItemsHeading": {
+                  "key": "wastedBytes",
+                  "valueType": "bytes"
+                }
+              }
+            ],
+            "items": [
+              {
+                "node": {
+                  "type": "node",
+                  "lhId": "page-7-IMG",
+                  "path": "1,HTML,1,BODY,2,HEADER,0,A,0,IMG",
+                  "selector": "body > header.site-header > a.site-logo-link > img.site-logo",
+                  "boundingRect": {
+                    "top": 16,
+                    "bottom": 48,
+                    "left": 12,
+                    "right": 103,
+                    "width": 91,
+                    "height": 32
+                  },
+                  "snippet": "<img src=\"/logo.png\" alt=\"Tripcod Travel Solutions\" width=\"720\" height=\"252\" class=\"site-logo\">",
+                  "nodeLabel": "Tripcod Travel Solutions"
+                },
+                "url": "http://127.0.0.1:4789/logo.png",
+                "totalBytes": 45330,
+                "wastedBytes": 43837,
+                "subItems": {
+                  "type": "subitems",
+                  "items": [
+                    {
+                      "reason": "Using a modern image format (WebP, AVIF) or increasing the image compression could improve this image's download size.",
+                      "wastedBytes": 15090
+                    },
+                    {
+                      "reason": "This image file is larger than it needs to be (720x252) for its displayed dimensions (160x56). Use responsive images to reduce the image download size.",
+                      "wastedBytes": 43092
+                    }
+                  ]
+                }
+              },
+              {
+                "node": {
+                  "type": "node",
+                  "lhId": "page-8-IMG",
+                  "path": "1,HTML,1,BODY,4,FOOTER,0,DIV,1,DIV,0,DIV,0,A,0,IMG",
+                  "selector": "div.footer-main > div.footer-brand > a.footer-logo-link > img",
+                  "boundingRect": {
+                    "top": 1851,
+                    "bottom": 1895,
+                    "left": 16,
+                    "right": 142,
+                    "width": 126,
+                    "height": 44
+                  },
+                  "snippet": "<img src=\"/logo-light.png\" alt=\"Tripcod Travel Solutions\" width=\"720\" height=\"252\">",
+                  "nodeLabel": "Tripcod Travel Solutions"
+                },
+                "url": "http://127.0.0.1:4789/logo-light.png",
+                "totalBytes": 36232,
+                "wastedBytes": 33409,
+                "subItems": {
+                  "type": "subitems",
+                  "items": [
+                    {
+                      "reason": "Using a modern image format (WebP, AVIF) or increasing the image compression could improve this image's download size.",
+                      "wastedBytes": 5992
+                    },
+                    {
+                      "reason": "This image file is larger than it needs to be (720x252) for its displayed dimensions (220x77). Use responsive images to reduce the image download size.",
+                      "wastedBytes": 32850
+                    }
+                  ]
+                }
+              }
+            ],
+            "debugData": {
+              "type": "debugdata",
+              "wastedBytes": 77246
+            }
+          }
+        },
+        "legacy-javascript-insight": {
+          "title": "Legacy JavaScript",
+          "score": 0.5,
+          "displayValue": "Est savings of 12 KiB",
+          "details": {
+            "type": "table",
+            "headings": [
+              {
+                "key": "url",
+                "valueType": "url",
+                "subItemsHeading": {
+                  "key": "location",
+                  "valueType": "source-location"
+                },
+                "label": "URL"
+              },
+              {
+                "key": null,
+                "valueType": "code",
+                "subItemsHeading": {
+                  "key": "signal"
+                },
+                "label": ""
+              },
+              {
+                "key": "wastedBytes",
+                "valueType": "bytes",
+                "label": "Wasted bytes"
+              }
+            ],
+            "items": [
+              {
+                "url": "http://127.0.0.1:4789/_next/static/chunks/552-2c7d6447a9fe1db8.js",
+                "wastedBytes": 11833,
+                "subItems": {
+                  "type": "subitems",
+                  "items": [
+                    {
+                      "signal": "Array.prototype.at",
+                      "location": {
+                        "type": "source-location",
+                        "url": "http://127.0.0.1:4789/_next/static/chunks/552-2c7d6447a9fe1db8.js",
+                        "urlProvider": "network",
+                        "line": 0,
+                        "column": 97709
+                      }
+                    },
+                    {
+                      "signal": "Array.prototype.flat",
+                      "location": {
+                        "type": "source-location",
+                        "url": "http://127.0.0.1:4789/_next/static/chunks/552-2c7d6447a9fe1db8.js",
+                        "urlProvider": "network",
+                        "line": 0,
+                        "column": 97097
+                      }
+                    },
+                    {
+                      "signal": "Array.prototype.flatMap",
+                      "location": {
+                        "type": "source-location",
+                        "url": "http://127.0.0.1:4789/_next/static/chunks/552-2c7d6447a9fe1db8.js",
+                        "urlProvider": "network",
+                        "line": 0,
+                        "column": 97210
+                      }
+                    },
+                    {
+                      "signal": "Object.fromEntries",
+                      "location": {
+                        "type": "source-location",
+                        "url": "http://127.0.0.1:4789/_next/static/chunks/552-2c7d6447a9fe1db8.js",
+                        "urlProvider": "network",
+                        "line": 0,
+                        "column": 97586
+                      }
+                    },
+                    {
+                      "signal": "Object.hasOwn",
+                      "location": {
+                        "type": "source-location",
+                        "url": "http://127.0.0.1:4789/_next/static/chunks/552-2c7d6447a9fe1db8.js",
+                        "urlProvider": "network",
+                        "line": 0,
+                        "column": 97844
+                      }
+                    },
+                    {
+                      "signal": "String.prototype.trimEnd",
+                      "location": {
+                        "type": "source-location",
+                        "url": "http://127.0.0.1:4789/_next/static/chunks/552-2c7d6447a9fe1db8.js",
+                        "urlProvider": "network",
+                        "line": 0,
+                        "column": 96839
+                      }
+                    },
+                    {
+                      "signal": "String.prototype.trimStart",
+                      "location": {
+                        "type": "source-location",
+                        "url": "http://127.0.0.1:4789/_next/static/chunks/552-2c7d6447a9fe1db8.js",
+                        "urlProvider": "network",
+                        "line": 0,
+                        "column": 96754
+                      }
+                    }
+                  ]
+                }
+              }
+            ],
+            "debugData": {
+              "type": "debugdata",
+              "wastedBytes": 11833
+            }
+          }
+        },
+        "render-blocking-insight": {
+          "title": "Render-blocking requests",
+          "score": 0,
+          "displayValue": "Est savings of 270 ms",
+          "details": {
+            "type": "table",
+            "headings": [
+              {
+                "key": "url",
+                "valueType": "url",
+                "label": "URL"
+              },
+              {
+                "key": "totalBytes",
+                "valueType": "bytes",
+                "label": "Transfer Size"
+              },
+              {
+                "key": "wastedMs",
+                "valueType": "timespanMs",
+                "label": "Duration"
+              }
+            ],
+            "items": [
+              {
+                "url": "http://127.0.0.1:4789/_next/static/css/3d15afbfeaf25193.css",
+                "totalBytes": 4531,
+                "wastedMs": 308
+              },
+              {
+                "url": "http://127.0.0.1:4789/_next/static/css/187c401110fbe3fa.css",
+                "totalBytes": 21305,
+                "wastedMs": 308
+              }
+            ]
+          }
+        }
+      }
+    }
+  }
+}

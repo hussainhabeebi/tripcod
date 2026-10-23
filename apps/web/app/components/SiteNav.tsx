@@ -6,16 +6,6 @@ import { apiCall, readCustomerToken } from "../lib/customer-api";
 import { CURRENCY_EVENT, isPrefCurrency, readPrefCurrency, savePrefCurrency, syncAccountCurrency, type PrefCurrency } from "../lib/currency-pref";
 import { CURRENCY_LIST } from "../lib/fx";
 
-function flightSearchUrl() {
-  // Match the existing popular-route search date rule without a dated link that expires.
-  const date = new Date();
-  date.setDate(date.getDate() + 14);
-  const departureDate = date.toISOString().split("T")[0];
-  return `/search?${new URLSearchParams({
-    origin: "CCJ", destination: "DXB", departureDate,
-    adults: "1", cabinClass: "ECONOMY", tripType: "ONEWAY",
-  }).toString()}`;
-}
 
 export default function SiteNav() {
   const pathname = usePathname();
@@ -91,7 +81,7 @@ export default function SiteNav() {
   );
 
   const navItems = [
-    { key: "flights", label: "Flights", href: flightSearchUrl(), icon: <><path d="m3 21 8-8-6-2-2 2-2-1 3-4 9 1 6-6a2 2 0 0 1 3 3l-6 6 1 9-4 3-1-2 2-2-2-6-8 8Z" /></> },
+    { key: "flights", label: "Flights", href: "/#flight-search", icon: <><path d="m3 21 8-8-6-2-2 2-2-1 3-4 9 1 6-6a2 2 0 0 1 3 3l-6 6 1 9-4 3-1-2 2-2-2-6-8 8Z" /></> },
     { key: "hotels", label: "Hotels", href: "/hotels", icon: <><path d="M4 21V5a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v16M2 21h20M9 21v-5h6v5M8 7h1m6 0h1M8 11h1m6 0h1" /></> },
     { key: "insurance", label: "Insurance", href: "/insurance", icon: <><path d="M12 3 4 6v6c0 4.5 3.4 8.2 8 9 4.6-.8 8-4.5 8-9V6l-8-3Z" /><path d="m9 12 2 2 4-4" /></> },
     { key: "trips", label: "My Trips", href: "/trips", icon: <><rect x="3" y="7" width="18" height="14" rx="2" /><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M3 13h18m-10 0v2h2v-2" /></> },
@@ -100,9 +90,9 @@ export default function SiteNav() {
     { key: "about", label: "About Us", href: "/about-us", icon: <><circle cx="12" cy="12" r="9" /><path d="M12 11v5M12 8h.01" /></> },
   ];
 
-  function navigationItems() {
-    return navItems.map(({ key, label, href, icon }) => (
-      <a key={key} href={href} onClick={key === "flights" ? (event) => { event.currentTarget.href = flightSearchUrl(); } : undefined} className={navClass(key)} aria-current={active === key ? "page" : undefined}>
+  function navigationItems(items = navItems) {
+    return items.map(({ key, label, href, icon }) => (
+      <a key={key} href={href} className={navClass(key)} aria-current={active === key ? "page" : undefined}>
         <svg className="site-nav-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{icon}</svg>
         <span>{label}</span>
       </a>
@@ -111,7 +101,10 @@ export default function SiteNav() {
 
   return (
     <nav className="site-nav" aria-label="Main navigation">
-      <div className="site-nav-links">{navigationItems()}</div>
+      <div className="site-nav-links">{navigationItems(navItems.filter((item) => ["flights", "trips"].includes(item.key)))}
+        <a className="nav-link" href="/#booking-support">Support</a>
+        <details className="nav-more"><summary>More <span aria-hidden="true">⌄</span></summary><div>{navigationItems(navItems.filter((item) => !["flights", "trips"].includes(item.key)))}</div></details>
+      </div>
       <label className="nav-currency" title="Prices are shown in this currency on every search">
         <span className="sr-only">Currency</span>
         <select value={currency} onChange={(e) => { if (isPrefCurrency(e.target.value)) changeCurrency(e.target.value); }} aria-label="Currency">
@@ -126,6 +119,7 @@ export default function SiteNav() {
         </summary>
         <div className="home-mobile-menu-panel">
           {navigationItems()}
+          <a className="nav-link" href="/#booking-support">Support</a>
           <a href="/account" className="nav-link home-menu-account-link"><span className="site-account-icon-wrap">{accountIcon}</span><span className="site-account-label" title={accountLabel}>{accountLabel}</span></a>
         </div>
       </details>
