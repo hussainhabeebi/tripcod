@@ -203,7 +203,6 @@ body .site-nav-links .nav-link { min-height:44px; color:var(--text-primary); }
 .flight-slider-controls .flight-slide-dot { border:0; background:transparent; display:grid; place-items:center; }
 .flight-slide-dot span { width:8px; height:8px; border-radius:50%; background:#fff; }
 .flight-slide-dot[aria-pressed="true"] span { width:22px; border-radius:8px; background:#FFB005; }
-.flight-slider-controls .flight-slider-play { width:auto; padding:0 12px; border-radius:22px; font-size:12px; }
 @media(max-width:767px) {
   .flight-hero { min-height:580px; }
   .flight-hero-copy { padding:44px 20px; }
