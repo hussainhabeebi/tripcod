@@ -213,3 +213,38 @@ body .site-nav-links .nav-link { min-height:44px; color:var(--text-primary); }
   .flight-hero .flight-intro-note { display:flex; font-size:11px; }
 }
 @media(prefers-reduced-motion:reduce) { .flight-hero-scene { transition:none; } }
+
+/* Restore legacy homepage sections without reactivating legacy header/search rules. */
+.restored-home .home-shell { max-width:1240px; }
+.restored-home .deal-cards-section,.restored-home .popular-routes-section,.restored-home .airline-logos-section { padding-inline:24px; }
+.restored-home .tc-about-photo::before { inset:12px 0 -12px 12px; }
+.restored-home .journey-section,.restored-home .deal-card { background:#4B4D4F; }
+.restored-home .popular-route-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:16px; }
+.restored-home .popular-route-card { min-width:0; }
+@media(max-width:767px) {
+  .restored-home .popular-route-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .restored-home .section-heading-row { flex-wrap:wrap; gap:16px; }
+}
+@media(max-width:479px) {
+  .restored-home .popular-route-grid { grid-template-columns:minmax(0,1fr); }
+}
+.restored-home .popular-route-journey { position:relative; display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; margin-bottom:14px; }
+.restored-home .popular-route-city { position:relative; display:block; min-width:0; height:130px; overflow:hidden; border-radius:9px; }
+.restored-home .popular-route-city img { width:100%; height:100%; object-fit:cover; }
+.restored-home .popular-route-city-name { position:absolute; bottom:0; left:0; right:0; padding:18px 10px 8px; color:white; background:linear-gradient(transparent,#252729); font-size:13px; font-weight:700; }
+.restored-home .popular-route-plane { position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); border-radius:50%; background:white; padding:8px; color:#4B4D4F; }
+.restored-home .popular-route-view { display:block; margin-top:6px; font-size:12px; }
+
+/* Keep the expanded navigation usable on tablets without squeezing booking controls. */
+@media(min-width:1024px) and (max-width:1279px) {
+  body .site-nav-links { display:none; }
+  body .home-mobile-menu { display:block; position:relative; }
+  body .home-mobile-menu summary { display:flex; align-items:center; gap:8px; min-height:44px; padding:0 12px; border:1px solid var(--border); border-radius:10px; list-style:none; cursor:pointer; }
+  body .home-mobile-menu-panel { position:absolute; top:calc(100% + 8px); right:0; display:grid; width:280px; padding:8px; border:1px solid var(--border); border-radius:12px; background:white; box-shadow:0 14px 36px #25272925; }
+  body .home-mobile-menu-panel .nav-link { display:flex; padding:10px 14px; }
+}
+@media(min-width:1280px) {
+  body .site-nav { gap:12px; }
+  body .site-nav-links { gap:10px; }
+  body .site-nav-links .nav-link { gap:5px; font-size:13px; }
+}

@@ -8,7 +8,6 @@ const columns = [
     links: [
       { label: "Flights", href: "/" },
       { label: "Hotels", href: "/hotels" },
-      { label: "Travel insurance", href: "/insurance" },
       { label: "Baggage & visa check", href: "/travel-check" },
     ],
   },
@@ -17,14 +16,15 @@ const columns = [
     links: [
       { label: "My Trips", href: "/trips" },
       { label: "Find a booking", href: "/trips/find" },
-      { label: "Wallet", href: "/wallet" },
       { label: "My account", href: "/account" },
     ],
   },
   {
     title: "Company",
     links: [
-      { label: "About Us", href: "/about-us" },
+      { label: "About", href: "/about-us" },
+      { label: "Services", href: "/services" },
+      { label: "Support", href: "/support" },
       { label: "Destinations", href: "/destinations" },
     ],
   },

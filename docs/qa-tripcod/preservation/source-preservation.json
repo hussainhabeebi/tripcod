@@ -1,0 +1,10 @@
+{
+  "reference": "7ba97f0",
+  "protectedFileCount": 390,
+  "unexpectedChanges": [],
+  "permittedPresentationFiles": [
+    "apps/web/app/components/HeroBanner.tsx",
+    "apps/web/app/flight-experience.css",
+    "apps/web/app/page.tsx"
+  ]
+}
