@@ -95,51 +95,9 @@ test('mobile filters batch changes until Apply and closing discards the draft',a
  await cleanup();query='';
 });
 
-const aiFields = {
- origin:{code:'DXB',city:'Dubai'},destination:{code:'COK',city:'Kochi'},
- departureDate:'2027-01-14',returnDate:null,tripType:'ONEWAY',adults:2,children:0,infants:0,
- cabinClass:'BUSINESS',fareType:'STUDENT',directOnly:true,refundableOnly:true,withBaggage:true,
- sort:'price',currency:'AED',language:'en',summary:'Dubai to Kochi for 2 adults',missing:[],
-};
-const submitAi=async()=>act(async()=>document.querySelector('.ai-search form').dispatchEvent(new Event('submit',{bubbles:true,cancelable:true})));
-test('inline AI is collapsed, expands below its toggle and retains the prompt when collapsed',async()=>{
- global.fetch=async()=>({ok:true,json:async()=>({tripSearch:true})});
- await mount();const toggle=document.querySelector('.flight-ai-toggle'),panel=document.getElementById('flight-ai-prompt');
- assert.equal(toggle.getAttribute('aria-expanded'),'false');assert.equal(panel.getAttribute('aria-hidden'),'true');
- await click(toggle);assert.equal(toggle.getAttribute('aria-expanded'),'true');assert.equal(toggle.nextElementSibling,panel);
- await input(document.querySelector('.ai-search-input'),'Dubai to Kochi');await click(toggle);await click(toggle);
- assert.equal(document.querySelector('.ai-search-input').value,'Dubai to Kochi');assert.equal(document.querySelectorAll('.ai-search').length,1);
- await key(document.querySelector('.ai-search-input'),'Escape');assert.equal(toggle.getAttribute('aria-expanded'),'false');assert.equal(document.activeElement,toggle);
- await cleanup();
-});
-test('AI forwards all four languages unchanged and normal search retains parsed preferences',async()=>{
- const requests=[];
- global.fetch=async(url,init)=>({ok:true,json:async()=>url.endsWith('/api/ai/status')?{tripSearch:true}:(requests.push({url,init,body:JSON.parse(init.body)}),{fields:aiFields})});
- await mount();await click(document.querySelector('.flight-ai-toggle'));
- for(const text of ['Dubai to Kochi next Thursday for 2 adults','ദുബായിൽ നിന്ന് കൊച്ചിയിലേക്ക് 2 പേർ','दुबई से कोच्चि दो वयस्क','من دبي إلى كوتشي شخصان']){
-  await input(document.querySelector('.ai-search-input'),text);await submitAi();assert.equal(requests.at(-1).body.text,text);
-  assert.equal(requests.at(-1).init.method,'POST');assert.equal(requests.at(-1).init.headers['x-tenant-slug'],'tripcod');
-  assert.equal(document.getElementById('sw-origin').value,'Dubai (DXB)');assert.equal(document.getElementById('sw-dest').value,'Kochi (COK)');
- }
- assert.equal(urls.length,0);assert.equal(document.getElementById('sw-depart').value,'2027-01-14');assert.equal(document.getElementById('sw-class').value,'Business');
- await act(async()=>document.querySelector('form:not(.ai-search-row)').dispatchEvent(new Event('submit',{bubbles:true,cancelable:true})));
- const url=new URL(urls[0],'https://example.test');for(const[k,v]of Object.entries({origin:'DXB',destination:'COK',adults:'2',cabinClass:'BUSINESS',fareType:'STUDENT',currency:'AED',stops:'0',refundable:'1',baggage:'1',sort:'price'}))assert.equal(url.searchParams.get(k),v);
- await cleanup();
-});
-test('AI partial result and server/network errors keep manual search available',async()=>{
- let mode='partial';global.fetch=async(url)=>{
-  if(url.endsWith('/api/ai/status'))return{ok:true,json:async()=>({tripSearch:true})};
-  if(mode==='network')throw Error('offline');
-  return{ok:mode!=='error',json:async()=>mode==='error'?{error:'Please add your departure city.'}:{fields:{...aiFields,departureDate:null,missing:['departureDate']}}};
- };
- await mount();await click(document.querySelector('.flight-ai-toggle'));await input(document.querySelector('.ai-search-input'),'Dubai to Kochi');await submitAi();
- assert.match(document.querySelector('.ai-search-result').textContent,/Please add your travel date/);assert.equal(document.querySelector('.ai-search-go'),null);
- mode='error';await submitAi();assert.match(document.querySelector('.ai-search-error').textContent,/departure city/);
- mode='network';await submitAi();assert.match(document.querySelector('.ai-search-error').textContent,/couldn't reach the server/);
- assert.equal(document.getElementById('sw-origin').value,'Dubai (DXB)');assert.equal(document.getElementById('sw-origin').disabled,false);assert.equal(urls.length,0);
- await cleanup();
-});
-test('disabled AI shows availability feedback while manual form remains usable',async()=>{
- global.fetch=async()=>({ok:true,json:async()=>({tripSearch:false})});
- await mount();await click(document.querySelector('.flight-ai-toggle'));assert.equal(document.querySelector('.ai-search-input'),null);assert.match(document.body.textContent,/AI search is currently unavailable/);assert.ok(document.getElementById('sw-origin'));await cleanup();
+test('AI prompt is absent and mounting normal search makes no AI request',async()=>{
+ const requests=[];global.fetch=async(url)=>{requests.push(String(url));return{ok:true,json:async()=>({})};};
+ await mount();assert.equal(document.querySelector('.flight-ai-search'),null);assert.equal(document.querySelector('.ai-search'),null);
+ assert.doesNotMatch(document.body.textContent,/Prefer to describe your trip|Fill search/);assert.equal(requests.some(url=>url.includes('/api/ai/')),false);
+ assert.ok(document.getElementById('sw-origin'));assert.ok(document.getElementById('sw-dest'));assert.ok(button('Search live flights'));await cleanup();
 });
