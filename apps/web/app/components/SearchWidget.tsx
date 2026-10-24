@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback } from "react";
-import { AiTripSearch, type AiTripFields } from "./AiTripSearch";
 import { useRouter } from "next/navigation";
 import { CURRENCY_EVENT, readPrefCurrency, savePrefCurrency } from "../lib/currency-pref";
 import { CURRENCY_LIST, type DisplayCurrency } from "../lib/fx";
@@ -188,8 +187,6 @@ export default function SearchWidget() {
   const paxRef = useRef<HTMLDivElement>(null);
   const [cabinClass,    setCabinClass]    = useState<(typeof CABIN_CLASSES)[number]>("Economy");
   const [currency,      setCurrencyState] = useState<CurrencyCode>("INR");
-  const [aiOpen, setAiOpen] = useState(false);
-  const aiToggleRef = useRef<HTMLButtonElement>(null);
   const [searchError, setSearchError] = useState("");
   const [searching,     setSearching]     = useState(false);
   const [searchStage,   setSearchStage]   = useState(0);
@@ -209,30 +206,6 @@ export default function SearchWidget() {
   }, []);
 
   const SEARCH_STAGES = ["Checking live fares", "Comparing airlines", "Finding your best options"];
-
-  // Plain-language search fills the regular form; its result-page preferences
-  // (sort / refundable / baggage) ride along with the next search.
-  const formRef = useRef<HTMLFormElement>(null);
-  const [aiPrefs, setAiPrefs] = useState<Record<string, string>>({});
-  function applyAi(f: AiTripFields) {
-    const toAirport = (p: { code: string; city: string } | null): Airport | null =>
-      p ? (AIRPORTS.find((a) => a.code === p.code) ?? { code: p.code, city: p.city, country: "" }) : null;
-    setTripType(f.tripType === "ROUNDTRIP" ? "Round Trip" : "One Way");
-    if (f.origin) setOrigin(toAirport(f.origin));
-    if (f.destination) setDest(toAirport(f.destination));
-    if (f.departureDate) setDepartDate(f.departureDate);
-    setReturnDate(f.returnDate ?? "");
-    setAdults(f.adults); setChildren(f.children); setInfants(f.infants);
-    setCabinClass(({ ECONOMY: "Economy", PREMIUM_ECONOMY: "Premium Economy", BUSINESS: "Business", FIRST: "First" } as const)[f.cabinClass]);
-    setSpecialFare(f.fareType === "STUDENT" ? "Student" : f.fareType === "SENIOR_CITIZEN" ? "Senior Citizen" : "Regular");
-    setDirectOnly(f.directOnly);
-    if (f.currency) setCurrency(f.currency);
-    setAiPrefs({
-      ...(f.sort !== "best" ? { sort: f.sort, all: "1" } : {}),
-      ...(f.refundableOnly ? { refundable: "1" } : {}),
-      ...(f.withBaggage ? { baggage: "1" } : {}),
-    });
-  }
 
   useEffect(() => {
     if (!searching) { setSearchStage(0); return; }
@@ -283,7 +256,6 @@ export default function SearchWidget() {
       currency,
       ...(FARE_TYPE_PARAM[specialFare] !== "REGULAR" ? { fareType: FARE_TYPE_PARAM[specialFare] } : {}),
       ...(directOnly ? { stops: "0" } : {}),
-      ...aiPrefs,
       ...(tripType === "Round Trip" && returnDate ? { returnDate } : {}),
       // legs=DEL-BOM-2026-10-01,BOM-GOI-2026-10-05
       ...(multi ? { legs: [`${origin.code}-${dest.code}-${departDate}`, ...extraLegs.map((l) => `${l.origin!.code}-${l.dest!.code}-${l.date}`)].join(",") } : {}),
@@ -300,15 +272,6 @@ export default function SearchWidget() {
 
   return (
     <div className="search-widget">
-      <div className="flight-ai-search">
-        <button ref={aiToggleRef} type="button" className="flight-ai-toggle" aria-expanded={aiOpen} aria-controls="flight-ai-prompt" onClick={() => setAiOpen((open) => !open)}>
-          Prefer to describe your trip? Try our AI search <span aria-hidden="true">{aiOpen ? "−" : "+"}</span>
-        </button>
-        <div id="flight-ai-prompt" className={`flight-ai-panel${aiOpen ? " is-open" : ""}`} aria-hidden={!aiOpen}
-          onKeyDown={(e) => { if (e.key === "Escape") { setAiOpen(false); aiToggleRef.current?.focus(); } }}>
-          <div className="flight-ai-panel-inner"><AiTripSearch onApply={applyAi} onSearchNow={() => formRef.current?.requestSubmit()} /></div>
-        </div>
-      </div>
       {/* Top bar: trip type + passengers */}
       <div className="trip-tabs">
         {(["One Way", "Round Trip", "Multi-city"] as TripType[]).map((t) => (
@@ -386,7 +349,7 @@ export default function SearchWidget() {
       </div>
 
       {searchError && <p className="flight-validation" role="alert">{searchError}</p>}
-      <form ref={formRef} onSubmit={handleSearch} aria-busy={searching}>
+      <form onSubmit={handleSearch} aria-busy={searching}>
         <div className={tripType === "Multi-city" ? "sw-grid sw-grid-multicity" : "sw-grid"}>
           {tripType === "Multi-city" && <div className="sw-flight-label">Flight 1</div>}
           {/* Route row: FROM ⇄ TO */}
