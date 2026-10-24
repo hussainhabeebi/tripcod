@@ -188,6 +188,8 @@ export default function SearchWidget() {
   const paxRef = useRef<HTMLDivElement>(null);
   const [cabinClass,    setCabinClass]    = useState<(typeof CABIN_CLASSES)[number]>("Economy");
   const [currency,      setCurrencyState] = useState<CurrencyCode>("INR");
+  const [aiOpen, setAiOpen] = useState(false);
+  const aiToggleRef = useRef<HTMLButtonElement>(null);
   const [searchError, setSearchError] = useState("");
   const [searching,     setSearching]     = useState(false);
   const [searchStage,   setSearchStage]   = useState(0);
@@ -298,7 +300,15 @@ export default function SearchWidget() {
 
   return (
     <div className="search-widget">
-      <details className="flight-ai-search"><summary>Prefer to describe your trip? Try our AI search <span aria-hidden="true">↗</span></summary><AiTripSearch onApply={applyAi} onSearchNow={() => formRef.current?.requestSubmit()} /></details>
+      <div className="flight-ai-search">
+        <button ref={aiToggleRef} type="button" className="flight-ai-toggle" aria-expanded={aiOpen} aria-controls="flight-ai-prompt" onClick={() => setAiOpen((open) => !open)}>
+          Prefer to describe your trip? Try our AI search <span aria-hidden="true">{aiOpen ? "−" : "+"}</span>
+        </button>
+        <div id="flight-ai-prompt" className={`flight-ai-panel${aiOpen ? " is-open" : ""}`} aria-hidden={!aiOpen}
+          onKeyDown={(e) => { if (e.key === "Escape") { setAiOpen(false); aiToggleRef.current?.focus(); } }}>
+          <div className="flight-ai-panel-inner"><AiTripSearch onApply={applyAi} onSearchNow={() => formRef.current?.requestSubmit()} /></div>
+        </div>
+      </div>
       {/* Top bar: trip type + passengers */}
       <div className="trip-tabs">
         {(["One Way", "Round Trip", "Multi-city"] as TripType[]).map((t) => (
@@ -414,8 +424,8 @@ export default function SearchWidget() {
                   required min={departDate || today}
                 />
               </div>
-            ) : (
-              <div className="search-field">
+            ) : null}
+              <div className={tripType === "Round Trip" ? "search-field flight-cabin-label" : "search-field"}>
                 <label htmlFor="sw-class">Class</label>
                 <select
                   id="sw-class" className="search-input" value={cabinClass}
@@ -425,7 +435,6 @@ export default function SearchWidget() {
                   {CABIN_CLASSES.map((c) => <option key={c}>{c}</option>)}
                 </select>
               </div>
-            )}
           </div>
 
           {tripType === "Multi-city" && (
@@ -464,7 +473,6 @@ export default function SearchWidget() {
 
           {/* Extras bar: direct-flights + special fares + cabin (always) */}
           <div className="sw-extras-bar">
-            {tripType === "Round Trip" && <label className="flight-cabin-label">Cabin class <select className="special-fare-select" value={cabinClass} onChange={(e) => setCabinClass(e.target.value as typeof cabinClass)}>{CABIN_CLASSES.map((c) => <option key={c}>{c}</option>)}</select></label>}
             <label className={`toggle-pill${directOnly ? " on" : ""}`}>
               <input type="checkbox" checked={directOnly} onChange={(e) => setDirectOnly(e.target.checked)} />
               <span className="toggle-pill-icon">✈</span> Direct flights only

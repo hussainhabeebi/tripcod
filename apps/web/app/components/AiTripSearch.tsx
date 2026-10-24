@@ -24,7 +24,7 @@ export type AiTripFields = {
 };
 
 const EXAMPLES = [
-  "Kochi to Dubai next Friday, 2 adults and a baby, back after a week, cheapest with baggage",
+  "Dubai to Kochi next Thursday for 2 adults",
   "കോഴിക്കോട് നിന്ന് ദോഹയിലേക്ക് ഡിസംബർ 20, 2 പേർ",
   "दिल्ली से मुंबई कल सुबह, सबसे सस्ती फ्लाइट",
   "من دبي إلى كوتشي يوم الخميس القادم، شخصان",
@@ -37,7 +37,7 @@ const MISSING_LABEL: Record<string, string> = {
 
 export function AiTripSearch({ onApply, onSearchNow }: { onApply: (f: AiTripFields) => void; onSearchNow: () => void }) {
   const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "https://api.tripcod.com";
-  const [enabled, setEnabled] = useState(false);
+  const [enabled, setEnabled] = useState<boolean | null>(null);
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -78,13 +78,13 @@ export function AiTripSearch({ onApply, onSearchNow }: { onApply: (f: AiTripFiel
     }
   }
 
-  if (!enabled) return null;
+  if (!enabled) return <p className="ai-search-hint" role="status">{enabled === null ? "Checking AI search availability…" : "AI search is currently unavailable. Please use the form below."}</p>;
   const ready = result && result.missing.length === 0;
 
   return (
     <div className="ai-search">
       <form onSubmit={submit} className="ai-search-row">
-        <span className="ai-search-icon" aria-hidden="true">✨</span>
+        <svg className="ai-search-icon" aria-hidden="true" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.6"><path d="m14 3 2.5 6.5L23 12l-6.5 2.5L14 21l-2.5-6.5L5 12l6.5-2.5L14 3ZM4 2l1 3 3 1-3 1-1 3-1-3-3-1 3-1 1-3Z" /></svg>
         <input
           dir="auto"
           value={text}
@@ -98,7 +98,7 @@ export function AiTripSearch({ onApply, onSearchNow }: { onApply: (f: AiTripFiel
           {busy ? <><i className="search-spinner" aria-hidden="true" /> Reading…</> : "Fill search"}
         </button>
       </form>
-      <p className="ai-search-hint">Type your trip in English, മലയാളം, हिन्दी or العربية — we’ll fill in the form for you.</p>
+      <p className="ai-search-hint">Type your trip in English, Malayalam, Hindi or Arabic — we’ll fill in the form for you.</p>
       {error && <p className="ai-search-error" role="alert">{error}</p>}
       {result && (
         <div className={ready ? "ai-search-result ai-search-ready" : "ai-search-result"} role="status">
