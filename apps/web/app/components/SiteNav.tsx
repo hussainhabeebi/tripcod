@@ -53,21 +53,14 @@ export default function SiteNav() {
   }, [pathname]);
 
   const accountLabel = accountName || "Account";
-  const active = pathname === "/search" || pathname.startsWith("/search/") || pathname === "/book" || pathname.startsWith("/book/") || pathname === "/checkout" || pathname.startsWith("/checkout/")
-    ? "flights"
-    : pathname === "/hotels" || pathname.startsWith("/hotels/")
-      ? "hotels"
-      : pathname === "/insurance" || pathname.startsWith("/insurance/")
-        ? "insurance"
-      : pathname === "/trips" || pathname.startsWith("/trips/")
-        ? "trips"
-        : pathname === "/wallet" || pathname.startsWith("/wallet/")
-          ? "wallet"
-          : pathname === "/destinations"
-            ? "destinations"
-            : pathname === "/about-us"
-              ? "about"
-              : null;
+  const active = pathname === "/" ? "home"
+    : pathname === "/search" || pathname.startsWith("/search/") || pathname === "/book" || pathname.startsWith("/book/") || pathname.startsWith("/checkout") ? "flights"
+    : pathname.startsWith("/trips") ? "trips"
+    : pathname.startsWith("/services") ? "services"
+    : pathname.startsWith("/support") ? "support"
+    : pathname.startsWith("/destinations") ? "destinations"
+    : pathname.startsWith("/about-us") ? "about"
+    : pathname.startsWith("/hotels") ? "hotels" : null;
 
   function navClass(item: string) {
     return active === item ? "nav-link nav-link-active" : "nav-link";
@@ -81,13 +74,14 @@ export default function SiteNav() {
   );
 
   const navItems = [
+    { key: "home", label: "Home", href: "/", icon: <><path d="m3 10 9-7 9 7v11H3V10Z" /><path d="M9 21v-8h6v8" /></> },
     { key: "flights", label: "Flights", href: "/#flight-search", icon: <><path d="m3 21 8-8-6-2-2 2-2-1 3-4 9 1 6-6a2 2 0 0 1 3 3l-6 6 1 9-4 3-1-2 2-2-2-6-8 8Z" /></> },
-    { key: "hotels", label: "Hotels", href: "/hotels", icon: <><path d="M4 21V5a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v16M2 21h20M9 21v-5h6v5M8 7h1m6 0h1M8 11h1m6 0h1" /></> },
-    { key: "insurance", label: "Insurance", href: "/insurance", icon: <><path d="M12 3 4 6v6c0 4.5 3.4 8.2 8 9 4.6-.8 8-4.5 8-9V6l-8-3Z" /><path d="m9 12 2 2 4-4" /></> },
     { key: "trips", label: "My Trips", href: "/trips", icon: <><rect x="3" y="7" width="18" height="14" rx="2" /><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M3 13h18m-10 0v2h2v-2" /></> },
-    { key: "wallet", label: "Wallet", href: "/wallet", icon: <><rect x="3" y="5" width="18" height="16" rx="2" /><path d="M3 9h18m-5 6h2" /></> },
+    { key: "services", label: "Services", href: "/services", icon: <><path d="M4 6h16M4 12h16M4 18h16" /></> },
+    { key: "about", label: "About", href: "/about-us", icon: <><circle cx="12" cy="12" r="9" /><path d="M12 11v5M12 8h.01" /></> },
+    { key: "support", label: "Support", href: "/support", icon: <><circle cx="12" cy="12" r="9" /><path d="M9 9a3 3 0 1 1 5 2c-2 1-2 2-2 3M12 17h.01" /></> },
     { key: "destinations", label: "Destinations", href: "/destinations", icon: <><path d="M12 21s-7-6.1-7-11.5a7 7 0 0 1 14 0C19 14.9 12 21 12 21Z" /><circle cx="12" cy="9.5" r="2.5" /></> },
-    { key: "about", label: "About Us", href: "/about-us", icon: <><circle cx="12" cy="12" r="9" /><path d="M12 11v5M12 8h.01" /></> },
+    { key: "hotels", label: "Hotels", href: "/hotels", icon: <><path d="M4 21V5a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v16M2 21h20M9 21v-5h6v5M8 7h1m6 0h1M8 11h1m6 0h1" /></> },
   ];
 
   function navigationItems(items = navItems) {
@@ -101,9 +95,8 @@ export default function SiteNav() {
 
   return (
     <nav className="site-nav" aria-label="Main navigation">
-      <div className="site-nav-links">{navigationItems(navItems.filter((item) => ["flights", "trips"].includes(item.key)))}
-        <a className="nav-link" href="/#booking-support">Support</a>
-        <details className="nav-more"><summary>More <span aria-hidden="true">⌄</span></summary><div>{navigationItems(navItems.filter((item) => !["flights", "trips"].includes(item.key)))}</div></details>
+      <div className="site-nav-links">{navigationItems(navItems.filter((item) => item.key !== "hotels"))}
+        <details className="nav-more"><summary>More <span aria-hidden="true">⌄</span></summary><div>{navigationItems(navItems.filter((item) => item.key === "hotels"))}</div></details>
       </div>
       <label className="nav-currency" title="Prices are shown in this currency on every search">
         <span className="sr-only">Currency</span>
@@ -119,8 +112,7 @@ export default function SiteNav() {
         </summary>
         <div className="home-mobile-menu-panel">
           {navigationItems()}
-          <a className="nav-link" href="/#booking-support">Support</a>
-          <a href="/account" className="nav-link home-menu-account-link"><span className="site-account-icon-wrap">{accountIcon}</span><span className="site-account-label" title={accountLabel}>{accountLabel}</span></a>
+            <a href="/account" className="nav-link home-menu-account-link"><span className="site-account-icon-wrap">{accountIcon}</span><span className="site-account-label" title={accountLabel}>{accountLabel}</span></a>
         </div>
       </details>
     </nav>

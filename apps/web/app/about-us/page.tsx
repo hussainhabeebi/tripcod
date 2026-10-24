@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { GallerySection, SectionHeading, StatRow } from "../components/TripcodSections";
+import { AboutPreview, GallerySection, SectionHeading, StatRow, TestimonialsSection } from "../components/TripcodSections";
 import { ABOUT_STATS, CORE_VALUES, whatsappLink } from "../lib/tripcod-content";
 
 export const metadata: Metadata = {
@@ -17,6 +17,8 @@ export default function AboutPage() {
           <p>Founded in 2023, Tripcod Travel Solutions helps travelers discover untapped destinations and immerse themselves in authentic local cultures.</p>
         </div>
       </section>
+
+      <AboutPreview />
 
       <section className="home-shell tc-section">
         <div className="tc-about">
@@ -65,6 +67,7 @@ export default function AboutPage() {
       </section>
 
       <GallerySection />
+      <TestimonialsSection />
 
       <section className="home-shell tc-section">
         <div className="wa-cta">
