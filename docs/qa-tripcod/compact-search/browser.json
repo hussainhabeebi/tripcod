@@ -1,0 +1,72 @@
+{
+  "rows": [
+    {
+      "width": 320,
+      "inlineToggle": true,
+      "multilingualInputs": 4,
+      "aiSearch": true,
+      "manualSearch": true,
+      "noOverflow": true,
+      "homepageSections": 7
+    },
+    {
+      "width": 375,
+      "inlineToggle": true,
+      "multilingualInputs": 4,
+      "aiSearch": true,
+      "manualSearch": true,
+      "noOverflow": true,
+      "homepageSections": 7
+    },
+    {
+      "width": 390,
+      "inlineToggle": true,
+      "multilingualInputs": 4,
+      "aiSearch": true,
+      "manualSearch": true,
+      "noOverflow": true,
+      "homepageSections": 7
+    },
+    {
+      "width": 428,
+      "inlineToggle": true,
+      "multilingualInputs": 4,
+      "aiSearch": true,
+      "manualSearch": true,
+      "noOverflow": true,
+      "homepageSections": 7
+    },
+    {
+      "width": 768,
+      "inlineToggle": true,
+      "multilingualInputs": 4,
+      "aiSearch": true,
+      "manualSearch": true,
+      "noOverflow": true,
+      "homepageSections": 7
+    },
+    {
+      "width": 1024,
+      "inlineToggle": true,
+      "multilingualInputs": 4,
+      "aiSearch": true,
+      "manualSearch": true,
+      "noOverflow": true,
+      "homepageSections": 7
+    },
+    {
+      "width": 1440,
+      "inlineToggle": true,
+      "multilingualInputs": 4,
+      "aiSearch": true,
+      "manualSearch": true,
+      "noOverflow": true,
+      "homepageSections": 7
+    }
+  ],
+  "errors": [],
+  "partialAndErrorFeedback": true,
+  "availabilityFeedback": true,
+  "bookingOrPaymentSubmissions": 0,
+  "mockedAI": true
+}
