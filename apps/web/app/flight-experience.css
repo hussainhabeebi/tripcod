@@ -248,3 +248,6 @@ body .site-nav-links .nav-link { min-height:44px; color:var(--text-primary); }
   body .site-nav-links { gap:10px; }
   body .site-nav-links .nav-link { gap:5px; font-size:13px; }
 }
+
+.home-mobile-menu .nav-more > div { position:static; width:auto; box-shadow:none; margin:0 8px 8px; }
+.home-mobile-menu .nav-more summary { min-height:44px; }
