@@ -210,11 +210,12 @@ bookingsAdminRoutes.post("/:id/refresh-details", async (c) => {
       passengers: tickets.map((ticketNumber) => ({ ticketNumber })),
     });
     // Save what TripJack now reports so the booking, itinerary and e-ticket catch up.
-    if (details.pnr || tickets.some(Boolean)) {
+    if (details.pnr || tickets.some(Boolean) || details.supplierStatus === "ON_HOLD") {
       await c.get("db").update(bookings).set({
         ...(details.pnr ? { pnr: details.pnr } : {}),
-        ...(tickets.some(Boolean) ? { ticketNumbers: tickets } : {}),
-        ...(["CONFIRMED", "PAYMENT_PENDING"].includes(b.status) && allTicketed ? { status: "TICKETED" as const } : {}),
+        ...(details.supplierStatus === "ON_HOLD" ? { ticketNumbers: [] } : details.supplierStatus === "SUCCESS" && tickets.some(Boolean) ? { ticketNumbers: tickets } : {}),
+        ...(details.supplierStatus === "ON_HOLD" ? { status: "HELD" as const }
+          : ["HELD", "CONFIRMED", "PAYMENT_PENDING"].includes(b.status) && details.supplierStatus === "SUCCESS" && details.pnr && allTicketed ? { status: "TICKETED" as const } : {}),
         updatedAt: new Date(),
       }).where(eq(bookings.id, b.id));
     }

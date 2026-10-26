@@ -41,12 +41,14 @@ export class TripjackClient {
   private omsBaseUrl: string;  // separate base for /oms/ paths when proxy only covers /fms/
   private apiKey:  string;
   private proxyKey: string;
+  private uatFareValidation: boolean;
 
   constructor(creds: SupplierCredentials) {
     this.baseUrl    = ((creds.baseUrl    as string) ?? process.env.TRIPJACK_API_BASE_URL ?? "").replace(/\/$/, "");
     this.omsBaseUrl = ((creds.omsBaseUrl as string) ?? process.env.TRIPJACK_OMS_BASE_URL ?? "").replace(/\/$/, "");
     this.apiKey     = (creds.apiKey   as string) ?? process.env.TRIPJACK_API_KEY      ?? "";
     this.proxyKey   = (creds.proxyKey as string) ?? process.env.TRIPJACK_PROXY_KEY ?? "";
+    this.uatFareValidation = creds.uatFareValidation === true || this.baseUrl === "https://apitest.tripjack.com";
     this.recorder   = typeof creds.recorder === "function" ? creds.recorder as ExchangeRecorder : undefined;
   }
 
@@ -150,7 +152,7 @@ export class TripjackClient {
     const searchPath = this.proxyKey ? "/air-search-all/v2" : "/fms/v1/air-search-all";
     return this.request(searchPath, {
       searchQuery: {
-        cabinClass:    params.cabinClass.charAt(0),  // Tripjack uses E/B/F
+        cabinClass:    tripjackCabinClass(params.cabinClass),
         paxInfo: {
           ADULT:  params.adults,
           CHILD:  params.children,
@@ -232,7 +234,7 @@ export class TripjackClient {
 
     // paymentInfos.amount must equal the exact TF from the review response.
     // TripJack B2B deducts from the agent wallet, but the field is required.
-    return this.request("/oms/v1/air/book", {
+    const payload = {
       bookingId: params.holdId,
       // A hold (ON_HOLD) is a book without paymentInfos; confirmHold() pays later.
       ...(params.holdOnly ? {} : { paymentInfos: [{ amount: params.paymentAmount }] }),
@@ -259,11 +261,14 @@ export class TripjackClient {
       } : {}),
       // Some TripJack partner accounts require a remarks field; harmless when not required.
       remarks: "Direct booking",
-    }, AbortSignal.timeout(25000));
+    };
+    if (this.uatFareValidation && !params.holdOnly) await this.validateInstantFare(payload);
+    return this.request("/oms/v1/air/book", payload, AbortSignal.timeout(25000));
   }
 
   // Pay for a held (ON_HOLD) booking before its time limit; amount = held TF.
   async confirmHold(bookingId: string, amount: number) {
+    if (this.uatFareValidation) await this.confirmFareBeforeTicket(bookingId);
     return this.request("/oms/v1/air/confirm-book", { bookingId, paymentInfos: [{ amount }] }, AbortSignal.timeout(30000));
   }
 
@@ -282,24 +287,44 @@ export class TripjackClient {
   }
 
   async ssrList(bookingId: string) {
-    return this.request<any>("/oms/v1/air/ssr-list", { bookingId });
+    return this.request<any>("/fms/v1/ancillaries/fetch/ssr", { bookingId });
   }
 
-  async addSsr(bookingId: string, ssrDetails: Array<{
-    type:         "MEAL" | "BAGGAGE";
-    key:          string;
-    paxIndex:     number;
-    segmentIndex?: number;
-  }>) {
-    return this.request("/oms/v1/air/ssr", {
-      bookingId,
-      ssrDetails: ssrDetails.map((s) => ({
-        code:         s.key,
-        type:         s.type,
-        paxIndex:     s.paxIndex,
-        segmentIndex: s.segmentIndex ?? 0,
-      })),
-    });
+  async postBookingSeatMap(bookingId: string) {
+    return this.request<any>("/fms/v1/ancillaries/fetch/seat", { bookingId });
+  }
+
+  async addSsr(bookingId: string, selection: PostBookingSsrSelection) {
+    return this.request("/oms/v1/air/amendment/add/ssr", { bookingId, ...selection });
+  }
+
+  async validateInstantFare(payload: Record<string, unknown>) {
+    return this.checkedFareValidation("/oms/v1/air/book/fare-validate", payload);
+  }
+
+  async confirmFareBeforeTicket(bookingId: string) {
+    return this.checkedFareValidation("/oms/v1/air/fare-validate", { bookingId });
+  }
+
+  private async checkedFareValidation(path: string, payload: Record<string, unknown>) {
+    if (this.uatFareValidation && ["tripjack.com", "api.tripjack.com"].includes(new URL(this.omsBaseUrl || this.baseUrl).hostname)) {
+      throw new Error("UAT fare validation cannot use a production OMS endpoint");
+    }
+    const raw = await this.request<any>(path, payload, AbortSignal.timeout(20000));
+    const result = raw?.data ?? raw?.result ?? raw;
+    if (raw?.status?.success === false || result?.status?.success === false || raw?.errors?.length || result?.errors?.length
+      || result?.alerts?.length) {
+      throw new SupplierError("TRIPJACK", 409, "Fare validation requires a fresh review before booking");
+    }
+    const amount = (payload.paymentInfos as { amount?: number }[] | undefined)?.[0]?.amount;
+    const validatedTotal = result?.totalPriceInfo?.totalFareDetail?.fC?.TF;
+    if (typeof amount === "number" && typeof validatedTotal === "number" && Math.round(amount * 100) !== Math.round(validatedTotal * 100)) {
+      throw new SupplierError("TRIPJACK", 409, "Validated fare changed; review before booking");
+    }
+    if (raw?.status?.success !== true && result?.status?.success !== true) {
+      throw new SupplierError("TRIPJACK", 502, "Fare validation did not establish success");
+    }
+    return raw;
   }
 
   // Cancellation charges quote for a whole booking (no change is made).
@@ -392,4 +417,17 @@ export function searchLegs(params: SearchParams): { origin: string; destination:
     out.push({ origin: params.destination, destination: params.origin, date: params.returnDate });
   }
   return out;
+}
+
+export interface PostBookingSsrSelection {
+  paymentInfos: { amount: number }[];
+  sI: { id: string; bI: { tI: { id: number; sbi?: { code: string }; smi?: { code: string }; ssi?: { code: string } }[] } }[];
+}
+
+export function tripjackCabinClass(value: string): string {
+  const classes: Record<string, string> = { E: "ECONOMY", P: "PREMIUM_ECONOMY", B: "BUSINESS", F: "FIRST",
+    ECONOMY: "ECONOMY", PREMIUM_ECONOMY: "PREMIUM_ECONOMY", BUSINESS: "BUSINESS", FIRST: "FIRST" };
+  const cabin = classes[value.toUpperCase()];
+  if (!cabin) throw new Error("Unsupported TripJack cabin class");
+  return cabin;
 }

@@ -635,7 +635,7 @@ bookDirectRoutes.post("/", zValidator("json", directBookSchema, (result, c) => {
     tenantId,
     userId:             customerId,
     channel:            "B2C_WEB",
-    status:             result.status === "CONFIRMED" || result.status === "TICKETED" ? "CONFIRMED" : "HELD",
+    status:             result.status === "TICKETED" ? "TICKETED" : result.status === "CONFIRMED" ? "CONFIRMED" : result.status === "HELD" ? "HELD" : "PAYMENT_PENDING",
     tripType:           "ONEWAY",
     cabinClass:         "ECONOMY",
     origin:             body.origin.toUpperCase(),

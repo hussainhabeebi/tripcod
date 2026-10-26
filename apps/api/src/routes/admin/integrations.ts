@@ -103,7 +103,7 @@ integrationsAdminRoutes.post("/tripjack", zValidator("json", tripjackSchema), as
   const existing = await load(c.env, tenantId, "tripjack") ?? {};
   const baseUrl  = body.environment === "PRODUCTION"
     ? "https://api.tripjack.com"
-    : "https://uat.tripjack.com";
+    : "https://apitest.tripjack.com";
   const merged   = {
     enabled:         body.enabled,
     apiKey:          body.apiKey || existing.apiKey,

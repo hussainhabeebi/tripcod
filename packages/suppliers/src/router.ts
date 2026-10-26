@@ -18,7 +18,7 @@ export interface SupplierConfig {
 // enabled but the tenant hasn't supplied their own API keys yet.
 export interface PlatformCredentials {
   RIYA?:        { apiKey?: string; secretKey?: string; baseUrl?: string };
-  TRIPJACK?:    { apiKey?: string; baseUrl?: string; omsBaseUrl?: string; proxyKey?: string };
+  TRIPJACK?:    { apiKey?: string; baseUrl?: string; omsBaseUrl?: string; proxyKey?: string; uatFareValidation?: boolean };
   GOOGLE_SERP?: { apiKey?: string; baseUrl?: string };
   DUFFEL?:      { apiKey?: string };
 }

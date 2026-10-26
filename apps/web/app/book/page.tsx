@@ -793,6 +793,7 @@ export default function BookPage() {
         <div className="ok">✓</div>
         <h1>{["CONFIRMED", "TICKETED"].includes(confirmation.status) && confirmation.pnr ? "Booking confirmed" : "Booking request received"}</h1>
         {confirmation.warningCode === "BOOKING_SAVE_PENDING" && <p>The supplier accepted your request, but we couldn't save all details. Do not book again. Contact support with your booking reference.</p>}
+        {confirmation.status === "HELD" && <p>Your booking is on hold. A held PNR is not an issued ticket.</p>}
         {confirmation.status === "PENDING" && <p>Airline confirmation is pending. Do not submit another booking for this flight.</p>}
         {confirmation.pnr && (
           <p style={{ fontSize: 22, fontWeight: 800 }}>
@@ -806,7 +807,7 @@ export default function BookPage() {
           <Row l="Booking ID"  v={confirmation.bookingId        ?? "—"} />
           <Row l="Booking Ref" v={confirmation.bookingReference ?? "—"} />
           <Row l="PNR"         v={confirmation.pnr              ?? "—"} />
-          <Row l="Status"      v={confirmation.status           ?? "CONFIRMED"} />
+          <Row l="Status"      v={confirmation.status           ?? "PENDING"} />
         </div>
         <a className="home" href="/">Search another flight</a>
       </main>

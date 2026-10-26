@@ -1,3 +1,4 @@
+import { tripjackBookingResult } from "./booking-status.js";
 import type {
   SupplierAdapter, SearchParams, NormalizedFare, HoldParams, HoldResult,
   BookParams, BookResult, PNRStatusResult, CancelResult, SupplierCredentials, FareRule, RevalidateResult,
@@ -119,21 +120,7 @@ export class TripjackAdapter implements SupplierAdapter {
 
   async book(params: BookParams): Promise<BookResult> {
     const raw = await this.client.book(params as HoldParams & BookParams) as Record<string, unknown>;
-    const response = unwrap(raw);
-    const order = (response.order ?? response) as Record<string, unknown>;
-    const travellers = travellersOf(response);
-    const pnr = firstValue(travellers.find((t) => firstValue(t.pnrDetails))?.pnrDetails) || String(response.pnr ?? "");
-    const bookingRef = String(order.bookingId ?? response.bookingId ?? params.holdId);
-    const orderStatus = String(order.status ?? "").toUpperCase();
-    const apiSuccess = (response.status as { success?: boolean } | undefined)?.success === true;
-    return {
-      success:       orderStatus === "SUCCESS" || orderStatus === "ON_HOLD" || apiSuccess || !!(pnr || bookingRef !== params.holdId),
-      bookingRef,
-      pnr,
-      status:        orderStatus === "SUCCESS" || orderStatus === "ON_HOLD" || apiSuccess ? "CONFIRMED" : "FAILED",
-      ticketNumbers: travellers.map((t) => firstValue(t.ticketNumberDetails)).filter(Boolean),
-      raw: response,
-    };
+    return tripjackBookingResult(raw, params.holdId);
   }
 
   async getPNRStatus(bookingId: string): Promise<PNRStatusResult> {

@@ -156,7 +156,7 @@ export interface BookResult {
   success:       boolean;
   bookingRef:    string;
   pnr:           string;
-  status:        "CONFIRMED" | "TICKETED" | "FAILED";
+  status:        "CONFIRMED" | "TICKETED" | "HELD" | "PENDING" | "FAILED";
   ticketNumbers: string[];
   raw:           unknown;
 }

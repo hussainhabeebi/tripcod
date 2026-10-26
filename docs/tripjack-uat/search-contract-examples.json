@@ -1,0 +1,192 @@
+[
+  {
+    "source": "Business Class/1A_1C_Search_Request.txt",
+    "cabinClass": "BUSINESS",
+    "routeCount": 2,
+    "paxInfo": {
+      "ADULT": "1",
+      "CHILD": "1",
+      "INFANT": "0"
+    }
+  },
+  {
+    "source": "Domestic/Oneway/1A_1C_Search_Request.txt",
+    "cabinClass": "ECONOMY",
+    "routeCount": 1,
+    "paxInfo": {
+      "ADULT": "1",
+      "CHILD": "1",
+      "INFANT": "0"
+    }
+  },
+  {
+    "source": "Premium Economy/1A_1C_1I_Search_Request.txt",
+    "cabinClass": "PREMIUM_ECONOMY",
+    "routeCount": 2,
+    "paxInfo": {
+      "ADULT": "1",
+      "CHILD": "1",
+      "INFANT": "1"
+    }
+  },
+  {
+    "source": "Domestic/Oneway/2A_1C_1I_Search_Request.txt",
+    "cabinClass": "ECONOMY",
+    "routeCount": 1,
+    "paxInfo": {
+      "ADULT": "2",
+      "CHILD": "1",
+      "INFANT": "1"
+    }
+  },
+  {
+    "source": "Domestic/Oneway/1A_1C_1I_Search_Request.txt",
+    "cabinClass": "ECONOMY",
+    "routeCount": 1,
+    "paxInfo": {
+      "ADULT": "1",
+      "CHILD": "1",
+      "INFANT": "1"
+    }
+  },
+  {
+    "source": "International/Oneway/1A_1C_Search_Request.txt",
+    "cabinClass": "ECONOMY",
+    "routeCount": 1,
+    "paxInfo": {
+      "ADULT": "1",
+      "CHILD": "1",
+      "INFANT": "0"
+    }
+  },
+  {
+    "source": "International/Return/1A_1C_Search_Request.txt",
+    "cabinClass": "ECONOMY",
+    "routeCount": 2,
+    "paxInfo": {
+      "ADULT": "1",
+      "CHILD": "1",
+      "INFANT": "0"
+    }
+  },
+  {
+    "source": "Domestic/Multicity/1A_1C_1I_Search_Request.txt",
+    "cabinClass": "ECONOMY",
+    "routeCount": 2,
+    "paxInfo": {
+      "ADULT": "1",
+      "CHILD": "1",
+      "INFANT": "1"
+    }
+  },
+  {
+    "source": "International/Oneway/2A_1C_1I_Search_Request.txt",
+    "cabinClass": "ECONOMY",
+    "routeCount": 1,
+    "paxInfo": {
+      "ADULT": "2",
+      "CHILD": "1",
+      "INFANT": "1"
+    }
+  },
+  {
+    "source": "International/Oneway/1A_1C_1I_Search_Request.txt",
+    "cabinClass": "ECONOMY",
+    "routeCount": 1,
+    "paxInfo": {
+      "ADULT": "1",
+      "CHILD": "1",
+      "INFANT": "1"
+    }
+  },
+  {
+    "source": "International/Return/1A_1C_1I_Search_Request.txt",
+    "cabinClass": "ECONOMY",
+    "routeCount": 2,
+    "paxInfo": {
+      "ADULT": "1",
+      "CHILD": "1",
+      "INFANT": "1"
+    }
+  },
+  {
+    "source": "International/Return/2A_2C_2I_Search_Request.txt",
+    "cabinClass": "ECONOMY",
+    "routeCount": 2,
+    "paxInfo": {
+      "ADULT": "2",
+      "CHILD": "2",
+      "INFANT": "1"
+    }
+  },
+  {
+    "source": "International/Multi-City/2A_2C_Search_Request.txt",
+    "cabinClass": "ECONOMY",
+    "routeCount": 3,
+    "paxInfo": {
+      "ADULT": "2",
+      "CHILD": "2",
+      "INFANT": "0"
+    }
+  },
+  {
+    "source": "International/Multi-City/1A_1C_Search_Request.txt",
+    "cabinClass": "ECONOMY",
+    "routeCount": 2,
+    "paxInfo": {
+      "ADULT": "1",
+      "CHILD": "1",
+      "INFANT": "0"
+    }
+  },
+  {
+    "source": "International/Multi-City/2A_2C_1I_Search_Request.txt",
+    "cabinClass": "ECONOMY",
+    "routeCount": 3,
+    "paxInfo": {
+      "ADULT": "2",
+      "CHILD": "2",
+      "INFANT": "1"
+    }
+  },
+  {
+    "source": "Preferred_Airline/Preferred_Airline_Search_Request.txt",
+    "cabinClass": "ECONOMY",
+    "routeCount": 2,
+    "paxInfo": {
+      "ADULT": "1",
+      "CHILD": "1",
+      "INFANT": "1"
+    }
+  },
+  {
+    "source": "Domestic/Return/Special Return/WITH MSRI/1A_1C_1I_Search_Request.txt",
+    "cabinClass": "ECONOMY",
+    "routeCount": 2,
+    "paxInfo": {
+      "ADULT": "1",
+      "CHILD": "1",
+      "INFANT": "1"
+    }
+  },
+  {
+    "source": "Domestic/Return/Special Return/Without MSRI/1A_1C_1I_Search_Request.txt",
+    "cabinClass": "ECONOMY",
+    "routeCount": 2,
+    "paxInfo": {
+      "ADULT": "1",
+      "CHILD": "1",
+      "INFANT": "1"
+    }
+  },
+  {
+    "source": "Search Options (Direct,Connect Flight)/Direct_Airline_Search_Request.txt",
+    "cabinClass": "ECONOMY",
+    "routeCount": 1,
+    "paxInfo": {
+      "ADULT": "2",
+      "CHILD": "0",
+      "INFANT": "0"
+    }
+  }
+]
