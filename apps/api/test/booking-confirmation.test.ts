@@ -78,3 +78,9 @@ test("confirm route distinguishes review, submission and persistence failures", 
     assert.equal(data.bookingReference, "supplier-1"); assert.equal(data.warningCode, "BOOKING_SAVE_PENDING");
   });
 });
+
+for (const state of ["ON_HOLD", "PENDING", "FAILED", "SUCCESS"]) test(`supplier order ${state} is not overridden by API acceptance`, () => {
+  const result = normalizeBookingResponse({ order: { bookingId: "session", status: state }, status: { success: true },
+    itemInfos: { AIR: { travellerInfos: [{ pnrDetails: { "DEL-BOM": "OFFLINE" }, ticketNumberDetails: { "DEL-BOM": "OFFLINE-TICKET" } }] } } }, "session");
+  assert.equal(result.status, state === "ON_HOLD" ? "HELD" : state === "SUCCESS" ? "TICKETED" : state);
+});

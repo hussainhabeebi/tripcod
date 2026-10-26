@@ -28,6 +28,9 @@ export const ROUTES = new Map([
   ["/air-book/v2", "/oms/v1/air/book"],
   ["/air-booking-detail/v2", "/oms/v1/booking-details"],
   ["/air-cancel/v2", "/oms/v1/air/amendment/submit-amendment"],
+  ["/fms/v1/ancillaries/fetch/seat", "/fms/v1/ancillaries/fetch/seat"],
+  ["/fms/v1/ancillaries/fetch/ssr", "/fms/v1/ancillaries/fetch/ssr"],
+  ["/oms/v1/air/amendment/add/ssr", "/oms/v1/air/amendment/add/ssr"],
   // Hotel routes
   ["/hotel-search/v1", "/hotel-search/v1"],
   ["/hotel-prebook/v1", "/hotel-prebook/v1"],

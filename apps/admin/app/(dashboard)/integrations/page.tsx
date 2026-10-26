@@ -225,7 +225,7 @@ export default function IntegrationsPage() {
             <div>
               <Label>Environment</Label>
               <select value={tj.env} onChange={(e) => setTj((s) => ({ ...s, env: e.target.value as Env }))} style={inputStyle}>
-                <option value="UAT">UAT (Sandbox) — uat.tripjack.com</option>
+                <option value="UAT">UAT (Sandbox) — apitest.tripjack.com</option>
                 <option value="PRODUCTION">Production — api.tripjack.com</option>
               </select>
               <p style={hint}>Switch to Production after UAT certification.</p>
@@ -286,7 +286,7 @@ export default function IntegrationsPage() {
             ["SERP_API_KEY",       "serpapi.com key — enables Google Flights trial for anonymous users"],
             ["DUFFEL_API_KEY",     "duffel_test_... for sandbox · duffel_live_... for production"],
             ["TRIPJACK_API_KEY",   "TripJack partner API key (shared for TripSafe + Cabs)"],
-            ["TRIPJACK_API_BASE_URL", "https://uat.tripjack.com (UAT) or https://api.tripjack.com (Prod)"],
+            ["TRIPJACK_API_BASE_URL", "https://apitest.tripjack.com (UAT) or https://api.tripjack.com (Prod)"],
           ].map(([k, d]) => (
             <div key={k} style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
               <code style={{ ...codeStyle, minWidth: 220, flexShrink: 0 }}>{k}</code>

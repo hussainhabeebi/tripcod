@@ -79,7 +79,7 @@ bookingRoutes.post("/", zValidator("json", bookingCreateSchema), async (c) => {
     const apiKey = saved?.apiKey || c.env.TRIPJACK_API_KEY;
     const baseUrl = c.env.TRIPJACK_API_BASE_URL || saved?.baseUrl;
     if ((apiKey || c.env.TRIPJACK_PROXY_KEY) && baseUrl) {
-      platformCredentials.TRIPJACK = { apiKey, baseUrl, omsBaseUrl: c.env.TRIPJACK_OMS_BASE_URL || undefined, proxyKey: c.env.TRIPJACK_PROXY_KEY };
+      platformCredentials.TRIPJACK = { apiKey, baseUrl, omsBaseUrl: c.env.TRIPJACK_OMS_BASE_URL || undefined, proxyKey: c.env.TRIPJACK_PROXY_KEY, uatFareValidation: c.env.ENVIRONMENT === "staging", };
       let config = supplierConfigs.find((item) => item.name === "TRIPJACK");
       if (!config) {
         const newConfig = {
@@ -115,6 +115,7 @@ bookingRoutes.post("/", zValidator("json", bookingCreateSchema), async (c) => {
         contactEmail: body.contactEmail,
         contactPhone: body.contactPhone,
         paymentRef:   "TRIPJACK_DIRECT",
+        paymentAmount: snap.totalFare,
       });
     } catch (err: unknown) {
       const errMsg = err instanceof Error ? err.message : String(err);
@@ -162,7 +163,7 @@ bookingRoutes.post("/", zValidator("json", bookingCreateSchema), async (c) => {
         userId:             userId ?? null,
         agentId:            agentId ?? null,
         channel:            agentId ? "B2B_PORTAL" : "B2C_WEB",
-        status:             "CONFIRMED",
+        status:             bookResult.status === "HELD" ? "HELD" : bookResult.status === "PENDING" ? "PAYMENT_PENDING" : bookResult.status === "TICKETED" ? "TICKETED" : "CONFIRMED",
         tripType:           "ONEWAY",
         cabinClass:         "ECONOMY",
         origin:             snap.origin,
@@ -195,11 +196,11 @@ bookingRoutes.post("/", zValidator("json", bookingCreateSchema), async (c) => {
         level: "ERROR", requestId: body.sessionId,
         requestSummary: { bookingRef: bookResult.bookingRef, pnr: bookResult.pnr },
         errorCode: "DB_WRITE_FAILED", errorMessage: errMsg });
-      return c.json({ bookingId: undefined, pnr: bookResult.pnr, status: "CONFIRMED",
+      return c.json({ bookingId: undefined, pnr: bookResult.pnr, status: bookResult.status,
         bookingRef: bookResult.bookingRef, warningCode: "BOOKING_SAVE_PENDING" }, 202);
     }
 
-    return c.json({ bookingId: booking!.id, pnr: bookResult.pnr, status: "CONFIRMED" }, 201);
+    return c.json({ bookingId: booking!.id, pnr: bookResult.pnr, status: bookResult.status }, 201);
   }
 
   // RIYA (and future suppliers): hold seat before taking payment
@@ -347,7 +348,7 @@ bookingRoutes.get("/:id/ssr", async (c) => {
     apiKey:     saved?.apiKey || c.env.TRIPJACK_API_KEY,
     baseUrl:    c.env.TRIPJACK_API_BASE_URL || saved?.baseUrl || "",
     omsBaseUrl: c.env.TRIPJACK_OMS_BASE_URL || "",
-    proxyKey:   c.env.TRIPJACK_PROXY_KEY,
+    proxyKey:   c.env.TRIPJACK_PROXY_KEY, uatFareValidation: c.env.ENVIRONMENT === "staging",
   });
 
   const raw = await client.ssrList(booking.supplierBookingRef);
@@ -356,11 +357,15 @@ bookingRoutes.get("/:id/ssr", async (c) => {
 
 // Add SSR (meal / baggage) to a confirmed TripJack booking
 bookingRoutes.post("/:id/ssr", zValidator("json", z.object({
-  ssrDetails: z.array(z.object({
-    type:         z.enum(["MEAL", "BAGGAGE"]),
-    key:          z.string().min(1),
-    paxIndex:     z.number().int().min(0),
-    segmentIndex: z.number().int().min(0).optional(),
+  paymentInfos: z.array(z.object({ amount: z.number().finite().nonnegative() })).length(1),
+  sI: z.array(z.object({
+    id: z.string().min(1),
+    bI: z.object({ tI: z.array(z.object({
+      id: z.number().int().nonnegative(),
+      sbi: z.object({ code: z.string().min(1) }).optional(),
+      smi: z.object({ code: z.string().min(1) }).optional(),
+      ssi: z.object({ code: z.string().min(1) }).optional(),
+    }).refine((p) => p.sbi || p.smi || p.ssi, "Select an ancillary")).min(1) }),
   })).min(1),
 })), async (c) => {
   const db       = c.get("db");
@@ -382,10 +387,10 @@ bookingRoutes.post("/:id/ssr", zValidator("json", z.object({
     apiKey:     saved?.apiKey || c.env.TRIPJACK_API_KEY,
     baseUrl:    c.env.TRIPJACK_API_BASE_URL || saved?.baseUrl || "",
     omsBaseUrl: c.env.TRIPJACK_OMS_BASE_URL || "",
-    proxyKey:   c.env.TRIPJACK_PROXY_KEY,
+    proxyKey:   c.env.TRIPJACK_PROXY_KEY, uatFareValidation: c.env.ENVIRONMENT === "staging",
   });
 
-  const result = await client.addSsr(booking.supplierBookingRef, body.ssrDetails);
+  const result = await client.addSsr(booking.supplierBookingRef, body);
   return c.json({ success: true, result });
 });
 

@@ -650,7 +650,7 @@ async function bookPaidBooking(
   let lastDetailsRaw: unknown = null;
   let finalPnr = bookResult.pnr;
   let finalTickets = bookResult.ticketNumbers.filter(Boolean);
-  let finalStatus: "CONFIRMED" | "TICKETED" = bookResult.status === "TICKETED" ? "TICKETED" : "CONFIRMED";
+  let finalStatus: "CONFIRMED" | "TICKETED" | "HELD" | "PAYMENT_PENDING" = bookResult.status === "TICKETED" ? "TICKETED" : bookResult.status === "CONFIRMED" ? "CONFIRMED" : bookResult.status === "HELD" ? "HELD" : "PAYMENT_PENDING";
   await db.update(bookings).set({
     status:            finalStatus,
     pnr:               finalPnr || null,
@@ -671,8 +671,10 @@ async function bookPaidBooking(
         const tickets = details.passengers.map((p) => p.ticketNumber);
         const allTicketed = tickets.length > 0 && tickets.every(Boolean);
         if (details.pnr) finalPnr = details.pnr;
-        if (tickets.some(Boolean)) finalTickets = tickets;
-        if (allTicketed) finalStatus = "TICKETED";
+        if (details.status.toUpperCase() === "SUCCESS" && tickets.some(Boolean)) finalTickets = tickets;
+        if (details.status.toUpperCase() === "ON_HOLD") finalTickets = [];
+        if (details.status.toUpperCase() === "ON_HOLD") finalStatus = "HELD";
+        else if (details.status.toUpperCase() === "SUCCESS" && details.pnr) finalStatus = allTicketed ? "TICKETED" : "CONFIRMED";
         const reason = explainMissingPnr(details);
         const testBooking = isTestBooking(details.pnr);
         await logBookingEvent(env, booking.id, finalPnr && allTicketed ? "TICKET" : "BOOKING_DETAILS",
@@ -709,6 +711,12 @@ async function bookPaidBooking(
     updatedAt:        new Date(),
   }).where(eq(payments.gatewayOrderId, data.orderId));
 
+  // A held or pending booking must not generate a confirmation or an e-ticket.
+  if (booking.supplier === "TRIPJACK" && ["HELD", "PAYMENT_PENDING"].includes(finalStatus)) {
+    await logBookingEvent(env, booking.id, "BOOKING_DETAILS", "warn", "Ticket issuance remains pending; no e-ticket or ticket notification generated", { status: finalStatus });
+    return;
+  }
+
   // ₹50 wallet bonus for signed-in customers, once per confirmed booking.
   // Never let a bonus problem fail (and retry) an already-ticketed booking.
   try {
@@ -727,6 +735,11 @@ async function bookPaidBooking(
     if (await rewardReferral(env, db, booking)) console.info(`[referral] rewarded for booking ${booking.id}`);
   } catch (err) {
     console.error(`[referral] booking ${booking.id}:`, err);
+  }
+
+  if (booking.supplier === "TRIPJACK" && finalStatus !== "TICKETED") {
+    await logBookingEvent(env, booking.id, "TICKET", "warn", "Booking confirmed but ticket numbers are pending; no e-ticket generated");
+    return;
   }
 
   // Generate e-ticket HTML

@@ -64,7 +64,7 @@ function platformCredentialsFromEnv(env: Env): PlatformCredentials {
   return {
     // RIYA, DUFFEL and GOOGLE_SERP are temporarily disabled — credentials intentionally excluded
     ...((env.TRIPJACK_API_KEY || env.TRIPJACK_PROXY_KEY) && env.TRIPJACK_API_BASE_URL
-      ? { TRIPJACK: { apiKey: env.TRIPJACK_API_KEY, baseUrl: env.TRIPJACK_API_BASE_URL, proxyKey: env.TRIPJACK_PROXY_KEY } }
+      ? { TRIPJACK: { apiKey: env.TRIPJACK_API_KEY, baseUrl: env.TRIPJACK_API_BASE_URL, proxyKey: env.TRIPJACK_PROXY_KEY, uatFareValidation: env.ENVIRONMENT === "staging", } }
       : {}),
   };
 }
@@ -126,7 +126,7 @@ export async function resolveFlightSuppliers(env: Env, tenant: Variables["tenant
       apiKey: tripjackApiKey,
       baseUrl: tripjackBaseUrl,
       omsBaseUrl: env.TRIPJACK_OMS_BASE_URL || undefined,
-      proxyKey: env.TRIPJACK_PROXY_KEY,
+      proxyKey: env.TRIPJACK_PROXY_KEY, uatFareValidation: env.ENVIRONMENT === "staging",
     };
   }
   const supplierConfigs = supplierConfigsForTenant(tenant, platformCredentials);
@@ -151,7 +151,7 @@ export async function resolveFlightSuppliers(env: Env, tenant: Variables["tenant
           ...(tripjackConfig.credentials ?? {}),
           ...(savedTripjack.apiKey ? { apiKey: savedTripjack.apiKey } : {}),
           baseUrl: tripjackBaseUrl,
-          proxyKey: env.TRIPJACK_PROXY_KEY,
+          proxyKey: env.TRIPJACK_PROXY_KEY, uatFareValidation: env.ENVIRONMENT === "staging",
         };
       }
     } else if (savedTripjack.enabled && (savedTripjack.apiKey || env.TRIPJACK_PROXY_KEY) && tripjackBaseUrl) {
@@ -162,7 +162,7 @@ export async function resolveFlightSuppliers(env: Env, tenant: Variables["tenant
         credentials: {
           ...(savedTripjack.apiKey ? { apiKey: savedTripjack.apiKey } : {}),
           baseUrl: tripjackBaseUrl,
-          proxyKey: env.TRIPJACK_PROXY_KEY,
+          proxyKey: env.TRIPJACK_PROXY_KEY, uatFareValidation: env.ENVIRONMENT === "staging",
         },
         timeoutMs: 15000,
         maxRetries: 0,
