@@ -9,10 +9,11 @@ function fixture() {
   let version = 0;
   let reject: ((key: string) => boolean) | null = null;
   const r2 = {
-    get: async (key: string) => { reads.push(key); const obj = data.get(key); return obj ? { ...obj, body: obj.text, json: async () => JSON.parse(obj.text) } : null; },
+    get: async (key: string) => { reads.push(key); const obj = data.get(key); return obj ? { ...obj, size: new TextEncoder().encode(obj.text).length, body: new Blob([obj.text]).stream(), json: async () => JSON.parse(obj.text) } : null; },
     head: async (key: string) => data.get(key) ?? null,
     put: async (key: string, text: string, options: any = {}) => {
       if (reject?.(key)) throw new Error("Simulated storage write failure");
+      if (typeof text !== "string") text = await new Response(text).text();
       const old = data.get(key);
       if (options.onlyIf?.etagMatches && options.onlyIf.etagMatches !== old?.etag) return null;
       if (options.onlyIf?.etagDoesNotMatch === "*" && old) return null;
@@ -176,7 +177,99 @@ test("a partial refresh of v2 keeps the previous completed v2 catalogue accessib
   const published = { ...f.data.get(CITY_INDEX_KEY)! };
   await syncCityIndex(f.env, { cityRegionIds: async () => ({ hotelCityRegionIds: [{ cityName: "Kochi", cityRegionId: 55, countryName: "India" }], hasMore: true, nextCursor: "refresh-next" }) }, true);
   assert.deepEqual(f.data.get(CITY_INDEX_KEY), published);
+  assert.deepEqual(await readCityMatches(f.env, ["KOCHI"]), [[55, "INDIA"]]);
   assert.deepEqual(await readCityMatches(f.env, ["DUBAI"]), [[42, "UNITED ARAB EMIRATES"]]);
   const status = await cityIndexStatus(f.env);
   assert.equal(status.ready, true); assert.equal(status.inProgress, true);
+});
+
+test("partial legacy and partially migrated cities can be searched before final publication", async () => {
+  const f = fixture();
+  await f.env.DOCUMENTS_R2.put(LEGACY, JSON.stringify({ cities: { DUBAI: [[42, "UNITED ARAB EMIRATES"]] }, pages: 128, count: 1, cursor: "next-129" }));
+  assert.deepEqual(await readCityMatches(f.env, ["DUBAI"]), [[42, "UNITED ARAB EMIRATES"]]);
+  const client = { cityRegionIds: async () => { throw new Error("Supplier must not be called while migrating"); } };
+  await syncCityIndex(f.env, client);
+  await syncCityIndex(f.env, client);
+  assert.deepEqual(await readCityMatches(f.env, ["DUBAI"]), [[42, "UNITED ARAB EMIRATES"]]);
+  assert.equal(f.data.has(CITY_INDEX_KEY), false);
+});
+test("a committed supplier page is searchable before the catalogue completes", async () => {
+  const f = fixture();
+  await syncCityIndex(f.env, { cityRegionIds: async () => page(42, true, "next-2") });
+  assert.deepEqual(await readCityMatches(f.env, ["DUBAI"]), [[42, "UNITED ARAB EMIRATES"]]);
+  await assert.rejects(readCityMatches(f.env, ["UNSYNCED"]), (e: any) => e.code === "CITY_NOT_SYNCED");
+});
+test("streaming legacy parser handles UTF-8, escaped keys and metadata after cities without buffering the object", async () => {
+  const { scanLegacyCities } = await import("../src/lib/hotel-city-legacy.js");
+  const text = JSON.stringify({ cities: { 'دبي "Dubai"': [[42, "AE"]], '__proto__': [] }, pages: 128, count: 1, cursor: "next-129" });
+  const bytes = new TextEncoder().encode(text); let offset = 0;
+  const found: any[] = [];
+  const metadata = await scanLegacyCities({ body: new ReadableStream({ pull(c) { if (offset === bytes.length) return c.close(); c.enqueue(bytes.slice(offset, ++offset)); } }) }, (name, rows) => found.push([name, rows]));
+  assert.equal(metadata.pages, 128); assert.equal(metadata.cursor, "next-129");
+  assert.deepEqual(found, [['دبي "Dubai"', [[42, "AE"]]]]);
+});
+test("invalid or oversized legacy entries stop without advancing progress or touching originals", async () => {
+  for (const text of [
+    '{"cities":{"DUBAI":[[1,"AE"]]},"pages":128,"count":1,"cursor":"next"',
+    JSON.stringify({ cities: { DUBAI: [[1, "X".repeat(140000)]] }, pages: 128, count: 1, cursor: "next" }),
+    '{"cities":{},"pages":128,"pages":0,"count":0,"cursor":"next"}',
+  ]) {
+    const f = fixture(); await f.env.DOCUMENTS_R2.put(LEGACY, text);
+    await assert.rejects(syncCityIndex(f.env, { cityRegionIds: async () => { throw new Error("Forbidden"); } }), (e: any) => e.code === "SYNC_CHECKPOINT_INVALID");
+    assert.equal(f.data.has(PROGRESS), false); assert.equal(f.data.get(LEGACY)?.text, text);
+  }
+});
+test("stream failure preserves the legacy source and cannot request page one", async () => {
+  const f = fixture(); await f.env.DOCUMENTS_R2.put(LEGACY, JSON.stringify({ cities: { DUBAI: [[42, "AE"]] }, pages: 128, count: 1, cursor: "next" }));
+  const client = { cityRegionIds: async () => { throw new Error("Forbidden"); } };
+  await syncCityIndex(f.env, client);
+  const before = f.data.get(PROGRESS)!.text;
+  const get = f.env.DOCUMENTS_R2.get;
+  f.env.DOCUMENTS_R2.get = async (key: string) => key === f.state().legacySource ? { body: new ReadableStream({ start(c) { c.error(new Error("Interrupted R2 stream")); } }) } : get(key);
+  await assert.rejects(syncCityIndex(f.env, client), /Interrupted R2 stream/);
+  assert.equal(f.data.get(PROGRESS)!.text, before);
+});
+test("oversized v2 shards fail safely without consuming their bodies", async () => {
+  const f = fixture(); await syncCityIndex(f.env, { cityRegionIds: async () => page(42, true, "next") });
+  const get = f.env.DOCUMENTS_R2.get;
+  f.env.DOCUMENTS_R2.get = async (key: string) => { const obj = await get(key); if (obj && key !== PROGRESS) return { ...obj, size: 3 * 1024 * 1024, json: () => { throw new Error("Oversized body parsed"); } }; return obj; };
+  const before = f.data.get(PROGRESS)!.text;
+  await assert.rejects(syncCityIndex(f.env, { cityRegionIds: async () => page(43, false) }), (e: any) => e.code === "CITY_SHARD_LIMIT");
+  assert.equal(f.data.get(PROGRESS)!.text, before);
+});
+test("migration shard cap stops safely with the original page-129 cursor intact", async () => {
+  const f = fixture(); const cities: Record<string, any> = {};
+  const hash = (name: string) => { let n = 0; for (const c of name) n = (n * 31 + c.charCodeAt(0)) >>> 0; return n % 16; };
+  for (let i = 0, added = 0; added < 23; i++) if (hash(`CITY${i}`) === 0) cities[`CITY${i}`] = [[++added, "X".repeat(100000)]];
+  await f.env.DOCUMENTS_R2.put(LEGACY, JSON.stringify({ cities, pages: 128, count: 23, cursor: "next-129" }));
+  const client = { cityRegionIds: async () => { throw new Error("Forbidden"); } };
+  await syncCityIndex(f.env, client); const before = f.data.get(PROGRESS)!.text;
+  await assert.rejects(syncCityIndex(f.env, client), (e: any) => e.code === "CITY_SHARD_LIMIT");
+  assert.equal(f.data.get(PROGRESS)!.text, before); assert.equal(f.state().cursor, "next-129");
+});
+test("hotel search resolves a saved partial city through mapping and listing without a completed catalogue", async () => {
+  const { searchHotels } = await import("../src/lib/hotels.js");
+  const f = fixture();
+  await f.env.DOCUMENTS_R2.put(LEGACY, JSON.stringify({ cities: { DUBAI: [[42, "UNITED ARAB EMIRATES"]] }, pages: 128, count: 1, cursor: "next-129" }));
+  const calls: string[] = [];
+  const client = {
+    hotelMapping: async (input: any) => { calls.push("mapping"); assert.deepEqual(input.regionIds, ["42"]); return { hotels: [{ tjHotelId: "100000569607" }] }; },
+    listing: async (input: any) => { calls.push("listing"); assert.deepEqual(input.hids, ["100000569607"]); return { hotels: [{ hotelId: "100000569607", name: "Synthetic hotel", options: [{ optionId: "synthetic-option", pricing: { totalPrice: 100, currency: "INR" } }] }] }; },
+    hotelContent: async () => { calls.push("content"); return { hotels: [] }; },
+  };
+  const result = await searchHotels({ ...f.env, FARE_CACHE_KV: { get: async () => null, put: async () => {} } }, client as any,
+    { cityCode: "DXB", checkIn: "2026-11-10", checkOut: "2026-11-12", rooms: [{ adults: 1, children: 0 }], nationality: "106", currency: "INR" });
+  assert.equal(result.hotels.length, 1); assert.equal(result.hotels[0].hid, "100000569607");
+  assert.deepEqual(calls, ["mapping", "listing", "content"]); assert.equal(f.data.has(CITY_INDEX_KEY), false);
+});
+
+test("multiple progress writes within one invocation are spaced for R2 per-key limits", async () => {
+  const f = fixture(); const put = f.env.DOCUMENTS_R2.put; const times: number[] = [];
+  f.env.DOCUMENTS_R2.put = async (key: string, value: any, options: any) => {
+    if (key === PROGRESS) times.push(Date.now());
+    return put(key, value, options);
+  };
+  await syncCityIndex(f.env, { cityRegionIds: async () => page(42, false) });
+  assert.equal(times.length, 3);
+  for (let i = 1; i < times.length; i++) assert.ok(times[i] - times[i-1] >= 1000, "progress writes must be at least one second apart");
 });

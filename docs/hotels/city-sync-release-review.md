@@ -1,62 +1,68 @@
-# PR #12 final review and release runbook
+# PR #12: bounded city sync and early hotel search
 
-Reviewed 2026-10-27 against main e95d83f9e502eca585cb9e5d6528dfd53b684411 and PR head 53e684e2b71a169e0e005627fe81eafd3ce0d8a4, plus the review corrections committed alongside this document.
+Reviewed 2026-10-27. Continues96dee3e; latest fetched main e95d83f9e502eca585cb9e5d6528dfd53b684411. This supersedes the earlier full-source-parsing resource assessment.
 
-## Decision: NO-GO pending resource and operational gates
+## Decision
 
-No merge, deployment, production data access/write, credential change or live supplier request was performed. Keep the PR Draft. Code/fixture compatibility is verified; actual production object contents, hosting limits, logs, key validity and supplier quota remain unverified. The original failure HTTP status, supplier code, request ID and precise failing page are still unknown. Admin requires authentication; the available browser session reached login only.
+**Code corrections are implemented and locally verified; production release remains NO-GO until the access and release gates below are closed. Keep Draft; do not merge/deploy yet.** No production writes, credential changes, live supplier requests, bookings or payment operations were performed.
 
-Legacy migration still parses the full immutable legacy JSON for each bucket. Returning immediately after initialization removes the duplicate initial parse; using head for the publication lease avoids opening an unused object body. These reduce resource use but do not bound it. Shards also have no hard byte ceiling. A shared API isolate may serve unrelated customer requests concurrently. Before release, implement bounded migration or validate an actual production-sized copy in an isolated Worker with the deployed limits and sufficient concurrent-load headroom. A standalone Node pass is insufficient.
+## Smallest targeted correction
 
-## Preservation and resume findings
+- Keep the existing v2 manifest, sixteen hash buckets, conditional checkpoints and supplier pagination. Replace only legacy catalogue parsing with a streaming reader. It validates one city entry at a time, handles metadata before/after cities and UTF-8/escaped text across stream chunks, and never calls text()/json() on an entire legacy catalogue.
+- Initialization scans without retaining city rows. Each subsequent invocation streams the immutable snapshot and retains only its target bucket. This deliberately uses seventeen streaming passes (initialization + sixteen buckets), preserving the existing migration format instead of introducing byte-offset/parser-state migration. Memory no longer grows with catalogue bytes; total read/CPU work still does. Oversized input stops safely rather than claiming completion.
+- Bound a single key/value token to128 Ki UTF-16 code units; cap retained shard JSON and selected legacy city rows at2 MiB UTF-8. Reject an existing oversized shard before json(), and reject a new oversized shard before checkpoint publication. A limit error leaves saved supplier pages/cursor and source intact; a separately reviewed split strategy is needed if real data exceeds those guards. These are serialized-size/token bounds, not claims about exact JS heap size.
+- Hotel Search reads committed partial data when the requested city is absent from a completed catalogue or none exists. During migration it streams the immutable snapshot; before initialization it can stream the original partial checkpoint. After migration it reads committed shards. Available cities proceed through the unchanged region → hotel mapping → listing flow; missing partial cities return CITY_NOT_SYNCED with Continue guidance. Never publish an incomplete catalogue as complete. Completed matches remain preferred.
+- Completed v1 reading is also streamed. No catalogue format, customer-facing search fields, supplier endpoint, credential resolution, booking/payment logic or Flight settings changed. Admin help explains that saved cities are already searchable.
 
-- Existing completed hotel-static/city-regions.json and partial hotel-static/city-regions.partial.json are never overwritten/deleted by this patch. New tests assert byte preservation throughout migration/publication and old completed v2 availability during refresh.
-- Readers prefer completed v2, otherwise completed v1. An incomplete refresh never replaces the completed pointer. Existing completed cities therefore remain readable in fixtures; no claim is made about private production objects. Partial-only data was never a ready catalogue and remains unavailable until publication.
-- Continue with restart=false preserves pages/count/cursor. A 128-page, 256,000-region fixture takes one initialization plus 16 migration calls with zero supplier calls, then fetches the saved next-page cursor. Normal requests checkpoint one supplier page; a lost reply after checkpoint does not repeat it. A page fetched but not committed can necessarily be retried.
-- Immutable shard revisions precede conditional manifest publication. Concurrent stale writers stop; they do not regress progress. Terminal checkpoint precedes publication, so failed publication retries without fetching the terminal page again.
-- No Flight, TripSafe, payment, booking or authentication business logic changed. Shared hotel diagnostics preserve upstream HTTP status/request IDs without adding credentials or raw success pages to logs.
+## Data and resume guarantees verified with fixtures
 
-## Storage migration and capacity
+Original hotel-static/city-regions.json and hotel-static/city-regions.partial.json remain untouched. Immutable legacy snapshots and revisions are retained; no deletion/reset/cleanup is added. Tests assert original content/ETag preservation, completed-v1 availability during migration and completed-v2 availability during refresh.
 
-No SQL migration, database schema change, KV migration, new bucket, namespace, binding or secret is required. There IS an additive R2 format migration, initiated only by an authorized Continue action. Existing DOCUMENTS_R2 binding points to tripcod-documents in repository configuration; verify deployed binding before release.
+A saved128-page/256,000-region checkpoint initializes and migrates in17 local calls, with ZERO supplier calls, then sends the exact saved next-page cursor on the next call. Page129 is correct only if the actual durable checkpoint is128; the code never hardcodes129 or resets to page1. Storage/stream/size/conflict failures preserve the last committed checkpoint. Terminal-publication retry makes no extra supplier request. A supplier page that never committed may need retry; an already committed page is not intentionally downloaded again.
 
-New keys: hotel-static/city-regions.v2.json (completed pointer), hotel-static/city-regions.sync-v2.json (progress), hotel-static/city-sync/<run>/legacy-base.json (immutable source) and immutable revision/bucket JSON objects. Sixteen hash buckets hold city-name mappings. Originals and old revisions are retained; failed writes can leave unreferenced objects. No cleanup is part of release.
+## Measured local validation and resource boundary
 
-Budget storage for original completed and partial files, one full legacy snapshot per migration run, initial shard set roughly the source data size, and every rewritten affected shard thereafter. Growth is the sum of revised shard bytes per page, not just the final index size. Exact capacity/cost requires actual object sizes and page/bucket distribution; retention cleanup needs separate review.
+| Synthetic fixture (256,000 regions) | Source | Largest shard | Max sampled Node heap | Max sampled Node CPU/call | Max local workerd wall time/call |
+| --- | --- | --- | --- | --- | --- |
+| 2,000 city names | 7.75 MiB | 0.59 MiB | 56 MiB | 925 ms | 1,999 ms |
+| 256,000 city names | 13.95 MiB | 0.92 MiB | 27 MiB | 3,068 ms | 2,439 ms |
 
-R2 operation counts from the probe: initialization 5; each migration 4; a page affecting u buckets approximately 2+2u, up to34; terminal publication adds4 (38 observed). Add gateway fetch, tenant/auth/KV/DB/log operations and redirects when evaluating total invocation budgets. Lookup reads manifest plus requested shards. KV lookup TTL30 days and hotel-ID TTL1 day remain unchanged: a warm-cache lookup alone does not prove the new reader was exercised. Do not purge production KV.
+Both resource-probe child processes explicitly run with --max-old-space-size=64, including migration, synthetic terminal page/publication and lookup. This caps Node old space, not total process memory or hosted Worker memory. Sampled heap is not a guaranteed peak. Raw evidence: [Node](city-sync-resource-probe.json).
 
-## Resource evidence
+The separate Miniflare integration runs bundled production code in local workerd with a fully local persisted R2 bucket. Both fixtures verify17 migration calls, exactly one mocked next-page supplier call, early/final lookups and unchanged original ETags. It also runs four simultaneous city lookups during a migration invocation. Fixture buffering occurs only in the external Node seeder; the Worker receives streams. Raw evidence: [workerd](city-sync-worker-probe.json).
 
-Reproduce without network: node apps/api/test/hotel-city-sync-resources.cjs. Raw synthetic measurements: [city-sync-resource-probe.json](city-sync-resource-probe.json). Node v24.22.1, disk-backed R2 mock, isolated process per fixture, sampled JS heap rather than process peak/Worker memory. Both fixtures contain256,000 regions, then one mocked2,000-record terminal page.
+Local workerd does NOT enforce hosted CPU/memory quotas. These results establish streaming correctness and bounded local operation, not a production load certification. Cloudflare documents128 MB per isolate shared across concurrent requests; Free CPU10 ms and Paid HTTP default30 seconds. The deployed plan/CPU configuration remains unknown. Confirm Paid CPU allowance/headroom and test a production-sized copy in isolated hosted bindings before claiming hosted safety. Do not attach previews to production KV (repository preview IDs reuse normal IDs).
 
-| Fixture | Legacy size | Largest shard | Init CPU / sampled heap | Migration max CPU / heap | Terminal CPU / heap | Lookup CPU / heap |
-| --- | --- | --- | --- | --- | --- | --- |
-| 2,000 city names | 7.75 MiB | 0.59 MiB | 184 ms / 50 MiB | 78 ms / 51 MiB | 88 ms / 57 MiB | 5 ms / 9 MiB |
-| 256,000 city names | 13.95 MiB | 0.92 MiB | 412 ms / 100 MiB | 361 ms / 103 MiB | 321 ms / 89 MiB | 9 ms / 13 MiB |
+Sources: https://developers.cloudflare.com/workers/platform/limits/ ; https://developers.cloudflare.com/workers/local-development/ (reviewed2026-10-27).
 
-These are not production-size claims, Cloudflare measurements or safety guarantees. Before the initialization correction the high-cardinality fixture sampled153 MiB. Current code still has unbounded source parsing.
+Reproduce locally, with repository dependencies installed:
 
-Cloudflare documentation states128 MB memory per isolate shared by concurrent requests; Free CPU10 ms, Paid HTTP default30 seconds/configurable up to5 minutes. Current subrequest limits distinguish external from internal operations: Free external50/internal1000; Paid default10,000 configurable. Six outbound connections may await headers concurrently. Actual plan and CPU configuration are unknown. Source: https://developers.cloudflare.com/workers/platform/limits/ (reviewed2026-10-27).
+    node apps/api/test/hotel-city-sync-resources.cjs
+    node apps/api/test/hotel-city-sync-worker.cjs
 
-Supplier/gateway source defaults: city client45-second timeout; gateway45 seconds,120 requests/minute per client IP, circuit opens after5 failures for30 seconds. These are not verified deployed values or TripJack account quota. Admin one-second delay means at most about60 requests/minute per tab plus latency; multiple tabs/other traffic aggregate. Confirm account quota and one operator; stop on429 rather than bypassing limits.
+## R2/KV/database resource requirements
 
-## Regression results
+No SQL/schema/KV migration, new bucket, namespace, binding or secret is needed. Additive R2 format migration uses existing DOCUMENTS_R2 (repository bucket tripcod-documents; deployed binding must be verified).
 
-- Targeted hotel sync and validation:15/15 passed.
-- Supplier and gateway suites:36/36 passed; only mocks.
-- Full API:105 tests,101 passed,4 failures. Baseline:92 tests,88 passed, same4 failures. Baseline API/supplier sources are identical to latest main (git diff c757f8e origin/main -- apps/api packages/suppliers is empty).
-- Existing failures: explicit rejected booking is not success; lost submit response is unknown and does not retry; accepted booking survives local save failure; enclosing confirm route distinguishes review, submission and persistence failures. They remain outside this hotel patch.
-- API TypeScript/build (tsc --noEmit), Admin Next build and web Next build passed. git diff --check passed.
-- Merge-tree against latest fetched main is clean. Recheck immediately before any future release.
+Retain both original legacy files, one immutable source snapshot, initial sixteen shard objects, small progress/completed manifests and every immutable rewritten shard. Storage is originals + snapshot + all shard revisions, not just final index size. Failed conditional writes may leave unreferenced objects. No retention cleanup is authorized. Source is read in full seventeen times during migration, but streamed; lookup fallback also streams a legacy source until migrated. Existing KV cache reduces repeat city lookups.
 
-## Required pre-release gates (no execution authorized here)
+Probe operation counts: initialization5 R2 operations; each migration4; normal supplier page roughly2+2u for u affected buckets (up to34); terminal publication adds4 (38 observed). Add ordinary auth/tenant/KV/DB/log operations and gateway fetch when checking invocation budgets. Partial lookup uses up to4 catalogue-object reads in the no-completed-index path; completed v2 normally reads manifest + selected shard(s). Existing30-day region and1-day hotel-ID KV TTLs are unchanged. No purge is required; a warm-cache result alone cannot verify new R2 reading.
 
-1. Close the resource gate above using bounded migration or a production-sized sanitized copy in an isolated Worker with actual plan, CPU settings and concurrent-load measurements. Separate all staging R2/KV/D1 bindings: repository preview KV IDs reuse normal IDs, so a preview is not automatically isolated.
-2. Authorized operators obtain sanitized supplier/gateway/Worker logs for the original failure and verify deployed HMS routing, effective hotel credential source, Hotel v3 entitlement and supplier quota without replacing shared credentials. Hotel key resolution is Admin saved key, then Worker key, then optional gateway fallback; actual winner remains unknown.
-3. Record current API/Admin Worker version IDs, build settings, routes, compatibility configuration and binding identities privately. Capture R2 object size/ETag/checksum/page/count/cursor presence for v1/v2/progress and secure backups. Version IDs and production sizes are currently unavailable; do not substitute invented values.
-4. Establish a reader-compatible rollback artifact if no completed v1 catalogue exists and uninterrupted hotel availability is required. Old API versions cannot read v2-only data.
-5. Approve a pinned API/Admin-only release procedure. Current .github/workflows/deploy.yml runs on push to main, executes all SQL migrations and deploys API/web/portal/Admin. Do not trigger it as an unreviewed hotel-only release. Inventory other connected build triggers too; do not change workflow/settings without separate approval.
+Gateway source defaults remain45-second timeout,120 requests/minute per client IP, circuit after5 failures/30-second cooldown. Admin pacing is one-second delay, stop on first error and pause after200 invocations. Progress writes are spaced by at least one second, including multiple writes inside initialization/publication, to respect the R2 per-key write limit. Source: https://developers.cloudflare.com/r2/platform/limits/ . Actual TripJack quota and deployed gateway limits are unknown; one tab is not an aggregate rate limiter. Confirm quota, use one operator and stop on429.
+
+## Credential/access findings and remaining gates
+
+1. **Production checkpoint/log evidence unavailable.** Current read-only browser check of https://admin.tripcod.com redirects to /login. No secure Admin session or Cloudflare runtime connector/token is available. Therefore actual pages/cursor/object sizes, prior failed page, supplier HTTP/code/request ID and Worker exception remain unverified. The original browser Failed to fetch is not proof of a supplier403 or memory termination.
+2. **Effective credentials/routing unverified.** Source resolution remains Admin-saved TripJack integration key → Worker TRIPJACK_API_KEY → optional gateway fallback when no apikey is supplied. Hotel helper does not use tenant supplier DB credentials. Worker TRIPJACK_API_BASE_URL/TRIPJACK_PROXY_KEY and gateway TRIPJACK_HMS_UPSTREAM determine actual routing; source default HMS is https://apitest-hms.tripjack.com. Actual winning key, hostname, entitlement, whitelist and quota require authorized secure hosting/Admin/TripJack access. Do not change shared Flight/TripSafe keys. A real staging hotel search was NOT executed; no secure staging credentials/routing evidence is available.
+3. **Hosted resource/capacity gate.** Read actual object metadata privately, check entry/shard sizes against guards, verify deployed limits, then use separate isolated bindings for copied data with no supplier calls. After secure staging routing is confirmed, perform only a controlled read-only mapping/search, not bookings/payments.
+4. **Targeted deployment gate.** Existing main-push workflow runs SQL migrations and deploys API/web/portal/Admin. No workflow/settings were changed here. Before release, authorize a separate pinned API/Admin-only manual procedure, verify other connected build triggers and avoid triggering the broad workflow. Do not merge merely to make deployment convenient.
+5. **Exact rollback version IDs unavailable.** An authorized Cloudflare operator must privately record current tripcod-api and tripcod-admin version IDs, compatible bindings/build settings and the approved rollback artifact before release. Git commit IDs are not Worker version IDs; this report intentionally provides no invented values. GitHub connector workflow lookup on main returned no PR-triggered runs, which does not establish production deployment history.
+
+## Essential regressions
+
+Targeted hotel sync/validation/search:24 tests. Supplier/gateway:36 tests. Full API:114 tests,110 passed, same4 baseline booking failures (baseline92/88). API TypeScript/build and Admin/web Next builds pass. All supplier exchanges are mocked. Existing failures remain explicit rejected booking is not success; lost submit response is unknown and does not retry; accepted booking survives local save failure; and their enclosing confirm-route test. No unrelated fixes were made.
+
+The hotel-ID test loader now resolves the small new streaming module; business assertions remain intact. Latest-main merge-tree conflict check and git diff --check passed before publishing this review commit.
 
 ## Exact ordered release and verification plan (separate approval required)
 

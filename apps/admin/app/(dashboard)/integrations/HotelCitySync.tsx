@@ -55,7 +55,7 @@ export function HotelCitySync() {
         Hotel search needs TripJack&apos;s city → hotel ID list. Sync it once after setup, then about monthly.
         {status && (status.ready
           ? <> Current list: <b>{status.cities.toLocaleString()}</b> cities, synced {status.builtAt ? new Date(status.builtAt).toLocaleString() : ""}.</>
-          : status.inProgress ? <> A sync is part-way ({status.pagesDone} pages) — press <b>Continue sync</b>.</>
+          : status.inProgress ? <> A sync is part-way ({status.pagesDone} pages). Saved cities can already be searched — press <b>Continue sync</b>.</>
           : <> <b style={{ color: "#fbbf24" }}>Not synced yet — hotel search will not work until it is.</b></>)}
       </p>
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>

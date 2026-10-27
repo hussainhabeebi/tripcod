@@ -1,5 +1,7 @@
 # Hotel city sync investigation and correction
 
+Current bounded-streaming correction and early partial-city search: see [release review](city-sync-release-review.md). The original investigation below records the initial findings; current measurements and release gates supersede its earlier resource notes.
+
 Date: 2026-10-27. Branch: codex/hotel-city-sync-resume. Baseline: e95d83f.
 
 ## Evidence boundary / root cause
@@ -28,7 +30,7 @@ Confirmed code defects / failure modes:
 
 1. Process at most one supplier page per Admin request and checkpoint it before replying. An acknowledged page or a lost reply after checkpoint is resumed from its saved cursor, not downloaded again. An uncommitted page after storage failure may necessarily be fetched again; completed pages remain intact.
 2. Use 16 city-name hash shards and a small progress manifest with conditional ETag writes. Shard revisions are immutable; the manifest publishes all changes for one page atomically. Concurrent stale writers stop with SYNC_CONFLICT rather than regress the cursor. Partial writes remain unreferenced, without corrupting committed data.
-3. Migrate a legacy partial checkpoint one shard per request without supplier calls. An immutable copy freezes its source even if an older deployment still has an in-flight batch. Its existing pages/count/cursor are preserved. The original file remains untouched; no reset is necessary. Migration still reads the legacy checkpoint to extract each bucket; deployment resource limits must be verified for that one-time legacy parsing work.
+3. Migrate a legacy partial checkpoint one shard per request without supplier calls. An immutable copy freezes its source even if an older deployment still has an in-flight batch. Its existing pages/count/cursor are preserved. The original file remains untouched; no reset is necessary. Migration now streams the legacy checkpoint to extract each bucket without buffering the catalogue; hosted resource limits must still be verified.
 4. Save the terminal-page checkpoint before final publication. Retry finalization without requesting the last supplier page again. Refuse malformed/non-advancing/cyclic cursors, missing saved cursors, empty catalogues and missing referenced shards.
 5. Publish to hotel-static/city-regions.v2.json; retain the original completed index and partial checkpoint. Readers support both formats and load only requested city shards for v2. Existing customers can keep using the old completed list while a refresh is incomplete. No existing data deletion or cleanup is performed. Immutable revisions consume additional R2 storage; retention/cleanup is a separate reviewed maintenance task.
 6. Preserve response HTTP status separately from supplier upstream status and carry the gateway request ID into errors. Supplier Logs and Admin responses include page, saved pages and supplier/persistence/publication phase. No raw success pages, API keys, internal proxy secrets or cursors are added to diagnostic responses.

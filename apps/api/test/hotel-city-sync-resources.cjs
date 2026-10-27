@@ -11,6 +11,8 @@ async function main() {
   const dir=await fs.mkdtemp(path.join(os.tmpdir(),'tripcod-city-resource-'));
   try {
    const modulePath=path.join(dir,'logic.mjs');
+   const legacySource=await fs.readFile(path.resolve(__dirname,'../src/lib/hotel-city-legacy.ts'),'utf8');
+   await fs.writeFile(path.join(dir,'hotel-city-legacy.js'),ts.transpileModule(legacySource,{compilerOptions:{module:ts.ModuleKind.ESNext,target:ts.ScriptTarget.ES2022}}).outputText);
    const source=await fs.readFile(path.resolve(__dirname,'../src/lib/hotel-city-sync.ts'),'utf8');
    await fs.writeFile(modulePath,ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.ESNext,target:ts.ScriptTarget.ES2022}}).outputText);
    const results=[];
@@ -27,10 +29,10 @@ async function main() {
      yield '}}';
     }
     await fs.writeFile(filename,json());
-    const output=execFileSync(process.execPath,['--expose-gc',__filename,'--measure',work,modulePath],{encoding:'utf8'});
+    const output=execFileSync(process.execPath,['--max-old-space-size=64','--expose-gc',__filename,'--measure',work,modulePath],{encoding:'utf8'});
     results.push({cityCount,...JSON.parse(output)});
    }
-   console.log(JSON.stringify({runtime:process.version,warning:'Local Node only; heap samples and CPU are not Worker measurements or guarantees.',scenarios:results},null,2));
+   console.log(JSON.stringify({runtime:process.version,childHeapLimitMiB:64,warning:'Local Node only; heap samples and CPU are not Worker measurements or guarantees.',scenarios:results},null,2));
   } finally {await fs.rm(dir,{recursive:true,force:true});}
   return;
  }
