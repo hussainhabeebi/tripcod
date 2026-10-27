@@ -10,6 +10,8 @@ type Props = {
   destination: string;
   departureDate: string;
   fares?: any[];
+  journey?: boolean;
+  onQueryChange?: (query: string) => void;
 };
 
 const AIRPORT_GROUPS = [
@@ -66,7 +68,7 @@ export function ChangeDatesAction() {
   return <button type="button" className="no-results-secondary" onClick={focusDateControls}>Change dates</button>;
 }
 
-export default function SearchResultControls({ origin, destination, departureDate, fares = [] }: Props) {
+export default function SearchResultControls({ origin, destination, departureDate, fares = [], journey = false, onQueryChange }: Props) {
   const current = useSearchParams();
   const panelRef = useRef<HTMLElement>(null);
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -114,6 +116,11 @@ export default function SearchResultControls({ origin, destination, departureDat
     return () => { document.body.style.overflow = oldOverflow; document.removeEventListener("keydown", close); window.removeEventListener("resize", resize); previous?.focus(); };
   }, [mobileOpen]);
 
+  function navigate(query: string) {
+    if (onQueryChange) onQueryChange(query);
+    else navigateSearch(`/search?${query}`);
+  }
+
   function update(updates: Record<string, string | null>) {
     const next = new URLSearchParams(pendingQuery ?? currentQuery);
     Object.entries(updates).forEach(([key, value]) => {
@@ -122,7 +129,7 @@ export default function SearchResultControls({ origin, destination, departureDat
     });
     next.delete("all");
     setPendingQuery(next.toString());
-    if (!mobileOpen) navigateSearch(`/search?${next.toString()}`);
+    if (!mobileOpen) navigate(next.toString());
   }
 
   function closeFilters() { setMobileOpen(false); setPendingQuery(null); }
@@ -151,13 +158,15 @@ export default function SearchResultControls({ origin, destination, departureDat
   const uniqueAirlines = useMemo(() => {
     const seen = new Map<string, { name: string; count: number }>();
     for (const f of fares) {
-      if (!f.airlineName) continue;
-      const existing = seen.get(f.airlineName);
-      if (existing) existing.count++;
-      else seen.set(f.airlineName, { name: f.airlineName, count: 1 });
+      const names = journey ? [...new Set([f.airlineName, ...(f.segments ?? []).map((s: any) => s.airlineName)].filter(Boolean))] : [f.airlineName].filter(Boolean);
+      for (const name of names) {
+        const existing = seen.get(name);
+        if (existing) existing.count++;
+        else seen.set(name, { name, count: 1 });
+      }
     }
     return [...seen.values()].sort((a, b) => b.count - a.count).slice(0, 8);
-  }, [fares]);
+  }, [fares, journey]);
 
   function toggleAirline(name: string) {
     const next = airlines.includes(name) ? airlines.filter((a) => a !== name) : [...airlines, name];
@@ -184,6 +193,8 @@ export default function SearchResultControls({ origin, destination, departureDat
       </div>
 
       {isPending && <div className="result-refresh" role="status"><span /> Updating flights…</div>}
+      {journey && <p style={{ fontSize: 12, lineHeight: 1.5, color: "#667085" }}>Stops, times and airlines apply to each leg. Price limits apply per leg, or to the whole combined fare. <a href="/">Change journey dates &amp; airports</a></p>}
+      {!journey && <>
       <div className="filter-section-label">Travel dates</div>
       <div className="date-navigation">
         <button type="button" className="date-range-arrow" aria-label="Previous travel dates" disabled={windowStart <= today} onClick={() => setWindowStart(moveDate(windowStart, -1))}>‹</button>
@@ -221,6 +232,8 @@ export default function SearchResultControls({ origin, destination, departureDat
           </label>
         </div>
       </div>
+
+      </>}
 
       {/* Stops */}
       <div className="filter-section">
@@ -286,7 +299,7 @@ export default function SearchResultControls({ origin, destination, departureDat
         </div>
       )}
 
-      <button type="button" className="filter-apply" onClick={() => { if (pendingQuery !== null) { setMobileOpen(false); navigateSearch(`/search?${pendingQuery}`); } else closeFilters(); }}>Show flights</button>
+      <button type="button" className="filter-apply" onClick={() => { if (pendingQuery !== null) { setMobileOpen(false); navigate(pendingQuery); } else closeFilters(); }}>Show flights</button>
     </aside>
     </>
   );
