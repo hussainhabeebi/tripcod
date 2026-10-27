@@ -80,69 +80,8 @@ export async function nationalityId(env: Env, client: TripjackHotelV3Client, iso
 // ── City index (TripJack city region IDs) ───────────────────────────────────
 // Built by Admin → Integrations → "Sync hotel cities" (paged; stored in R2).
 
-const CITY_INDEX_KEY = "hotel-static/city-regions.json";
-const CITY_INDEX_PARTIAL_KEY = "hotel-static/city-regions.partial.json";
-const PAGES_PER_SYNC_CALL = 8;
-
-interface CityIndex {
-  builtAt:  string;
-  count:    number;
-  cities:   Record<string, [number, string][]>;   // CITY NAME → [regionId, COUNTRY NAME][]
-}
-
-interface PartialCityIndex extends CityIndex { cursor?: string; pages: number }
-
-export async function cityIndexStatus(env: Env) {
-  const [done, partial] = await Promise.all([
-    env.DOCUMENTS_R2.head(CITY_INDEX_KEY),
-    env.DOCUMENTS_R2.get(CITY_INDEX_PARTIAL_KEY),
-  ]);
-  const p = partial ? await partial.json() as PartialCityIndex : null;
-  return {
-    ready:       Boolean(done),
-    builtAt:     done?.customMetadata?.builtAt ?? null,
-    cities:      done ? Number(done.customMetadata?.count ?? 0) : 0,
-    inProgress:  Boolean(p),
-    pagesDone:   p?.pages ?? 0,
-    regionsSoFar: p?.count ?? 0,
-  };
-}
-
-// Processes a few pages per call so each request stays well within Worker limits.
-export async function syncCityIndex(env: Env, client: TripjackHotelV3Client, restart = false) {
-  let state: PartialCityIndex | null = null;
-  if (!restart) {
-    const obj = await env.DOCUMENTS_R2.get(CITY_INDEX_PARTIAL_KEY);
-    state = obj ? await obj.json() as PartialCityIndex : null;
-  }
-  state ??= { builtAt: "", count: 0, cities: {}, pages: 0 };
-
-  let hasMore = true;
-  for (let i = 0; i < PAGES_PER_SYNC_CALL && hasMore; i++) {
-    const page = await client.cityRegionIds(2000, state.cursor);
-    for (const r of page.hotelCityRegionIds ?? []) {
-      const name = String(r.cityName ?? "").toUpperCase().trim();
-      if (!name) continue;
-      (state.cities[name] ??= []).push([Number(r.cityRegionId), String(r.countryName ?? "").toUpperCase()]);
-      state.count += 1;
-    }
-    state.pages += 1;
-    state.cursor = page.nextCursor ?? undefined;
-    hasMore = Boolean(page.hasMore && page.nextCursor);
-  }
-
-  if (hasMore) {
-    await env.DOCUMENTS_R2.put(CITY_INDEX_PARTIAL_KEY, JSON.stringify(state));
-    return { done: false, pages: state.pages, regions: state.count };
-  }
-  const index: CityIndex = { builtAt: new Date().toISOString(), count: state.count, cities: state.cities };
-  await env.DOCUMENTS_R2.put(CITY_INDEX_KEY, JSON.stringify(index), {
-    httpMetadata: { contentType: "application/json" },
-    customMetadata: { builtAt: index.builtAt, count: String(Object.keys(index.cities).length) },
-  });
-  await env.DOCUMENTS_R2.delete(CITY_INDEX_PARTIAL_KEY);
-  return { done: true, pages: state.pages, regions: state.count, cities: Object.keys(index.cities).length };
-}
+export { cityIndexStatus, syncCityIndex } from "./hotel-city-sync.js";
+import { readCityMatches } from "./hotel-city-sync.js";
 
 // Website city codes → city names (the Hotels page sends these).
 const CITY_CODES: Record<string, { city: string; country: string }> = {
@@ -182,15 +121,9 @@ export async function resolveRegionIds(env: Env, city: string, countryIso2: stri
   const cached = await env.FARE_CACHE_KV.get(cacheKey, "json").catch(() => null) as string[] | null;
   if (cached?.length) return cached;
 
-  const obj = await env.DOCUMENTS_R2.get(CITY_INDEX_KEY);
-  if (!obj) {
-    throw Object.assign(new Error("The TripJack hotel city list has not been synced yet — run Admin → Integrations → Sync hotel cities"),
-      { code: "CITY_INDEX_MISSING" });
-  }
-  const index = await obj.json() as CityIndex;
   const names = CITY_ALIASES[city.toUpperCase()] ?? [city.toUpperCase()];
   const countries = COUNTRY_NAMES[countryIso2] ?? [];
-  const matches = names.flatMap((n) => index.cities[n] ?? []);
+  const matches = await readCityMatches(env, names);
   const inCountry = countries.length ? matches.filter(([, c]) => countries.includes(c)) : matches;
   const ids = [...new Set((inCountry.length ? inCountry : matches).map(([id]) => String(id)))];
   if (!ids.length) {

@@ -66,7 +66,11 @@ export async function logged<T>(
       errorCode: errorCodeOf(err),
       errorMessage: errorMessageOf(err),
       responseSnippet: typeof err?.responseSnippet === "string" ? err.responseSnippet : String(err?.stack ?? err).slice(0, 800),
-      requestSummary: { ...requestSummary, tripjackEndpoint: err?.endpoint },
+      requestSummary: { ...requestSummary, tripjackEndpoint: err?.endpoint,
+        ...(err?.syncPhase ? { syncPage: err.syncPage, pagesDone: err.pagesDone, syncPhase: err.syncPhase } : {}),
+        ...(err?.gatewayRequestId ? { gatewayRequestId: err.gatewayRequestId } : {}),
+        ...(err?.upstreamStatus != null ? { upstreamStatus: err.upstreamStatus } : {}),
+      },
       durationMs: Date.now() - started,
     });
     throw Object.assign(err instanceof Error ? err : new Error(String(err)), { requestId });
