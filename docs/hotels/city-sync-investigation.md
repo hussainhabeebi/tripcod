@@ -36,7 +36,7 @@ Confirmed code defects / failure modes:
 
 ## Regression / validation
 
-- Hotel sync + existing hotel validation: 13/13 tests passed. Includes a synthetic legacy checkpoint with exactly 128 pages and 256,000 regions; 16 local migration calls make zero supplier calls, then resume at its saved page-129 cursor. Tests also cover 429 checkpoint preservation, write failure/deduplication, failed final publication, cursor faults, concurrent manifest writes, legacy fallback and correlated Admin/log diagnostics.
+- Original patch validation: 13/13 hotel sync + existing hotel validation tests passed. Final review adds two preservation tests (15/15); see [release review](city-sync-release-review.md). Includes a synthetic legacy checkpoint with exactly 128 pages and 256,000 regions; one initialization and 16 local migration calls make zero supplier calls, then resume at its saved page-129 cursor. Tests also cover 429 checkpoint preservation, write failure/deduplication, failed final publication, cursor faults, concurrent manifest writes, legacy fallback and correlated Admin/log diagnostics.
 - Supplier + gateway suites: 36/36 tests passed, including opaque cursor encoding, unchanged authentication headers, HTTP 403 diagnostics, interrupted response body and HTTP-200 supplier errors. All exchanges use mocks; there were no real supplier calls.
 - API TypeScript / API build (tsc --noEmit) and Admin/web Next builds passed. No Cloudflare dry-run/deploy, production merge or production data write performed.
 - The existing hotel-ID integration test's data-URL loader was updated to resolve the newly extracted module; its business assertions remain intact.

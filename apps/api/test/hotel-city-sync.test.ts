@@ -32,7 +32,7 @@ test("128-page legacy checkpoint migrates without downloading any completed page
   const original = f.data.get(LEGACY)!.text;
   const seen: (string | undefined)[] = [];
   const client = { cityRegionIds: async (_limit: number, cursor?: string) => { seen.push(cursor); return page(999999, false); } };
-  for (let i = 0; i < 16; i++) {
+  for (let i = 0; i < 17; i++) {
     const result = await syncCityIndex(f.env, client);
     assert.equal(result.pages, 128); assert.equal(result.regions, 256000);
   }
@@ -146,4 +146,37 @@ test("Admin failure response and Supplier Log correlate HTTP status, page and ga
   assert.equal(entry.requestId, body.requestId); assert.equal(entry.requestSummary.syncPage, 2); assert.equal(entry.requestSummary.gatewayRequestId, "synthetic-gateway");
   assert.equal(JSON.stringify(body).includes("synthetic-key"), false);
   assert.equal(f.state().pages, 1);
+});
+test("legacy completed cities remain available throughout migration and publication without rewriting legacy objects", async () => {
+  const f = fixture();
+  const oldKey = "hotel-static/city-regions.json";
+  const cities = { DUBAI: [[42, "UNITED ARAB EMIRATES"]] };
+  await f.env.DOCUMENTS_R2.put(oldKey, JSON.stringify({ cities, builtAt: "original", count: 1 }), { customMetadata: { builtAt: "original", count: "1" } });
+  await f.env.DOCUMENTS_R2.put(LEGACY, JSON.stringify({ cities, pages: 128, count: 1, cursor: "saved-next-page" }));
+  const beforeDone = { ...f.data.get(oldKey)! }, beforePartial = { ...f.data.get(LEGACY)! };
+  let requests = 0;
+  const client = { cityRegionIds: async (_limit: number, cursor?: string) => {
+    requests++; assert.equal(cursor, "saved-next-page");
+    return { hotelCityRegionIds: [{ cityName: "Kochi", cityRegionId: 55, countryName: "India" }], hasMore: false };
+  } };
+  for (let i = 0; i < 17; i++) {
+    const result = await syncCityIndex(f.env, client);
+    assert.equal(result.pages, 128); assert.equal(requests, 0);
+    assert.deepEqual(await readCityMatches(f.env, ["DUBAI"]), [[42, "UNITED ARAB EMIRATES"]]);
+    assert.equal((await cityIndexStatus(f.env)).ready, true);
+  }
+  assert.equal((await syncCityIndex(f.env, client)).done, true);
+  assert.deepEqual(await readCityMatches(f.env, ["DUBAI", "KOCHI"]), [[42, "UNITED ARAB EMIRATES"], [55, "INDIA"]]);
+  assert.deepEqual(f.data.get(oldKey), beforeDone);
+  assert.deepEqual(f.data.get(LEGACY), beforePartial);
+});
+test("a partial refresh of v2 keeps the previous completed v2 catalogue accessible", async () => {
+  const f = fixture();
+  await syncCityIndex(f.env, { cityRegionIds: async () => page(42, false) });
+  const published = { ...f.data.get(CITY_INDEX_KEY)! };
+  await syncCityIndex(f.env, { cityRegionIds: async () => ({ hotelCityRegionIds: [{ cityName: "Kochi", cityRegionId: 55, countryName: "India" }], hasMore: true, nextCursor: "refresh-next" }) }, true);
+  assert.deepEqual(f.data.get(CITY_INDEX_KEY), published);
+  assert.deepEqual(await readCityMatches(f.env, ["DUBAI"]), [[42, "UNITED ARAB EMIRATES"]]);
+  const status = await cityIndexStatus(f.env);
+  assert.equal(status.ready, true); assert.equal(status.inProgress, true);
 });

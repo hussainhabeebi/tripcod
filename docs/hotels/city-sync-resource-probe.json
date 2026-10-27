@@ -1,0 +1,304 @@
+{
+  "runtime": "v24.22.1",
+  "warning": "Local Node only; heap samples and CPU are not Worker measurements or guarantees.",
+  "scenarios": [
+    {
+      "cityCount": 2000,
+      "legacyBytes": 8127854,
+      "maxShardBytes": 615495,
+      "migratedSupplierCalls": 0,
+      "totalMockSupplierCalls": 1,
+      "complete": {
+        "done": true,
+        "pages": 129,
+        "regions": 258000,
+        "cities": 4000,
+        "phase": "Syncing pages"
+      },
+      "measurements": [
+        {
+          "phase": "legacy-initialization",
+          "cpuMs": 184,
+          "wallMs": 120,
+          "peakSampledHeapMiB": 50,
+          "r2Operations": 5
+        },
+        {
+          "phase": "migration-0",
+          "cpuMs": 78,
+          "wallMs": 60,
+          "peakSampledHeapMiB": 51,
+          "r2Operations": 4
+        },
+        {
+          "phase": "migration-1",
+          "cpuMs": 50,
+          "wallMs": 49,
+          "peakSampledHeapMiB": 51,
+          "r2Operations": 4
+        },
+        {
+          "phase": "migration-2",
+          "cpuMs": 55,
+          "wallMs": 54,
+          "peakSampledHeapMiB": 51,
+          "r2Operations": 4
+        },
+        {
+          "phase": "migration-3",
+          "cpuMs": 49,
+          "wallMs": 48,
+          "peakSampledHeapMiB": 51,
+          "r2Operations": 4
+        },
+        {
+          "phase": "migration-4",
+          "cpuMs": 53,
+          "wallMs": 52,
+          "peakSampledHeapMiB": 51,
+          "r2Operations": 4
+        },
+        {
+          "phase": "migration-5",
+          "cpuMs": 52,
+          "wallMs": 51,
+          "peakSampledHeapMiB": 51,
+          "r2Operations": 4
+        },
+        {
+          "phase": "migration-6",
+          "cpuMs": 47,
+          "wallMs": 46,
+          "peakSampledHeapMiB": 51,
+          "r2Operations": 4
+        },
+        {
+          "phase": "migration-7",
+          "cpuMs": 54,
+          "wallMs": 53,
+          "peakSampledHeapMiB": 51,
+          "r2Operations": 4
+        },
+        {
+          "phase": "migration-8",
+          "cpuMs": 54,
+          "wallMs": 53,
+          "peakSampledHeapMiB": 51,
+          "r2Operations": 4
+        },
+        {
+          "phase": "migration-9",
+          "cpuMs": 41,
+          "wallMs": 40,
+          "peakSampledHeapMiB": 51,
+          "r2Operations": 4
+        },
+        {
+          "phase": "migration-10",
+          "cpuMs": 41,
+          "wallMs": 39,
+          "peakSampledHeapMiB": 51,
+          "r2Operations": 4
+        },
+        {
+          "phase": "migration-11",
+          "cpuMs": 41,
+          "wallMs": 40,
+          "peakSampledHeapMiB": 51,
+          "r2Operations": 4
+        },
+        {
+          "phase": "migration-12",
+          "cpuMs": 43,
+          "wallMs": 42,
+          "peakSampledHeapMiB": 51,
+          "r2Operations": 4
+        },
+        {
+          "phase": "migration-13",
+          "cpuMs": 42,
+          "wallMs": 41,
+          "peakSampledHeapMiB": 51,
+          "r2Operations": 4
+        },
+        {
+          "phase": "migration-14",
+          "cpuMs": 42,
+          "wallMs": 41,
+          "peakSampledHeapMiB": 51,
+          "r2Operations": 4
+        },
+        {
+          "phase": "migration-15",
+          "cpuMs": 41,
+          "wallMs": 41,
+          "peakSampledHeapMiB": 51,
+          "r2Operations": 4
+        },
+        {
+          "phase": "next-page-and-publication",
+          "cpuMs": 88,
+          "wallMs": 88,
+          "peakSampledHeapMiB": 57,
+          "r2Operations": 38
+        },
+        {
+          "phase": "lookup",
+          "cpuMs": 5,
+          "wallMs": 3,
+          "peakSampledHeapMiB": 9,
+          "r2Operations": 2
+        }
+      ]
+    },
+    {
+      "cityCount": 256000,
+      "legacyBytes": 14625854,
+      "maxShardBytes": 966151,
+      "migratedSupplierCalls": 0,
+      "totalMockSupplierCalls": 1,
+      "complete": {
+        "done": true,
+        "pages": 129,
+        "regions": 258000,
+        "cities": 258000,
+        "phase": "Syncing pages"
+      },
+      "measurements": [
+        {
+          "phase": "legacy-initialization",
+          "cpuMs": 412,
+          "wallMs": 352,
+          "peakSampledHeapMiB": 100,
+          "r2Operations": 5
+        },
+        {
+          "phase": "migration-0",
+          "cpuMs": 301,
+          "wallMs": 294,
+          "peakSampledHeapMiB": 103,
+          "r2Operations": 4
+        },
+        {
+          "phase": "migration-1",
+          "cpuMs": 323,
+          "wallMs": 318,
+          "peakSampledHeapMiB": 103,
+          "r2Operations": 4
+        },
+        {
+          "phase": "migration-2",
+          "cpuMs": 313,
+          "wallMs": 308,
+          "peakSampledHeapMiB": 103,
+          "r2Operations": 4
+        },
+        {
+          "phase": "migration-3",
+          "cpuMs": 328,
+          "wallMs": 327,
+          "peakSampledHeapMiB": 103,
+          "r2Operations": 4
+        },
+        {
+          "phase": "migration-4",
+          "cpuMs": 307,
+          "wallMs": 305,
+          "peakSampledHeapMiB": 103,
+          "r2Operations": 4
+        },
+        {
+          "phase": "migration-5",
+          "cpuMs": 333,
+          "wallMs": 326,
+          "peakSampledHeapMiB": 103,
+          "r2Operations": 4
+        },
+        {
+          "phase": "migration-6",
+          "cpuMs": 281,
+          "wallMs": 277,
+          "peakSampledHeapMiB": 103,
+          "r2Operations": 4
+        },
+        {
+          "phase": "migration-7",
+          "cpuMs": 304,
+          "wallMs": 298,
+          "peakSampledHeapMiB": 103,
+          "r2Operations": 4
+        },
+        {
+          "phase": "migration-8",
+          "cpuMs": 344,
+          "wallMs": 339,
+          "peakSampledHeapMiB": 103,
+          "r2Operations": 4
+        },
+        {
+          "phase": "migration-9",
+          "cpuMs": 300,
+          "wallMs": 296,
+          "peakSampledHeapMiB": 103,
+          "r2Operations": 4
+        },
+        {
+          "phase": "migration-10",
+          "cpuMs": 312,
+          "wallMs": 307,
+          "peakSampledHeapMiB": 103,
+          "r2Operations": 4
+        },
+        {
+          "phase": "migration-11",
+          "cpuMs": 361,
+          "wallMs": 355,
+          "peakSampledHeapMiB": 103,
+          "r2Operations": 4
+        },
+        {
+          "phase": "migration-12",
+          "cpuMs": 306,
+          "wallMs": 300,
+          "peakSampledHeapMiB": 103,
+          "r2Operations": 4
+        },
+        {
+          "phase": "migration-13",
+          "cpuMs": 337,
+          "wallMs": 330,
+          "peakSampledHeapMiB": 103,
+          "r2Operations": 4
+        },
+        {
+          "phase": "migration-14",
+          "cpuMs": 291,
+          "wallMs": 287,
+          "peakSampledHeapMiB": 103,
+          "r2Operations": 4
+        },
+        {
+          "phase": "migration-15",
+          "cpuMs": 346,
+          "wallMs": 342,
+          "peakSampledHeapMiB": 103,
+          "r2Operations": 4
+        },
+        {
+          "phase": "next-page-and-publication",
+          "cpuMs": 321,
+          "wallMs": 289,
+          "peakSampledHeapMiB": 89,
+          "r2Operations": 38
+        },
+        {
+          "phase": "lookup",
+          "cpuMs": 9,
+          "wallMs": 9,
+          "peakSampledHeapMiB": 13,
+          "r2Operations": 2
+        }
+      ]
+    }
+  ]
+}

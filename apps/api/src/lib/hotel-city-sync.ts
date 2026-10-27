@@ -37,6 +37,7 @@ async function runSync(env: Env, client: Pick<TripjackHotelV3Client, "cityRegion
   const object = await env.DOCUMENTS_R2.get(PROGRESS);
   let etag = object?.etag;
   let state = object ? await object.json() as State : null;
+  let initializedLegacy = false;
   if (restart && state && !state.complete) throw fail("SYNC_RESTART_BLOCKED", "Sync is incomplete. Continue without resetting saved progress.");
   if (!state || restart) {
     const old = !state ? await env.DOCUMENTS_R2.get(LEGACY_PARTIAL) : null;
@@ -52,6 +53,7 @@ async function runSync(env: Env, client: Pick<TripjackHotelV3Client, "cityRegion
       cityCount: legacy ? Object.keys(legacy.cities).length : 0, cursor: legacy?.cursor, shards: {},
       migrationBucket: legacy ? 0 : BUCKETS, ...(legacy ? { legacySource: source } : {}) };
     await checkpoint(state);
+    initializedLegacy = !!legacy;
   }
   const current = state;
   async function checkpoint(next: State) {
@@ -64,7 +66,8 @@ async function runSync(env: Env, client: Pick<TripjackHotelV3Client, "cityRegion
   }
   const result = () => ({ done: !!current.complete, pages: current.pages, regions: current.count, cities: current.cityCount,
     phase: current.migrationBucket < BUCKETS ? "Migrating saved checkpoint" : "Syncing pages" });
-  if (current.complete) return result();
+  // Return before extracting a shard: do not parse the large legacy source twice in one invocation.
+  if (current.complete || initializedLegacy) return result();
   if (current.migrationBucket < BUCKETS) {
     try {
     // The original checkpoint remains untouched and available for recovery.
@@ -132,7 +135,7 @@ async function runSync(env: Env, client: Pick<TripjackHotelV3Client, "cityRegion
       if (!current.cityCount) throw fail("CITY_INDEX_EMPTY", "The supplier returned no city data. The previous completed index is preserved.");
       current.builtAt = new Date().toISOString();
       const previous = await env.DOCUMENTS_R2.head(CITY_INDEX_KEY);
-      const lease = await env.DOCUMENTS_R2.get(PROGRESS);
+      const lease = await env.DOCUMENTS_R2.head(PROGRESS);
       if (lease?.etag !== etag) throw fail("SYNC_CONFLICT", "Sync progress changed before publication. Refresh status.");
       const published = await env.DOCUMENTS_R2.put(CITY_INDEX_KEY, JSON.stringify(current), {
         onlyIf: previous ? { etagMatches: previous.etag } : { etagDoesNotMatch: "*" },
