@@ -5,6 +5,8 @@ import { SeatPicker, seatCss, type SegmentSeatMap } from "./SeatPicker";
 import { ScanDocument, type ScannedTraveller } from "../components/ScanDocument";
 import { flightClock } from "../lib/flight-clock";
 import BookingProgress from "../components/BookingProgress";
+import PassengerDateInput from "./PassengerDateInput";
+import { localToday, passengerDatesError, passportExpiryMinimum } from "./passenger-dates";
 import SocialSignIn from "./SocialSignIn";
 import { bookingError } from "./booking-error";
 import { passengerNameProblem } from "./passenger-names";
@@ -651,9 +653,18 @@ export default function BookPage() {
     };
   }
 
+  function validatePassengerDates() {
+    for (const [i, p] of passengers.entries()) {
+      const problem = passengerDatesError(p);
+      if (problem) { setError(`Traveller ${i + 1}: ${problem}`); setReviewing(false); return false; }
+    }
+    return true;
+  }
+
   async function holdFare(form: HTMLFormElement | null) {
     if (!fare || submitting || !review || !cond?.holdAllowed) return;
     if (form && !form.reportValidity()) return;
+    if (!validatePassengerDates()) return;
     setSubmitting(true); setError("");
     try {
       const res = await fetch(`${apiUrl}/api/book`, {
@@ -680,6 +691,7 @@ export default function BookPage() {
   async function submit(e: FormEvent) {
     e.preventDefault();
     if (!fare || submitting || fareExpired || bookingUncertain) return;
+    if (!validatePassengerDates()) { window.scrollTo({ top: 0, behavior: "smooth" }); return; }
     // Names must be real (no TBA / Test) — the airline and TripJack reject placeholders.
     for (const [i, p] of passengers.entries()) {
       const problem = passengerNameProblem(p.firstName, "First name") ?? passengerNameProblem(p.lastName, "Last name");
@@ -983,7 +995,7 @@ export default function BookPage() {
               <div className="grid">
                 <Input l="First name"             v={p.firstName}      c={(v) => upd(i, "firstName",      v)} r />
                 <Input l="Last name"              v={p.lastName}       c={(v) => upd(i, "lastName",       v)} r />
-                <Input l="Date of birth"  t="date" v={p.dob}           c={(v) => upd(i, "dob",            v)} r={p.type !== "ADULT" || isInternational || !!cond?.dobRequired[p.type]} />
+                <PassengerDateInput label="Date of birth" max={localToday()} value={p.dob} onChange={(v) => upd(i, "dob", v)} required={p.type !== "ADULT" || isInternational || !!cond?.dobRequired[p.type]} />
                 <label>Gender
                   <select value={p.gender} onChange={(e) => upd(i, "gender", e.target.value as "M" | "F")}>
                     <option value="M">Male</option>
@@ -998,9 +1010,9 @@ export default function BookPage() {
                 <div className="grid">
                   <Input l="Nationality (e.g. IN, AE)" v={p.nationality} c={(v) => upd(i, "nationality", v.toUpperCase().slice(0, 2))} max={2} r={passportNeeded} />
                   <Input l="Passport number" v={p.passportNumber} c={(v) => upd(i, "passportNumber", v)} r={passportNeeded} />
-                  <Input l="Passport expiry" t="date" v={p.passportExpiry} c={(v) => upd(i, "passportExpiry", v)} r={passportNeeded || (!!cond?.passportExpiryRequired && !!p.passportNumber)} />
+                  <PassengerDateInput label="Passport expiry" min={passportExpiryMinimum()} value={p.passportExpiry} onChange={(v) => upd(i, "passportExpiry", v)} required={passportNeeded || (!!cond?.passportExpiryRequired && !!p.passportNumber)} />
                   {(passportNeeded || p.passportNumber) && (
-                    <Input l="Passport issue date" t="date" v={p.passportIssueDate} c={(v) => upd(i, "passportIssueDate", v)} />
+                    <PassengerDateInput label="Passport issue date" max={localToday()} value={p.passportIssueDate} onChange={(v) => upd(i, "passportIssueDate", v)} />
                   )}
                   {cond?.panApplicable && (
                     <Input l="PAN (optional)" v={p.panNumber} c={(v) => upd(i, "panNumber", v.toUpperCase().slice(0, 10))} ph="ABCDE1234F" max={10} />
