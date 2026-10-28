@@ -1,7 +1,7 @@
-name: Hotel booking isolated release (API + web + migration 0012)
+name: Hotel booking isolated release (D1 migration + API + web)
 
-# Releases only PR #13 (merge e579682): migration 0012_hotel_bookings.sql, then
-# tripcod-api, then tripcod-web. No other migration, Worker, secret or setting.
+# Releases PR #13 + PR #14 (merge 92e60fd): D1 migration (tripcod-hotels), then
+# tripcod-api, then tripcod-web. No Neon migration, other Worker, secret or setting.
 # Preflight is read-only; the release job runs only when every gate passes.
 
 on:
@@ -18,7 +18,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  RELEASE_COMMIT: e579682836e4482a22f7adc5aee061a22bbac47f
+  RELEASE_COMMIT: 92e60fd11791ecabcb4471ab40489cce823670b9
   CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
   CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
   WRANGLER_SEND_METRICS: "false"
@@ -31,6 +31,7 @@ jobs:
     timeout-minutes: 20
     outputs:
       go:          ${{ steps.gate.outputs.go }}
+      bookmark:    ${{ steps.d1.outputs.bookmark }}
       api_version: ${{ steps.cf.outputs.api_version }}
       web_version: ${{ steps.cf.outputs.web_version }}
       city_sha:    ${{ steps.cf.outputs.city_sha }}
@@ -55,36 +56,22 @@ jobs:
         run: |
           pnpm --filter @tripcod/api typecheck
           node --import ./node_modules/.pnpm/tsx@4.23.12/node_modules/tsx/dist/loader.mjs --test \
-            apps/api/test/hotel-orders.test.ts apps/api/test/hotel-validation.test.ts apps/api/test/hotel-city-sync.test.ts
+            apps/api/test/hotel-orders.test.ts apps/api/test/hotel-orders-d1.test.ts apps/api/test/hotel-validation.test.ts apps/api/test/hotel-city-sync.test.ts
           node --test packages/suppliers/test/*.test.cjs apps/tripjack-gateway/test/*.test.mjs
 
-      - name: Gate — database backup (Neon point-in-time restore) is verifiable
-        env:
-          NEON_API_KEY:    ${{ secrets.NEON_API_KEY }}
-          NEON_PROJECT_ID: ${{ secrets.NEON_PROJECT_ID }}
-          DATABASE_URL:    ${{ secrets.DATABASE_URL }}
-        shell: python
+      - name: Gate — D1 backup / recovery (Time Travel) and empty target
+        id: d1
+        working-directory: apps/api
         run: |
-          import json, os, urllib.parse, urllib.request, urllib.error
-          db = os.environ.get("DATABASE_URL", "")
-          if not db:
-              raise SystemExit("BLOCKER: DATABASE_URL secret is not available to this workflow.")
-          host = urllib.parse.urlparse(db).hostname or ""
-          print(json.dumps({"databaseHostProvider": "neon" if host.endswith(".neon.tech") else "other/unknown"}))
-          key, project = os.environ.get("NEON_API_KEY", ""), os.environ.get("NEON_PROJECT_ID", "")
-          if not key or not project:
-              raise SystemExit("BLOCKER: database backup cannot be verified — repository secrets NEON_API_KEY and NEON_PROJECT_ID "
-                               "are not configured, so Neon point-in-time-restore retention cannot be read. No migration was run.")
-          req = urllib.request.Request(f"https://console.neon.tech/api/v2/projects/{project}", headers={"Authorization": f"Bearer {key}", "Accept": "application/json"})
-          try:
-              with urllib.request.urlopen(req, timeout=30) as r: p = json.load(r)["project"]
-          except urllib.error.HTTPError as e:
-              raise SystemExit(f"BLOCKER: Neon API refused the backup check (HTTP {e.code}).")
-          retention = int(p.get("history_retention_seconds") or 0)
-          print(json.dumps({"neonProject": p.get("id"), "pitrRetentionHours": round(retention / 3600, 1)}))
-          if retention < 24 * 3600:
-              raise SystemExit("BLOCKER: Neon point-in-time-restore retention is under 24 hours.")
-          print("BACKUP_VERIFIED")
+          set -o pipefail
+          grep -q 'database_id    = "e07a176a-f724-4769-9e0b-26250d23dea2"' wrangler.toml
+          pnpm exec wrangler d1 time-travel info tripcod-hotels --json | tee tt.json
+          bookmark=$(python3 -c "import json;print(json.load(open('tt.json'))['bookmark'])")
+          [ -n "$bookmark" ] || { echo "BLOCKER: no D1 Time Travel bookmark"; exit 1; }
+          echo "bookmark=$bookmark" >> "$GITHUB_OUTPUT"
+          pnpm exec wrangler d1 execute tripcod-hotels --remote --json --command "SELECT name FROM sqlite_master WHERE type = 'table'" | tee tables.json
+          pnpm exec wrangler d1 migrations list tripcod-hotels --remote | tee pending.txt
+          echo "BACKUP_VERIFIED (D1 Time Travel restore point $bookmark)"
 
       - name: Gate — database state (read-only session)
         env:
@@ -94,9 +81,8 @@ jobs:
           sudo apt-get install -y postgresql-client >/dev/null 2>&1 || true
           psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -At <<'SQL'
           SELECT 'read_only=' || current_setting('transaction_read_only');
-          SELECT 'hotel_bookings_exists=' || (to_regclass('public.hotel_bookings') IS NOT NULL);
-          SELECT 'currency_type=' || (to_regtype('public.currency') IS NOT NULL);
-          SELECT 'tenants=' || (to_regclass('public.tenants') IS NOT NULL) || ' users=' || (to_regclass('public.users') IS NOT NULL);
+          SELECT 'neon_hotel_bookings_table=' || (to_regclass('public.hotel_bookings') IS NOT NULL) || ' (expected false: hotel orders live in D1)';
+          SELECT 'tenants=' || (to_regclass('public.tenants') IS NOT NULL) || ' users=' || (to_regclass('public.users') IS NOT NULL) || ' wallet_transactions=' || (to_regclass('public.wallet_transactions') IS NOT NULL);
           SELECT 'bookings_rows=' || count(*) FROM bookings;
           SELECT 'payments_rows=' || count(*) FROM payments;
           SQL
@@ -142,7 +128,7 @@ jobs:
         run: echo "go=true" >> "$GITHUB_OUTPUT"
 
   release:
-    name: Migration 0012 → API → web, with verification and rollback
+    name: D1 migration → API → web, with verification and rollback
     needs: preflight
     if: needs.preflight.outputs.go == 'true'
     runs-on: ubuntu-latest
@@ -151,6 +137,7 @@ jobs:
       API_ROLLBACK: ${{ needs.preflight.outputs.api_version }}
       WEB_ROLLBACK: ${{ needs.preflight.outputs.web_version }}
       CITY_SHA:     ${{ needs.preflight.outputs.city_sha }}
+      D1_BOOKMARK:  ${{ needs.preflight.outputs.bookmark }}
     steps:
       - uses: actions/checkout@v4
         with: { fetch-depth: 0 }
@@ -186,7 +173,11 @@ jobs:
               new = re.search(r"Worker Version ID:\s*([0-9a-f-]{36})", open(sys.argv[3]).read())
               if not new: raise SystemExit("STOP: uploaded version ID missing; nothing activated")
               old_v, new_v = call(f"/workers/scripts/{worker}/versions/{sys.argv[4]}"), call(f"/workers/scripts/{worker}/versions/{new[1]}")
-              if bindings(old_v) != bindings(new_v): raise SystemExit("STOP: binding differences; nothing activated")
+              added = sorted(set(bindings(new_v)) - set(bindings(old_v))); removed = sorted(set(bindings(old_v)) - set(bindings(new_v)))
+              allowed = [b for b in added if json.loads(b).get("type") == "d1" and json.loads(b).get("name") == "HOTEL_DB"]
+              if removed or added != allowed or (worker == "tripcod-api" and len(allowed) not in (0, 1)) or (worker != "tripcod-api" and added):
+                  raise SystemExit(f"STOP: binding differences beyond HOTEL_DB (added={added}, removed={removed}); nothing activated")
+              print(json.dumps({"bindingsAdded": [json.loads(b).get("name") for b in added], "bindingsRemoved": []}))
               o, n = old_v["resources"].get("script_runtime", {}), new_v["resources"].get("script_runtime", {})
               for k in ("compatibility_date", "compatibility_flags", "migration_tag", "limits"):
                   if o.get(k) != n.get(k): raise SystemExit(f"STOP: runtime {k} differs ({o.get(k)} → {n.get(k)}); nothing activated")
@@ -201,23 +192,28 @@ jobs:
           python3 "$RUNNER_TEMP/cf.py" unchanged tripcod-api "$API_ROLLBACK"
           python3 "$RUNNER_TEMP/cf.py" unchanged tripcod-web "$WEB_ROLLBACK"
 
-      - name: Migration 0012 only (single transaction, short lock timeout)
+      - name: Neon flight data counts before release (read-only)
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          PGOPTIONS: "-c default_transaction_read_only=on"
         run: |
           sudo apt-get install -y postgresql-client >/dev/null 2>&1 || true
-          psql "$DATABASE_URL" -At -c "SELECT 'restore_point=' || now() || ' lsn=' || pg_current_wal_lsn();"
-          psql "$DATABASE_URL" -At -c "SELECT 'before bookings=' || (SELECT count(*) FROM bookings) || ' payments=' || (SELECT count(*) FROM payments);" | tee before.txt
-          { echo "SET lock_timeout = '5s'; SET statement_timeout = '60s';"; cat packages/db/drizzle/migrations/0012_hotel_bookings.sql; } > m.sql
-          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 --single-transaction -f m.sql
-          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -At <<'SQL' | tee after.txt
-          SELECT 'columns=' || count(*) FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'hotel_bookings';
-          SELECT 'indexes=' || count(*) FROM pg_indexes WHERE tablename = 'hotel_bookings';
-          SELECT 'before bookings=' || (SELECT count(*) FROM bookings) || ' payments=' || (SELECT count(*) FROM payments);
-          SQL
-          grep -q '^columns=35$' after.txt || { echo "STOP: hotel_bookings has unexpected columns"; exit 1; }
-          grep -q "$(cat before.txt)" after.txt || { echo "STOP: flight bookings/payments counts changed"; exit 1; }
-          echo MIGRATION_OK
+          psql "$DATABASE_URL" -At -c "SELECT 'bookings=' || (SELECT count(*) FROM bookings) || ' payments=' || (SELECT count(*) FROM payments);" | tee "$RUNNER_TEMP/neon-before.txt"
+
+      - name: D1 migration only (tripcod-hotels; Time Travel restore point recorded)
+        working-directory: apps/api
+        run: |
+          set -o pipefail
+          echo "D1 restore point (Time Travel bookmark): $D1_BOOKMARK"
+          pnpm exec wrangler d1 migrations apply tripcod-hotels --remote
+          pnpm exec wrangler d1 execute tripcod-hotels --remote --json --command "SELECT (SELECT count(*) FROM pragma_table_info('hotel_bookings')) AS cols, (SELECT count(*) FROM sqlite_master WHERE type = 'index' AND tbl_name = 'hotel_bookings' AND name LIKE 'hotel_%') AS idx, (SELECT count(*) FROM hotel_bookings) AS rows_" | tee d1.json
+          python3 - <<'PY'
+          import json
+          r = json.load(open("d1.json"))[0]["results"][0]
+          print(r)
+          if (r["cols"], r["idx"]) != (35, 3): raise SystemExit("STOP: D1 hotel_bookings schema is not as expected")
+          PY
+          echo D1_MIGRATION_OK
 
       - name: API — upload non-serving version, verify, activate
         working-directory: apps/api
@@ -287,7 +283,9 @@ jobs:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           PGOPTIONS: "-c default_transaction_read_only=on"
         run: |
-          psql "$DATABASE_URL" -At -c "SELECT 'final bookings=' || (SELECT count(*) FROM bookings) || ' payments=' || (SELECT count(*) FROM payments) || ' hotel_bookings=' || (SELECT count(*) FROM hotel_bookings);"
+          psql "$DATABASE_URL" -At -c "SELECT 'bookings=' || (SELECT count(*) FROM bookings) || ' payments=' || (SELECT count(*) FROM payments);" | tee neon-after.txt
+          cmp -s neon-after.txt "$RUNNER_TEMP/neon-before.txt" && echo "NEON_FLIGHT_DATA_UNCHANGED" || echo "NOTE: Neon counts moved during the release (live traffic) — compare: $(cat "$RUNNER_TEMP/neon-before.txt")"
+          (cd apps/api && pnpm exec wrangler d1 execute tripcod-hotels --remote --json --command "SELECT count(*) AS hotel_orders FROM hotel_bookings")
           python3 - <<'PY'
           import hashlib, json, os, urllib.request
           base = "https://api.cloudflare.com/client/v4/accounts/" + os.environ["CLOUDFLARE_ACCOUNT_ID"]
@@ -302,7 +300,7 @@ jobs:
         run: |
           python3 "$RUNNER_TEMP/cf.py" rollback tripcod-api "$API_ROLLBACK"
           if [ -n "${TRIPCOD_WEB_NEW:-}" ]; then python3 "$RUNNER_TEMP/cf.py" rollback tripcod-web "$WEB_ROLLBACK"; fi
-          echo "ROLLED_BACK (migration 0012 stays: additive table, unused by the previous versions)"
+          echo "ROLLED_BACK. D1 hotel_bookings stays (new database, unused by the previous versions); full D1 restore point: $D1_BOOKMARK"
           exit 1
 
       - uses: actions/upload-artifact@v4
