@@ -44,6 +44,15 @@ Cross-database risks and how they are handled:
 - **Nomod webhook.** Flight payments are matched in Neon first; only unmatched link ids are looked up in D1. Nomod link ids are unique, so no event can match both.
 - **No Neon hotel table.** Neon migration `0012_hotel_bookings.sql` was removed before it was ever applied (the earlier release stopped at its backup gate), so the normal `deploy.yml` migration loop never creates it.
 
+## Wallet payment (same customer wallet as flights)
+
+- Offered to the signed-in customer who made the order, for INR orders the balance fully covers (as on flight checkout). Pays an instant booking or confirms a hold.
+- One atomic debit per order (D1 payment slot claimed first, conditional Neon debit); TripJack is called only after the debit, from the queue.
+- Booking fails / hold released before confirmation → full amount credited back once (`hotel_refund_<debit ref>`).
+- Customer cancellation confirmed by TripJack → the policy refund is credited to the wallet automatically (like flight cancellations). Card refunds stay with the team.
+- A payment interrupted between the D1 claim and the Neon debit is settled from the wallet ledger after 60 s.
+- Tests: `node --experimental-test-module-mocks --import <tsx> --test apps/api/test/hotel-wallet.test.ts`.
+
 ## Release gates (not done in this change)
 
 1. **D1 migration** `apps/api/d1-migrations/0001_hotel_bookings.sql` (`wrangler d1 migrations apply tripcod-hotels --remote`) must be applied before the API is released; D1 Time Travel gives the restore point.
