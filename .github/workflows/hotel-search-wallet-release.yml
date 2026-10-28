@@ -1,0 +1,128 @@
+name: Hotel Search recovery + wallet refund release (API only)
+
+# Releases PR #17 + #18 (merge 246303e) to tripcod-api only. No Admin / website /
+# portal deploy, no migration, no secret or setting change. Rollback on failure.
+# Approved by the owner; runs on a push of this file to this branch.
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [release/hotel-search-wallet]
+    paths: [.github/workflows/hotel-search-wallet-release.yml]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tripcod-hotel-booking-release
+  cancel-in-progress: false
+
+env:
+  RELEASE_COMMIT: 246303e0824839ccf11f91fba738025406cb4cc7
+  CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+  CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+  WRANGLER_SEND_METRICS: "false"
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - name: Gate — code is exactly the merged PR #17 + #18
+        run: |
+          git merge-base --is-ancestor "$RELEASE_COMMIT" origin/main
+          git diff --exit-code "$RELEASE_COMMIT" HEAD -- apps packages pnpm-lock.yaml
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - name: Gate — typecheck and hotel / supplier tests
+        run: |
+          pnpm --filter @tripcod/api typecheck
+          node --import ./node_modules/.pnpm/tsx@4.23.12/node_modules/tsx/dist/loader.mjs --test \
+            apps/api/test/hotel-cert-logs.test.ts apps/api/test/hotel-orders.test.ts apps/api/test/hotel-orders-d1.test.ts apps/api/test/hotel-validation.test.ts
+          node --experimental-test-module-mocks --import ./node_modules/.pnpm/tsx@4.23.12/node_modules/tsx/dist/loader.mjs --test apps/api/test/hotel-wallet.test.ts | tee wallet.txt
+          grep -q "^# pass 6" wallet.txt && grep -q "^# fail 0" wallet.txt
+          node --test packages/suppliers/test/*.test.cjs apps/tripjack-gateway/test/*.test.mjs
+      - name: Release helper
+        shell: bash
+        run: |
+          cat > "$RUNNER_TEMP/cf.py" <<'PY'
+          import json, os, re, sys, urllib.request, urllib.error
+          base = "https://api.cloudflare.com/client/v4/accounts/" + os.environ["CLOUDFLARE_ACCOUNT_ID"]
+          def call(path, payload=None):
+              r = urllib.request.Request(base + path, data=None if payload is None else json.dumps(payload).encode(), method="GET" if payload is None else "POST",
+                  headers={"Authorization": "Bearer " + os.environ["CLOUDFLARE_API_TOKEN"], "Content-Type": "application/json"})
+              try:
+                  with urllib.request.urlopen(r, timeout=60) as res: v = json.load(res)
+              except urllib.error.HTTPError as e: raise SystemExit(f"Cloudflare {path}: HTTP {e.code}")
+              if not v.get("success"): raise SystemExit(f"Cloudflare {path} failed")
+              return v["result"]
+          def serving(worker): return call(f"/workers/scripts/{worker}/deployments")["deployments"][0]["versions"]
+          def bindings(v): return sorted(json.dumps(b, sort_keys=True) for b in v["resources"].get("bindings", []))
+          def activate(worker, vid, note):
+              call(f"/workers/scripts/{worker}/deployments", {"strategy": "percentage", "versions": [{"version_id": vid, "percentage": 100}], "annotations": {"workers/message": note}})
+              print(json.dumps({"activated": worker, "version": vid}))
+          mode, worker = sys.argv[1], sys.argv[2]
+          if mode == "unchanged":       # serving version is still the recorded rollback target
+              if serving(worker) != [{"version_id": sys.argv[3], "percentage": 100}]: raise SystemExit(f"STOP: {worker} deployment moved since preflight")
+              print(f"{worker} unchanged")
+          elif mode == "activate":      # compare uploaded version to the serving one, then activate
+              new = re.search(r"Worker Version ID:\s*([0-9a-f-]{36})", open(sys.argv[3]).read())
+              if not new: raise SystemExit("STOP: uploaded version ID missing; nothing activated")
+              old_v, new_v = call(f"/workers/scripts/{worker}/versions/{sys.argv[4]}"), call(f"/workers/scripts/{worker}/versions/{new[1]}")
+              added = sorted(set(bindings(new_v)) - set(bindings(old_v))); removed = sorted(set(bindings(old_v)) - set(bindings(new_v)))
+              allowed = [b for b in added if json.loads(b).get("type") == "d1" and json.loads(b).get("name") == "HOTEL_DB"]
+              if removed or added != allowed or (worker == "tripcod-api" and len(allowed) not in (0, 1)) or (worker != "tripcod-api" and added):
+                  raise SystemExit(f"STOP: binding differences beyond HOTEL_DB (added={added}, removed={removed}); nothing activated")
+              print(json.dumps({"bindingsAdded": [json.loads(b).get("name") for b in added], "bindingsRemoved": []}))
+              o, n = old_v["resources"].get("script_runtime", {}), new_v["resources"].get("script_runtime", {})
+              for k in ("compatibility_date", "compatibility_flags", "migration_tag", "limits"):
+                  if o.get(k) != n.get(k): raise SystemExit(f"STOP: runtime {k} differs ({o.get(k)} → {n.get(k)}); nothing activated")
+              activate(worker, new[1], "Hotel booking release (PR #13); no other change")
+              open(os.environ["GITHUB_ENV"], "a").write(f"{worker.upper().replace('-', '_')}_NEW={new[1]}\n")
+          elif mode == "rollback":
+              activate(worker, sys.argv[3], "Rollback: restore pre-hotel-booking version")
+          PY
+
+      - name: Record rollback version
+        shell: python
+        run: |
+          import json, os, urllib.request
+          base = "https://api.cloudflare.com/client/v4/accounts/" + os.environ["CLOUDFLARE_ACCOUNT_ID"]
+          r = urllib.request.Request(f"{base}/workers/scripts/tripcod-api/deployments", headers={"Authorization": "Bearer " + os.environ["CLOUDFLARE_API_TOKEN"]})
+          v = json.load(urllib.request.urlopen(r, timeout=60))["result"]["deployments"][0]["versions"]
+          if len(v) != 1 or v[0]["percentage"] != 100: raise SystemExit("STOP: tripcod-api split deployment")
+          print(json.dumps({"worker": "tripcod-api", "rollbackVersion": v[0]["version_id"]}))
+          open(os.environ["GITHUB_ENV"], "a").write(f"TRIPCOD_API_ROLLBACK={v[0]['version_id']}\n")
+
+      - name: API — upload, verify bindings / runtime, activate
+        id: api
+        working-directory: apps/api
+        run: |
+          set -o pipefail
+          cp wrangler.toml wrangler.release.toml
+          printf '\n[limits]\ncpu_ms = 30000\n' >> wrangler.release.toml
+          pnpm exec wrangler versions upload --config wrangler.release.toml --keep-vars --message "Hotel Search recovery + wallet refund PR #17 #18" 2>&1 | tee "$RUNNER_TEMP/api.log"
+          python3 "$RUNNER_TEMP/cf.py" activate tripcod-api "$RUNNER_TEMP/api.log" "$TRIPCOD_API_ROLLBACK"
+          sleep 15
+          curl -sS --fail -m 30 https://api.tripcod.com/health; echo
+          c=$(curl -sS -m 30 -o /dev/null -w "%{http_code}" -A "Mozilla/5.0" https://api.tripcod.com/api/admin/supplier-logs/hotel-certification); echo "admin route without sign-in → $c"; [ "$c" = 401 ]
+          c=$(curl -sS -m 60 -o /dev/null -w "%{http_code}" -A "Mozilla/5.0" -H 'x-tenant-slug: tripcod' https://api.tripcod.com/api/hotels/orders/mine); echo "hotel orders route → $c"; [ "$c" = 401 ]
+          c=$(curl -sS -m 60 -o /dev/null -w "%{http_code}" -A "Mozilla/5.0" -H 'Content-Type: application/json' -H 'x-tenant-slug: tripcod' -X POST -d '{"method":"WALLET"}' https://api.tripcod.com/api/hotels/orders/release-check-none/pay); echo "wallet pay route, unknown order → $c"; [ "$c" = 404 ]
+
+      - name: Verify TJP202803274047 in Hotel UAT certification logs and its ZIP (read-only, metadata only)
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          # Runs from apps/api so it resolves the API's own packages (copied after the code gate).
+          cp .github/release/verify-hotel-pack.mts apps/api/.verify-hotel-pack.mts
+          cd apps/api && node --import ../../node_modules/.pnpm/tsx@4.23.12/node_modules/tsx/dist/loader.mjs .verify-hotel-pack.mts TJP202803274047
+
+      - name: Roll back API if the release step failed (not on a verification-only failure)
+        if: failure() && steps.api.outcome == 'failure' && env.TRIPCOD_API_NEW != ''
+        run: |
+          python3 "$RUNNER_TEMP/cf.py" rollback tripcod-api "$TRIPCOD_API_ROLLBACK"
+          echo ROLLED_BACK
