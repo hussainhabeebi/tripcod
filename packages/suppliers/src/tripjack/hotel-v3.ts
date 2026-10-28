@@ -71,7 +71,9 @@ export class TripjackHotelError extends Error {
   code?:            string;
   endpoint!:        string;
   responseSnippet?: string;
-  constructor(message: string, init: { endpoint: string; statusCode?: number; code?: string; responseSnippet?: string }) {
+  gatewayRequestId?: string;
+  upstreamStatus?: number;
+  constructor(message: string, init: { endpoint: string; statusCode?: number; code?: string; responseSnippet?: string; gatewayRequestId?: string; upstreamStatus?: number }) {
     super(message);
     this.name = "TripjackHotelError";
     Object.assign(this, init);
@@ -138,28 +140,37 @@ export class TripjackHotelV3Client {
       });
     } catch (err) {
       this.record(exchange(null, {}, null, err instanceof Error ? `${err.name}: ${err.message}` : String(err)));
-      const timeout = (err as Error)?.name === "TimeoutError";
+      const timeout = ["TimeoutError", "AbortError"].includes((err as Error)?.name);
       throw new TripjackHotelError(timeout ? `TripJack hotel API timed out after ${timeoutMs} ms` : `Could not reach the TripJack gateway: ${(err as Error)?.message ?? err}`,
         { endpoint, code: timeout ? "TIMEOUT" : "NETWORK_ERROR" });
     }
-    const text = await res.text();
+    const rawId = res.headers.get("x-request-id");
+    const gatewayRequestId = rawId && /^[A-Za-z0-9._:-]{1,128}$/.test(rawId) ? rawId : undefined;
+    const upstream = res.headers.get("x-tripjack-upstream-status");
+    const upstreamStatus = upstream && /^\d{3}$/.test(upstream) ? Number(upstream) : undefined;
+    let text: string;
+    try { text = await res.text(); } catch {
+      this.record(exchange(res.status, Object.fromEntries(res.headers), null, "Response body read failed"));
+      throw new TripjackHotelError("The TripJack gateway response body could not be read", { endpoint, statusCode: res.status,
+        code: "RESPONSE_READ_FAILED", gatewayRequestId, upstreamStatus });
+    }
     this.record(exchange(res.status, Object.fromEntries(res.headers), text));
     let json: any = null;
     try { json = text ? JSON.parse(text) : {}; } catch { /* non-JSON (proxy HTML) */ }
 
     const envelope = json?.error && typeof json.error === "object" ? json.error : null;
-    const failed = !res.ok || json?.status?.success === false || envelope;
+    const failed = !res.ok || json?.status?.success === false || envelope || (Array.isArray(json?.errors) && json.errors.length > 0);
     if (failed) {
       const code = String(envelope?.code ?? json?.errors?.[0]?.errCode ?? (typeof json?.error === "string" ? json.error : "") ?? "") || `HTTP_${res.status}`;
       const message = envelope?.message ?? json?.errors?.[0]?.message ?? json?.status?.statusMessage
         ?? (typeof json?.error === "string" ? json.error : "") ?? "";
       throw new TripjackHotelError(
         `TripJack hotel ${endpoint} failed (HTTP ${res.status}${code ? `, ${code}` : ""})${message ? `: ${message}` : ""}`,
-        { endpoint, statusCode: res.status, code, responseSnippet: text.slice(0, 1500) },
+        { endpoint, statusCode: res.status, code, responseSnippet: text.slice(0, 1500), gatewayRequestId, upstreamStatus },
       );
     }
     if (json === null) {
-      throw new TripjackHotelError(`TripJack hotel ${endpoint} returned a non-JSON response`, { endpoint, statusCode: res.status, code: "INVALID_RESPONSE", responseSnippet: text.slice(0, 1500) });
+      throw new TripjackHotelError(`TripJack hotel ${endpoint} returned a non-JSON response`, { endpoint, statusCode: res.status, code: "INVALID_RESPONSE", responseSnippet: text.slice(0, 1500), gatewayRequestId, upstreamStatus });
     }
     return json as T;
   }

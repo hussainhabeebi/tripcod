@@ -23,8 +23,11 @@ hotelsAdminRoutes.post("/city-index/sync", zValidator("json", z.object({ restart
   try {
     return c.json(await logged(c, "/hms/v3/content/fetch-city-regionIds", { restart }, () => syncCityIndex(c.env, client, restart),
       (r) => ({ ...r })));
-  } catch (err) {
-    return hotelError(c, err, "City sync failed");
+  } catch (err: any) {
+    return c.json({ error: err?.message ?? "City sync failed", errorCode: err?.code ?? "CITY_SYNC_FAILED",
+      requestId: err?.requestId, httpStatus: err?.statusCode ?? null, upstreamStatus: err?.upstreamStatus ?? null,
+      gatewayRequestId: err?.gatewayRequestId, page: err?.syncPage, pagesDone: err?.pagesDone, phase: err?.syncPhase,
+    }, 502);
   }
 });
 
