@@ -63,6 +63,15 @@ max_batch_timeout = 2
 binding = "HYPERDRIVE"
 id      = "28bf3c3cf90d4e8f9b0ef1039c68da6a"
 
+# ── D1: website hotel orders (TripJack Hotel v3) ──────────────────
+# Orders, holds, cancellations and payment refs. Customers, wallet, flights and
+# payments stay in Neon. Schema: d1-migrations/ (wrangler d1 migrations apply).
+[[d1_databases]]
+binding        = "HOTEL_DB"
+database_name  = "tripcod-hotels"
+database_id    = "e07a176a-f724-4769-9e0b-26250d23dea2"
+migrations_dir = "d1-migrations"
+
 # ── Durable Objects (per-tenant rate limiter) ─────────────────────
 [[durable_objects.bindings]]
 name       = "TENANT_RATE_LIMITER"

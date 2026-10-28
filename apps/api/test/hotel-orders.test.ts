@@ -12,6 +12,34 @@ import {
   recordPaid, refreshOrder, sha256Hex, type HotelOrder, type HotelOrderDeps, type HotelOrderStore, type ReviewSnapshot,
 } from "../src/lib/hotel-orders.js";
 import { hotelRoutes } from "../src/routes/hotel.js";
+import { d1HotelOrderStore } from "../src/lib/hotel-order-store.js";
+import { createRequire } from "node:module";
+import { readFileSync } from "node:fs";
+import { after } from "node:test";
+
+// HOTEL_STORE=d1 (hotel-orders-d1.test.ts) runs every scenario against the real
+// D1 store on local workerd SQLite with the production D1 migration applied.
+const USE_D1 = process.env.HOTEL_STORE === "d1";
+async function localD1() {
+  const require = createRequire(import.meta.url);
+  const wrangler = createRequire(require.resolve("wrangler/package.json"));
+  const { Miniflare, convertV4MiniflareOptions } = wrangler("miniflare");
+  const mf = new Miniflare(convertV4MiniflareOptions({ modules: true, script: "export default { fetch() { return new Response('') } }", d1Databases: ["HOTEL_DB"] }));
+  const d1 = await mf.getD1Database("HOTEL_DB");
+  const sql = readFileSync(new URL("../d1-migrations/0001_hotel_bookings.sql", import.meta.url), "utf8").replace(/--.*$/gm, "");
+  await d1.batch(sql.split(";").map((q: string) => q.trim()).filter(Boolean).map((q: string) => d1.prepare(q)));
+  after(() => mf.dispose());
+  return d1;
+}
+const D1 = USE_D1 ? await localD1() : null;
+
+// A fresh, empty store per test (memory, or the D1 table emptied first).
+function newStore(): HotelOrderStore {
+  if (!D1) return memoryStore();
+  const ready = D1.exec("DELETE FROM hotel_bookings");
+  const store = d1HotelOrderStore(D1);
+  return Object.fromEntries(Object.entries(store).map(([k, fn]) => [k, async (...a: unknown[]) => { await ready; return (fn as any)(...a); }])) as HotelOrderStore;
+}
 
 // ── Fixtures ────────────────────────────────────────────────────────────────
 
@@ -185,7 +213,7 @@ test("guests must match each room's adults and children; PAN only for eligible I
 
 for (const [label, countryCode, nationality] of [["domestic", "IN", "IN"], ["international", "AE", "AE"]] as const) {
   test(`instant ${label} booking: nothing is booked before payment; confirmed only on TripJack SUCCESS`, async () => {
-    const store = memoryStore();
+    const store = newStore();
     const tj = tripjack(["IN_PROGRESS", "SUCCESS"]);
     const { d, queued } = deps(store, tj.client);
     const order = await newOrder(store, "INSTANT", review({ nationality, hotel: { ...review().hotel, countryCode } }));
@@ -214,7 +242,7 @@ for (const [label, countryCode, nationality] of [["domestic", "IN", "IN"], ["int
 }
 
 test("paid booking that TripJack fails is refunded in full and never shown as confirmed", async () => {
-  const store = memoryStore();
+  const store = newStore();
   const tj = tripjack(["FAILED"]);
   const { d, refunds } = deps(store, tj.client);
   const order = await newOrder(store, "INSTANT");
@@ -226,7 +254,7 @@ test("paid booking that TripJack fails is refunded in full and never shown as co
 });
 
 test("unknown book outcome (timeout) is never resubmitted; Booking Details decides later", async () => {
-  const store = memoryStore();
+  const store = newStore();
   const timeout = Object.assign(new Error("timed out"), { code: "TIMEOUT" });
   const tj = tripjack(["IN_PROGRESS"], { bookError: timeout });
   const { d, refunds } = deps(store, tj.client);
@@ -242,7 +270,7 @@ test("unknown book outcome (timeout) is never resubmitted; Booking Details decid
 });
 
 test("definite TripJack rejection after payment refunds; one payment slot per order", async () => {
-  const store = memoryStore();
+  const store = newStore();
   const rejected = Object.assign(new Error("OPTION_SOLD_OUT"), { code: "6506", statusCode: 400 });
   const tj = tripjack([""], { bookError: rejected });
   const { d, refunds } = deps(store, tj.client);
@@ -260,7 +288,7 @@ test("definite TripJack rejection after payment refunds; one payment slot per or
 // ── Hold → confirm ──────────────────────────────────────────────────────────
 
 test("hold booking shows ON_HOLD with the supplier deadline, then confirms after payment", async () => {
-  const store = memoryStore();
+  const store = newStore();
   const tj = tripjack(["ON_HOLD"], { deadline: "2026-11-25T18:00" });
   const { d } = deps(store, tj.client);
   const held = await placeHold(d, await newOrder(store, "HOLD"));
@@ -283,7 +311,7 @@ test("hold booking shows ON_HOLD with the supplier deadline, then confirms after
 });
 
 test("paid hold stays unconfirmed while TripJack still reports ON_HOLD", async () => {
-  const store = memoryStore();
+  const store = newStore();
   const tj = tripjack(["ON_HOLD"]);
   const { d } = deps(store, tj.client);
   const held = await placeHold(d, await newOrder(store, "HOLD"));
@@ -294,7 +322,7 @@ test("paid hold stays unconfirmed while TripJack still reports ON_HOLD", async (
 });
 
 test("expired hold auto-cancelled by the supplier shows CANCELLED and can't be paid", async () => {
-  const store = memoryStore();
+  const store = newStore();
   const tj = tripjack(["ON_HOLD"], { deadline: "2026-10-31T18:00" });
   const { d, refunds } = deps(store, tj.client);
   const held = await placeHold(d, await newOrder(store, "HOLD"));
@@ -307,7 +335,7 @@ test("expired hold auto-cancelled by the supplier shows CANCELLED and can't be p
 });
 
 test("hold paid just before expiry: supplier released it, so the payment is refunded", async () => {
-  const store = memoryStore();
+  const store = newStore();
   const tj = tripjack(["ON_HOLD"]);
   const { d, refunds } = deps(store, tj.client);
   const held = await placeHold(d, await newOrder(store, "HOLD"));
@@ -321,7 +349,7 @@ test("hold paid just before expiry: supplier released it, so the payment is refu
 });
 
 test("hold cancellation releases the hold at no charge", async () => {
-  const store = memoryStore();
+  const store = newStore();
   const tj = tripjack(["ON_HOLD"]);
   const { d, refunds } = deps(store, tj.client);
   const held = await placeHold(d, await newOrder(store, "HOLD"));
@@ -338,7 +366,7 @@ test("hold cancellation releases the hold at no charge", async () => {
 // ── Cancellation within / outside the deadline ──────────────────────────────
 
 async function confirmedOrder(now: string) {
-  const store = memoryStore();
+  const store = newStore();
   const tj = tripjack(["SUCCESS"]);
   const { d, refunds } = deps(store, tj.client, now);
   const order = await newOrder(store, "INSTANT");
@@ -380,7 +408,7 @@ test("cancel accepted but TripJack still SUCCESS → CANCELLATION_PENDING, not C
 });
 
 test("rejected cancellation leaves the booking as it was", async () => {
-  const store = memoryStore();
+  const store = newStore();
   const tj = tripjack(["SUCCESS"], { cancelError: Object.assign(new Error("not allowed"), { code: "CANCEL_NOT_ALLOWED", statusCode: 400 }) });
   const { d } = deps(store, tj.client, "2026-11-10T10:00:00+05:30");
   const order = await newOrder(store, "INSTANT");
@@ -393,7 +421,7 @@ test("rejected cancellation leaves the booking as it was", async () => {
 });
 
 test("unpaid or failed bookings are not cancellable", async () => {
-  const store = memoryStore();
+  const store = newStore();
   const order = await newOrder(store, "INSTANT");
   assert.equal(cancelQuote(order).eligible, false);
 });
@@ -406,7 +434,7 @@ test("non-refundable policy charges the full amount", () => {
 // ── Access + order creation route ───────────────────────────────────────────
 
 test("order access needs the key or the customer who made it", async () => {
-  const store = memoryStore();
+  const store = newStore();
   const order = await newOrder(store, "INSTANT");
   assert.equal(await canAccess(order, { key: "secret-key" }), true);
   assert.equal(await canAccess(order, { key: "wrong" }), false);

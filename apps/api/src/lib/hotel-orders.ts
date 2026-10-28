@@ -21,10 +21,25 @@ import {
   HOTEL_TERMINAL_STATUSES, cancellationChargeAt, parseHotelBookingDetails,
   type HotelGuestInput, type HotelV3Option, type RoomOccupancy, type TripjackHotelV3Client,
 } from "@tripcod/suppliers";
-import type { hotelBookings } from "@tripcod/db/schema";
 
-export type HotelOrder = typeof hotelBookings.$inferSelect;
-export type NewHotelOrder = typeof hotelBookings.$inferInsert;
+// One website hotel order (Cloudflare D1 table hotel_bookings — see
+// apps/api/d1-migrations). tenantId / userId are Neon ids (tenants / users)
+// kept as plain text: there is no cross-database foreign key.
+export interface HotelOrder {
+  id: string; tenantId: string; userId: string | null;
+  supplierBookingId: string; mode: string; status: string; supplierStatus: string | null;
+  confirmationNo: string | null; holdDeadline: string | null;
+  hotel: unknown; occupancy: unknown; guests: unknown; option: unknown; nationality: string;
+  amount: string; currency: "INR" | "AED" | "USD";
+  contactEmail: string; contactPhone: string; dialCode: string;
+  paymentStatus: string; paymentGateway: string | null; paymentOrderId: string | null; paymentRef: string | null;
+  paymentUrl: string | null; paidAt: Date | null; refundAmount: string | null; refundNote: string | null;
+  supplierSubmittedAt: Date | null; confirmSubmittedAt: Date | null;
+  cancellation: unknown; accessKeyHash: string; lastError: string | null; lastCheckedAt: Date | null;
+  createdAt: Date; updatedAt: Date;
+}
+export type NewHotelOrder = Pick<HotelOrder, "tenantId" | "userId" | "supplierBookingId" | "mode" | "status" | "hotel" | "occupancy"
+  | "guests" | "option" | "nationality" | "amount" | "currency" | "contactEmail" | "contactPhone" | "dialCode" | "accessKeyHash">;
 export type HotelOrderPatch = Partial<Omit<HotelOrder, "id" | "tenantId" | "createdAt">>;
 
 export interface OrderGuard {
@@ -54,6 +69,8 @@ export interface HotelOrderDeps {
   // Full refund of a captured payment; ok=false leaves it for the team (REFUND_PENDING).
   refund:  (order: HotelOrder, amount: number, reason: string) => Promise<{ ok: boolean; note: string }>;
   enqueue: (orderId: string) => Promise<void>;
+  // Neon wallet ledger lookup by payment_id (the order lives in D1, the money in Neon).
+  walletDebited?: (paymentRef: string) => Promise<boolean>;
   now?:    () => number;
   sleep?:  (ms: number) => Promise<void>;
   pollMs?: number;   // how long to wait for a terminal TripJack status
@@ -357,7 +374,19 @@ export async function processPaidOrder(deps: HotelOrderDeps, orderId: string): P
 
 const SETTLED = ["CONFIRMED", "FAILED", "CANCELLED", "PAYMENT_PENDING"];
 
+// A wallet payment is two writes in two databases: claim in D1 (with the debit
+// ref), debit in Neon, then PAID in D1. If the last step never happened, the
+// Neon ledger decides: debited → PAID (and booked); not debited → slot released.
+export async function reconcileWalletPayment(deps: HotelOrderDeps, order: HotelOrder): Promise<HotelOrder> {
+  const now = deps.now?.() ?? Date.now();
+  if (order.paymentStatus !== "PENDING" || order.paymentGateway !== "WALLET" || !order.paymentOrderId || !deps.walletDebited) return order;
+  if (now - order.updatedAt.getTime() < 60_000) return order;   // the paying request may still be running
+  if (await deps.walletDebited(order.paymentOrderId)) return (await recordPaid(deps, order, order.paymentOrderId)) ?? order;
+  return (await releasePayment(deps.store, order)) ?? order;
+}
+
 export async function refreshOrder(deps: HotelOrderDeps, order: HotelOrder, force = false): Promise<HotelOrder> {
+  order = await reconcileWalletPayment(deps, order);
   const now = deps.now?.() ?? Date.now();
   // Paid but never sent (queue message lost): recover after a minute.
   if (order.paymentStatus === "PAID" && order.paidAt && now - order.paidAt.getTime() > 60_000

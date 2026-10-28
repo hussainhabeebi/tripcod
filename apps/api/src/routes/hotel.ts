@@ -447,7 +447,9 @@ hotelRoutes.post("/orders/:id/pay", zValidator("json", z.object({ method: z.enum
   try {
     const deps = await orderDeps(c, 0);
     let order = await accessibleOrder(c, deps);
-    if (order.mode === "HOLD") order = await refreshOrder(deps, order, true);   // the hold must still exist
+    // Settles a wallet payment interrupted between the D1 claim and the Neon debit,
+    // and for a hold re-reads TripJack (the hold must still exist).
+    order = await refreshOrder(deps, order, order.mode === "HOLD");
     if (order.paymentStatus === "PENDING") {
       // An open card link for this order is reused rather than opening a second charge.
       if (method === "CARD" && order.paymentGateway === "NOMOD" && order.paymentUrl && payable(order).ok) return c.json({ paymentUrl: order.paymentUrl, reused: true });
