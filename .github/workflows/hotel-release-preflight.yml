@@ -50,7 +50,14 @@ jobs:
               print(json.dumps({"worker": worker, "deploymentId": deployments[0]["id"], "versions": deployments[0]["versions"]}))
           data, _ = get("/workers/scripts/tripcod-api/settings")
           settings = json.loads(data).get("result", {})
-          print(json.dumps({"worker": "tripcod-api", "configuredLimits": settings.get("limits"), "migrationTag": settings.get("migration_tag"), "note": "No hosted memory/plan certification; no settings changed."}))
+          print(json.dumps({"worker": "tripcod-api", "configuredLimits": settings.get("limits"), "migrationTag": settings.get("migration_tag"), "usageModel": settings.get("usage_model"), "settingKeys": sorted(settings), "note": "No hosted memory/plan certification; no settings changed."}))
+          try:
+              subscription_data, _ = get("/subscriptions")
+              subscriptions = json.loads(subscription_data).get("result", [])
+              plans = [{"name": item.get("rate_plan", {}).get("public_name", item.get("rate_plan", {}).get("id")), "state": item.get("state")} for item in subscriptions]
+              print(json.dumps({"subscriptionPlans": plans}))
+          except SystemExit as error:
+              print(json.dumps({"subscriptionPlanUnverified": str(error)}))
           found = False
           for key in ("city-regions.partial.json", "city-regions.sync-v2.json", "city-regions.json", "city-regions.v2.json"):
               data, headers = get("/r2/buckets/tripcod-documents/objects/hotel-static/" + key, optional=True)
@@ -65,6 +72,20 @@ jobs:
                       raise SystemExit("Saved checkpoint is below the reported152 pages. Stop; do not reset or deploy.")
                   if not value.get("complete") and not value.get("exhausted") and not value.get("cursor"):
                       raise SystemExit("Saved cursor missing. Stop; preserve all data.")
+              if key == "city-regions.partial.json":
+                  cities = value.get("cities", {})
+                  buckets = [{} for _ in range(16)]
+                  max_token = 0
+                  encode = lambda obj: json.dumps(obj, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+                  for name, rows in cities.items():
+                      number = 0
+                      for char in name:
+                          number = (number * 31 + ord(char)) & 0xffffffff
+                      buckets[number % 16][name] = rows
+                      max_token = max(max_token, len(encode(rows)), len(encode(name)))
+                  summary.update({"cities": len(cities), "maxEntryUtf8Bytes": max_token, "maxShardUtf8Bytes": max(len(encode(bucket)) for bucket in buckets), "dubaiRegions": len(cities.get("DUBAI", [])), "sharjahRegions": len(cities.get("SHARJAH", []))})
+                  if max_token > 128 * 1024 or summary["maxShardUtf8Bytes"] > 2 * 1024 * 1024:
+                      raise SystemExit("Actual checkpoint exceeds a streaming guard. Preserve data; do not deploy.")
               print(json.dumps(summary))
           if not found:
               raise SystemExit("No saved checkpoint found; production release remains blocked.")
