@@ -1,0 +1,31 @@
+name: Hotel live verification (read-only, no deploy)
+
+# Browser checks of the released hotel flow on www.tripcod.com. Deploys nothing,
+# writes nothing: checkout is never submitted (no order, booking or payment).
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [verify/hotel-live]
+    paths: [.github/workflows/hotel-live-verify.yml, .github/release/hotel-journey.cjs]
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Browser journey on desktop and mobile
+        run: |
+          mkdir -p "$RUNNER_TEMP/pw" && (cd "$RUNNER_TEMP/pw" && npm i --silent playwright@1.49.1 >/dev/null && npx playwright install --with-deps chromium >/dev/null 2>&1)
+          IN=$(date -u -d '+30 days' +%F); OUT=$(date -u -d '+32 days' +%F)
+          NODE_PATH="$RUNNER_TEMP/pw/node_modules" node .github/release/hotel-journey.cjs "$IN" "$OUT" | tee journey.txt
+          grep -q '"result":"VERIFIED_NOTHING_SUBMITTED"' journey.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: hotel-live-screenshots
+          path: release-shots/
