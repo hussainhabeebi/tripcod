@@ -266,6 +266,18 @@ export async function applySupplierStatus(deps: HotelOrderDeps, order: HotelOrde
           refundNote: "Cancelled with the hotel. The refund under the cancellation policy is being processed to the original payment method." }
       : { refundAmount: "0.00", refundNote: "Cancelled with the hotel. No refund applies under the cancellation policy." },
     { paymentStatus: ["PAID"] })) ?? updated;
+    // Like flights: a wallet payment is refunded to the wallet as soon as the
+    // supplier confirms the cancellation. Card refunds stay with the team (the
+    // hotel supplier reports no refund amount to refund a card against).
+    if (refund > 0 && updated.paymentStatus === "REFUND_PENDING" && updated.paymentGateway === "WALLET") {
+      let outcome: { ok: boolean; note: string };
+      try { outcome = await deps.refund(updated, refund, "Hotel cancellation refund"); }
+      catch (err) { outcome = { ok: false, note: `Automatic wallet refund failed: ${err instanceof Error ? err.message : String(err)}` }; }
+      updated = (await deps.store.update(updated.id, outcome.ok
+        ? { paymentStatus: "REFUNDED", refundNote: `Cancelled with the hotel. ${outcome.note}` }
+        : { refundNote: `Cancelled with the hotel. ${outcome.note} Our team will complete the refund.` },
+      { paymentStatus: ["REFUND_PENDING"] })) ?? updated;
+    }
   }
   return updated;
 }
