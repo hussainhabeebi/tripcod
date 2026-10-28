@@ -9,6 +9,7 @@ on:
   push:
     branches: [verify/hotel-tjp202803274047]
     paths: [.github/workflows/hotel-booking-investigate.yml]
+# run 2: fixed psql variables; Neon + R2 only (no TripJack call)
 
 permissions:
   contents: read
@@ -34,6 +35,8 @@ jobs:
           \echo == exchanges linked to the booking (booking_id) or naming it in the URL ==
           SELECT id, endpoint, http_status, started_at, booking_id, search_id IS NOT NULL AS has_search, response_key IS NOT NULL AS has_response
             FROM supplier_exchanges WHERE booking_id = :'b' OR url LIKE '%' || :'b' || '%' ORDER BY started_at;
+          \echo == exchanges now linked to the booking (after the 11:46 status check) ==
+          SELECT endpoint, http_status, started_at FROM supplier_exchanges WHERE booking_id = :'b' ORDER BY started_at;
           \echo == supplier_api_logs mentioning the booking ==
           SELECT endpoint, level, http_status, error_code, created_at FROM supplier_api_logs
             WHERE request_summary::text LIKE '%' || :'b' || '%' ORDER BY created_at;
@@ -42,14 +45,18 @@ jobs:
             FROM supplier_exchanges WHERE (endpoint LIKE '/hms/%' OR endpoint LIKE '/oms/v3/hotel/%') AND started_at > now() - interval '7 days'
             GROUP BY endpoint ORDER BY endpoint;
           SQL
-          psql "$DATABASE_URL" -At -v b="$BOOKING" -c "SELECT tenant_id FROM supplier_exchanges WHERE booking_id = :'b' OR url LIKE '%' || :'b' || '%' LIMIT 1" > tenant.txt || true
-          psql "$DATABASE_URL" -At -v b="$BOOKING" -c "
-            WITH first AS (SELECT min(started_at) t FROM supplier_exchanges WHERE booking_id = :'b' OR url LIKE '%' || :'b' || '%')
-            SELECT x.id || ' ' || x.started_at || ' ' || coalesce(x.search_id, '-') || ' ' || coalesce(x.response_key, '-')
-              FROM supplier_exchanges x, first
-             WHERE x.endpoint = '/hms/v3/hotel/review' AND x.booking_id IS NULL AND first.t IS NOT NULL
-               AND x.started_at BETWEEN first.t - interval '6 hours' AND first.t + interval '5 minutes'
-             ORDER BY x.started_at DESC LIMIT 40" > reviews.txt || true
+          psql "$DATABASE_URL" -At -v b="$BOOKING" > tenant.txt <<'SQL'
+          SELECT tenant_id FROM supplier_exchanges WHERE booking_id = :'b' OR url LIKE '%' || :'b' || '%'
+          UNION SELECT tenant_id FROM supplier_api_logs WHERE request_summary::text LIKE '%' || :'b' || '%' LIMIT 1;
+          SQL
+          psql "$DATABASE_URL" -At -v b="$BOOKING" > reviews.txt <<'SQL'
+          WITH first AS (SELECT min(created_at) t FROM supplier_api_logs WHERE request_summary::text LIKE '%' || :'b' || '%')
+          SELECT x.id || ' ' || x.started_at || ' ' || coalesce(x.search_id, '-') || ' ' || coalesce(x.response_key, '-')
+            FROM supplier_exchanges x, first
+           WHERE x.endpoint = '/hms/v3/hotel/review' AND x.booking_id IS NULL AND first.t IS NOT NULL
+             AND x.started_at BETWEEN first.t - interval '6 hours' AND first.t + interval '30 minutes'
+           ORDER BY x.started_at DESC LIMIT 40;
+          SQL
           echo "candidate unlinked Review calls in the 6 h before the booking: $(grep -c . reviews.txt || true)"
 
       - name: R2 — stored files and which earlier Review returned this booking ID (presence only)
@@ -77,13 +84,3 @@ jobs:
               if b in body: matches.append({"reviewExchangeId": xid, "at": f"{t1} {t2}", "searchLinked": search != "-"})
           print(json.dumps({"reviewCallsWhoseResponseHasThisBookingId": matches}, indent=1))
 
-      - name: D1 — website order for this booking (read-only SELECT)
-        run: |
-          npx -y wrangler@4.86.0 d1 execute tripcod-hotels --remote --json --command \
-            "SELECT id, mode, status, supplier_status, hold_deadline, payment_status, created_at, last_checked_at, json_extract(hotel, '$.name') AS hotel FROM hotel_bookings WHERE supplier_booking_id = '$BOOKING'" \
-            | python3 -c "import json,sys;print(json.dumps(json.load(sys.stdin)[0]['results'],indent=1))"
-
-      - name: Live status — TripJack Booking Details through the API (read-only; prints status fields only)
-        run: |
-          curl -sS -m 60 -A "Mozilla/5.0" -H 'x-tenant-slug: tripcod' "https://api.tripcod.com/api/hotels/bookings/$BOOKING" -o bd.json -w "http=%{http_code}\n" || true
-          python3 -c "import json;d=json.load(open('bd.json'));print(json.dumps({k:d.get(k) for k in ('bookingId','status','pending','holdDeadline','checkIn','checkOut','hotelName','errorCode','error')},indent=1))" || head -c 200 bd.json
