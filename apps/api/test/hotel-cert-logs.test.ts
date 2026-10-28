@@ -91,8 +91,12 @@ function fakeDb(flightBookingIds: string[] = []) {
     } }),
     // Only the legacy Review lookup queries Neon now: newest Review rows first.
     select: () => {
-      const chain: any = { from: () => chain, where: () => chain, orderBy: () => chain,
-        limit: async () => rows.filter((r) => r.endpoint === "/hms/v3/hotel/review").reverse() };
+      let cond: unknown;
+      const chain: any = { from: () => chain, where: (c: unknown) => { cond = c; return chain; }, orderBy: () => chain,
+        // Legacy lookups (Review, then listing) — the fake answers by the endpoint in the WHERE clause.
+    limit: async () => { const e = JSON.stringify(cond ?? null, (_k, v) => typeof v === "object" && v && ("table" in v) ? undefined : v);
+      const wanted = /hotel\/listing/.test(e) ? "/hms/v3/hotel/listing" : "/hms/v3/hotel/review";
+      return rows.filter((r) => r.endpoint === wanted).reverse(); } };
       return chain;
     },
   };
@@ -193,7 +197,9 @@ test("a hold logged before this fix (index rejected, Review in the search folder
   const env: any = { DOCUMENTS_R2: r2, TENANT_CACHE_KV: { get: async () => null } };
   const db = fakeDb();
   const x = await recordedScenario();
-  await persistExchanges(env, db, "t1", x.slice(0, 3), { searchId: SEARCH, requestId: "old-search" });
+  // Before PR #15 the listing sat in the browser request's folder (no correlationId link).
+  await persistExchanges(env, db, "t1", x.slice(0, 1), { requestId: "hotel-old-search-request" });
+  await persistExchanges(env, db, "t1", x.slice(1, 3), { searchId: SEARCH, requestId: "old-detail" });
   await persistExchanges(env, db, "t1", x.slice(3, 5), { bookingId: TJ, requestId: "old-order" }).catch(() => {});
   assert.equal(db.rejected, 2, "same rejection production saw");
 
