@@ -5,6 +5,8 @@ import { HTTPException } from "hono/http-exception";
 import { buildZip } from "../../lib/zip.js";
 import { certificationRequest, tripjackHost } from "../../lib/certification.js";
 import { tripjackEnvironment } from "../../lib/hotels.js";
+import { hotelScenario, hotelStep, type HotelStep } from "../../lib/hotel-cert-logs.js";
+import { d1HotelOrderStore } from "../../lib/hotel-order-store.js";
 import type { Env, Variables } from "../../types.js";
 import { z } from "zod";
 import { zValidator } from "@hono/zod-validator";
@@ -115,8 +117,8 @@ function hostFor(endpoint: string, env: "UAT" | "PRODUCTION") {
   return tripjackHost(env);
 }
 
-// "/hms/v3/hotel/listing" → "HotelListing"
-const serviceName = (endpoint: string) => endpoint.replace(/^\/(hms|oms|fms)\/v\d+\//, "").split(/[^a-zA-Z0-9]+/).filter(Boolean)
+// "/hms/v3/hotel/listing" → "HotelListing" (a booking ID in the path is not part of the name)
+const serviceName = (endpoint: string) => endpoint.replace(/\/cancel-booking\/.*$/, "/cancel-booking").replace(/^\/(hms|oms|fms)\/v\d+\//, "").split(/[^a-zA-Z0-9]+/).filter(Boolean)
   .map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join("") || "Call";
 
 supplierLogsAdminRoutes.get("/exchanges", async (c) => {
@@ -140,14 +142,14 @@ supplierLogsAdminRoutes.get("/exchanges", async (c) => {
   return c.json({ exchanges: list });
 });
 
-async function exchangeFile(c: any, id: string, part: "request" | "response") {
+async function exchangeFile(c: any, id: string, part: "request" | "response", baseName?: string) {
   const [x] = await c.get("db").select().from(supplierExchanges)
     .where(and(eq(supplierExchanges.id, id), eq(supplierExchanges.tenantId, c.get("tenantId")))).limit(1);
   const key = part === "request" ? x?.requestKey : x?.responseKey;
   if (!x || !key) return null;
   const obj = await c.env.DOCUMENTS_R2.get(key);
   if (!obj) return null;
-  const name = `${serviceName(x.endpoint)}${part === "request" ? "Request" : "Response"}.${key.endsWith(".txt") ? "txt" : "json"}`;
+  const name = `${baseName ?? serviceName(x.endpoint)}${part === "request" ? "Request" : "Response"}.${key.endsWith(".txt") ? "txt" : "json"}`;
   if (part === "request") {
     let stored: Record<string, any> = {};
     try { stored = JSON.parse(await obj.text()); } catch { /* keep empty */ }
@@ -196,5 +198,114 @@ supplierLogsAdminRoutes.get("/exchanges/:id/:part", async (c) => {
   return new Response(f.data, { headers: {
     "Content-Type": f.name.endsWith(".txt") ? "text/plain; charset=utf-8" : "application/json",
     "Content-Disposition": `attachment; filename="${f.name}"`, "Cache-Control": "private, no-store",
+  } });
+});
+
+// ── Hotel UAT certification packs (one ZIP per TripJack hotel booking) ──────
+//
+// GET /hotel-certification                 TripJack hotel bookings with logged calls + covered steps
+// GET /hotel-certification/:bookingId/zip  every request / response for that booking (and the
+//                                          search it came from) + HotelBookingSummary.json
+
+const HOTEL_BOOKING_ID = /^[A-Za-z0-9_-]{3,64}$/;
+
+async function hotelRows(c: any, bookingId: string) {
+  const db = c.get("db");
+  const tenantId = c.get("tenantId");
+  const own = await db.select().from(supplierExchanges)
+    .where(and(eq(supplierExchanges.tenantId, tenantId), eq(supplierExchanges.bookingId, bookingId), HOTEL_SCOPE()))
+    .orderBy(asc(supplierExchanges.startedAt)).limit(200);
+  // The search (listing / pricing) the Review came from, by correlationId.
+  const searchIds = [...new Set(own.map((x: any) => x.searchId).filter(Boolean))] as string[];
+  const search = searchIds.length ? await db.select().from(supplierExchanges)
+    .where(and(eq(supplierExchanges.tenantId, tenantId), inArray(supplierExchanges.searchId, searchIds), HOTEL_SCOPE()))
+    .orderBy(asc(supplierExchanges.startedAt)).limit(100) : [];
+  const seen = new Set<string>();
+  return [...search, ...own].filter((x: any) => !seen.has(x.id) && seen.add(x.id))
+    .sort((a: any, b: any) => +new Date(a.startedAt) - +new Date(b.startedAt));
+}
+
+async function requestBodyOf(c: any, key: string) {
+  try { return JSON.parse(await (await c.env.DOCUMENTS_R2.get(key))!.text())?.body ?? null; } catch { return null; }
+}
+
+supplierLogsAdminRoutes.get("/hotel-certification", async (c) => {
+  const limit = Math.min(parseInt(c.req.query("limit") ?? "50") || 50, 200);
+  const rows = await c.get("db").select({
+    bookingId: supplierExchanges.bookingId, endpoint: supplierExchanges.endpoint, httpStatus: supplierExchanges.httpStatus,
+    startedAt: supplierExchanges.startedAt, requestKey: supplierExchanges.requestKey,
+  }).from(supplierExchanges)
+    .where(and(eq(supplierExchanges.tenantId, c.get("tenantId")), HOTEL_SCOPE(), like(supplierExchanges.endpoint, "/%")))
+    .orderBy(desc(supplierExchanges.startedAt)).limit(3000);
+  const byBooking = new Map<string, { bookingId: string; first: Date; last: Date; calls: number; failed: number; endpoints: Set<string>; bookKeys: string[] }>();
+  for (const r of rows) {
+    if (!r.bookingId || !HOTEL_BOOKING_ID.test(r.bookingId)) continue;
+    const b = byBooking.get(r.bookingId) ?? { bookingId: r.bookingId, first: r.startedAt, last: r.startedAt, calls: 0, failed: 0, endpoints: new Set<string>(), bookKeys: [] };
+    b.calls++; if (!r.httpStatus || r.httpStatus >= 400) b.failed++;
+    if (r.startedAt < b.first) b.first = r.startedAt;
+    if (r.startedAt > b.last) b.last = r.startedAt;
+    b.endpoints.add(r.endpoint);
+    if (r.endpoint === "/oms/v3/hotel/book") b.bookKeys.push(r.requestKey);
+    byBooking.set(r.bookingId, b);
+  }
+  const store = c.env.HOTEL_DB ? d1HotelOrderStore(c.env.HOTEL_DB, c.get("tenantId")) : null;
+  const list = [];
+  for (const b of [...byBooking.values()].sort((x, y) => +y.last - +x.last).slice(0, limit)) {
+    const steps = new Set<HotelStep>();
+    for (const e of b.endpoints) if (e !== "/oms/v3/hotel/book") steps.add(hotelStep(e, null).step);
+    for (const k of b.bookKeys) steps.add(hotelStep("/oms/v3/hotel/book", await requestBodyOf(c, k)).step);
+    // Search calls are linked by correlationId, not the booking: a Review means a search preceded it.
+    if (steps.has("Review")) steps.add("Search");
+    const order = store ? await store.bySupplierBooking(c.get("tenantId"), b.bookingId).catch(() => null) : null;
+    list.push({
+      bookingId: b.bookingId, firstCallAt: b.first, lastCallAt: b.last, calls: b.calls, failedCalls: b.failed, ...hotelScenario(steps),
+      order: order ? { id: order.id, mode: order.mode, status: order.status, supplierStatus: order.supplierStatus, hotel: (order.hotel as any)?.name ?? null } : null,
+    });
+  }
+  return c.json({ packs: list });
+});
+
+supplierLogsAdminRoutes.get("/hotel-certification/:bookingId/zip", async (c) => {
+  const bookingId = c.req.param("bookingId");
+  if (!HOTEL_BOOKING_ID.test(bookingId)) throw new HTTPException(400, { message: "Invalid TripJack booking ID" });
+  const rows = await hotelRows(c, bookingId);
+  if (!rows.length) throw new HTTPException(404, { message: `No hotel API logs for TripJack booking ${bookingId}` });
+  const files: { name: string; data: Uint8Array; date: Date }[] = [];
+  const used = new Map<string, number>();
+  const steps = new Set<HotelStep>();
+  const calls: Record<string, unknown>[] = [];
+  for (const x of rows as any[]) {
+    const { step, name } = hotelStep(x.endpoint, x.endpoint === "/oms/v3/hotel/book" ? await requestBodyOf(c, x.requestKey) : null);
+    steps.add(step);
+    // Repeated services get _2, _3 … (several listing batches, status polls).
+    const n = (used.get(name) ?? 0) + 1;
+    used.set(name, n);
+    const base = n > 1 ? `${name}_${n}` : name;
+    const written: string[] = [];
+    for (const part of ["request", "response"] as const) {
+      const f = await exchangeFile(c, x.id, part, base);
+      if (f) { files.push(f); written.push(f.name); }
+    }
+    calls.push({ step, service: x.endpoint, httpStatus: x.httpStatus, error: x.error, at: x.startedAt, searchId: x.searchId, bookingId: x.bookingId, files: written });
+  }
+  const order = c.env.HOTEL_DB ? await d1HotelOrderStore(c.env.HOTEL_DB, c.get("tenantId")).bySupplierBooking(c.get("tenantId"), bookingId).catch(() => null) : null;
+  const summary = {
+    tripjackBookingId: bookingId,
+    correlationIds: [...new Set((rows as any[]).map((x) => x.searchId).filter(Boolean))],
+    environment: await tripjackEnvironment(c.env, c.get("tenantId")),
+    ...hotelScenario(steps),
+    tripcodOrder: order ? {
+      id: order.id, mode: order.mode, status: order.status, supplierStatus: order.supplierStatus, confirmationNo: order.confirmationNo,
+      holdDeadline: order.holdDeadline, occupancy: order.occupancy, hotel: (order.hotel as any)?.name, amount: order.amount, currency: order.currency,
+      payment: order.paymentStatus, cancellation: order.cancellation,
+    } : null,
+    calls,
+    note: "Requests as TripJack received them (TripJack URL + apikey; never the Tripcod gateway secret). Responses byte-for-byte as received.",
+  };
+  files.push({ name: "HotelBookingSummary.json", data: new TextEncoder().encode(JSON.stringify(summary, null, 2)), date: new Date() });
+  return new Response(buildZip(files), { headers: {
+    "Content-Type": "application/zip",
+    "Content-Disposition": `attachment; filename="tripjack-hotel-${bookingId}.zip"`,
+    "Cache-Control": "private, no-store",
   } });
 });

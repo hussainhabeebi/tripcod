@@ -8,7 +8,8 @@ import {
 } from "@tripcod/suppliers";
 import type { Env } from "../types.js";
 import type { ExchangeRecorder } from "@tripcod/suppliers";
-import { collectExchanges, persistExchanges, persistInBackground } from "./api-exchanges.js";
+import { collectExchanges, persistInBackground } from "./api-exchanges.js";
+import { persistHotelExchanges } from "./hotel-cert-logs.js";
 
 // ── Credentials / environment ───────────────────────────────────────────────
 
@@ -44,7 +45,9 @@ export const hotelExchanges = async (c: any, next: () => Promise<void>) => {
   let body: any = null;
   if (c.req.method === "POST") { try { body = await c.req.json(); } catch { /* no JSON body */ } }
   const pathBooking = /\/bookings\/([A-Za-z0-9_-]+)/.exec(c.req.path)?.[1];
-  persistInBackground(c, persistExchanges(c.env, c.get("db"), c.get("tenantId"), collector.exchanges, {
+  // Each call is linked to the TripJack booking / search IDs it carries itself
+  // (see hotel-cert-logs.ts); the browser request's IDs are only the fallback.
+  persistInBackground(c, persistHotelExchanges(c.env, c.get("db"), c.get("tenantId"), collector.exchanges, {
     bookingId: body?.bookingId ?? pathBooking ?? null,
     searchId:  body?.correlationId ?? null,
     requestId: c.get("hotelRequestId"),
