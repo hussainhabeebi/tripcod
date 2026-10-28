@@ -1,0 +1,140 @@
+name: Hotel UAT logs release (API + Admin only)
+
+# Releases PR #15 (merge e4cfb60): tripcod-api, then tripcod-admin. No migration,
+# no website / portal, no secret or setting change. Paired rollback on failure.
+
+# Manual only: nothing deploys until someone starts it (Actions → this workflow →
+# Run workflow, branch release/hotel-uat-logs). Pushing this file deploys nothing.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tripcod-hotel-booking-release
+  cancel-in-progress: false
+
+env:
+  RELEASE_COMMIT: e4cfb60726f37e7bf0f435d04206d0c404450692
+  CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+  CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+  WRANGLER_SEND_METRICS: "false"
+  NEXT_TELEMETRY_DISABLED: "1"
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - name: Gate — code is exactly the merged PR #15
+        run: |
+          git merge-base --is-ancestor "$RELEASE_COMMIT" origin/main
+          git diff --exit-code "$RELEASE_COMMIT" HEAD -- apps packages pnpm-lock.yaml
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - name: Gate — typecheck and hotel / supplier tests
+        run: |
+          pnpm --filter @tripcod/api typecheck
+          node --import ./node_modules/.pnpm/tsx@4.23.12/node_modules/tsx/dist/loader.mjs --test \
+            apps/api/test/hotel-cert-logs.test.ts apps/api/test/hotel-orders.test.ts apps/api/test/hotel-orders-d1.test.ts apps/api/test/hotel-validation.test.ts
+          node --test packages/suppliers/test/*.test.cjs apps/tripjack-gateway/test/*.test.mjs
+      - name: Release helper
+        shell: bash
+        run: |
+          cat > "$RUNNER_TEMP/cf.py" <<'PY'
+          import json, os, re, sys, urllib.request, urllib.error
+          base = "https://api.cloudflare.com/client/v4/accounts/" + os.environ["CLOUDFLARE_ACCOUNT_ID"]
+          def call(path, payload=None):
+              r = urllib.request.Request(base + path, data=None if payload is None else json.dumps(payload).encode(), method="GET" if payload is None else "POST",
+                  headers={"Authorization": "Bearer " + os.environ["CLOUDFLARE_API_TOKEN"], "Content-Type": "application/json"})
+              try:
+                  with urllib.request.urlopen(r, timeout=60) as res: v = json.load(res)
+              except urllib.error.HTTPError as e: raise SystemExit(f"Cloudflare {path}: HTTP {e.code}")
+              if not v.get("success"): raise SystemExit(f"Cloudflare {path} failed")
+              return v["result"]
+          def serving(worker): return call(f"/workers/scripts/{worker}/deployments")["deployments"][0]["versions"]
+          def bindings(v): return sorted(json.dumps(b, sort_keys=True) for b in v["resources"].get("bindings", []))
+          def activate(worker, vid, note):
+              call(f"/workers/scripts/{worker}/deployments", {"strategy": "percentage", "versions": [{"version_id": vid, "percentage": 100}], "annotations": {"workers/message": note}})
+              print(json.dumps({"activated": worker, "version": vid}))
+          mode, worker = sys.argv[1], sys.argv[2]
+          if mode == "unchanged":       # serving version is still the recorded rollback target
+              if serving(worker) != [{"version_id": sys.argv[3], "percentage": 100}]: raise SystemExit(f"STOP: {worker} deployment moved since preflight")
+              print(f"{worker} unchanged")
+          elif mode == "activate":      # compare uploaded version to the serving one, then activate
+              new = re.search(r"Worker Version ID:\s*([0-9a-f-]{36})", open(sys.argv[3]).read())
+              if not new: raise SystemExit("STOP: uploaded version ID missing; nothing activated")
+              old_v, new_v = call(f"/workers/scripts/{worker}/versions/{sys.argv[4]}"), call(f"/workers/scripts/{worker}/versions/{new[1]}")
+              added = sorted(set(bindings(new_v)) - set(bindings(old_v))); removed = sorted(set(bindings(old_v)) - set(bindings(new_v)))
+              allowed = [b for b in added if json.loads(b).get("type") == "d1" and json.loads(b).get("name") == "HOTEL_DB"]
+              if removed or added != allowed or (worker == "tripcod-api" and len(allowed) not in (0, 1)) or (worker != "tripcod-api" and added):
+                  raise SystemExit(f"STOP: binding differences beyond HOTEL_DB (added={added}, removed={removed}); nothing activated")
+              print(json.dumps({"bindingsAdded": [json.loads(b).get("name") for b in added], "bindingsRemoved": []}))
+              o, n = old_v["resources"].get("script_runtime", {}), new_v["resources"].get("script_runtime", {})
+              for k in ("compatibility_date", "compatibility_flags", "migration_tag", "limits"):
+                  if o.get(k) != n.get(k): raise SystemExit(f"STOP: runtime {k} differs ({o.get(k)} → {n.get(k)}); nothing activated")
+              activate(worker, new[1], "Hotel booking release (PR #13); no other change")
+              open(os.environ["GITHUB_ENV"], "a").write(f"{worker.upper().replace('-', '_')}_NEW={new[1]}\n")
+          elif mode == "rollback":
+              activate(worker, sys.argv[3], "Rollback: restore pre-hotel-booking version")
+          PY
+
+      - name: Record rollback versions
+        shell: python
+        run: |
+          import json, os, urllib.request
+          base = "https://api.cloudflare.com/client/v4/accounts/" + os.environ["CLOUDFLARE_ACCOUNT_ID"]
+          out = []
+          for worker in ("tripcod-api", "tripcod-admin"):
+              r = urllib.request.Request(f"{base}/workers/scripts/{worker}/deployments", headers={"Authorization": "Bearer " + os.environ["CLOUDFLARE_API_TOKEN"]})
+              v = json.load(urllib.request.urlopen(r, timeout=60))["result"]["deployments"][0]["versions"]
+              if len(v) != 1 or v[0]["percentage"] != 100: raise SystemExit(f"STOP: {worker} split deployment")
+              out.append(f"{worker.upper().replace('-', '_')}_ROLLBACK={v[0]['version_id']}")
+              print(json.dumps({"worker": worker, "rollbackVersion": v[0]["version_id"]}))
+          open(os.environ["GITHUB_ENV"], "a").write("\n".join(out) + "\n")
+
+      - name: API — upload, verify bindings / runtime, activate
+        working-directory: apps/api
+        run: |
+          set -o pipefail
+          cp wrangler.toml wrangler.release.toml
+          printf '\n[limits]\ncpu_ms = 30000\n' >> wrangler.release.toml
+          pnpm exec wrangler versions upload --config wrangler.release.toml --keep-vars --message "Hotel UAT logs PR #15" 2>&1 | tee "$RUNNER_TEMP/api.log"
+          python3 "$RUNNER_TEMP/cf.py" activate tripcod-api "$RUNNER_TEMP/api.log" "$TRIPCOD_API_ROLLBACK"
+          sleep 15
+          curl -sS --fail -m 30 https://api.tripcod.com/health
+          c=$(curl -sS -m 30 -o /dev/null -w "%{http_code}" -A "Mozilla/5.0" https://api.tripcod.com/api/admin/supplier-logs/hotel-certification); echo "admin route without sign-in → $c"; [ "$c" = 401 ]
+          c=$(curl -sS -m 60 -o /dev/null -w "%{http_code}" -A "Mozilla/5.0" -H 'Content-Type: application/json' -H 'x-tenant-slug: tripcod' https://api.tripcod.com/api/hotels/orders/mine); echo "hotel orders route → $c"; [ "$c" = 401 ]
+
+      - name: Admin — build, upload, verify, activate
+        working-directory: apps/admin
+        env:
+          NEXT_PUBLIC_API_URL: https://api.tripcod.com
+        run: |
+          set -o pipefail
+          pnpm exec opennextjs-cloudflare build --dangerouslyUseUnsupportedNextVersion
+          grep -rl "Hotel UAT certification logs" .open-next >/dev/null && echo "new admin section in build"
+          pnpm exec wrangler versions upload --keep-vars --message "Hotel UAT logs PR #15" 2>&1 | tee "$RUNNER_TEMP/admin.log"
+          python3 "$RUNNER_TEMP/cf.py" activate tripcod-admin "$RUNNER_TEMP/admin.log" "$TRIPCOD_ADMIN_ROLLBACK"
+          sleep 15
+          curl -sS --fail -m 30 -o /dev/null -w "admin login %{http_code}\n" https://admin.tripcod.com/login
+
+      - name: Optional — read the hotel certification list with the admin service token
+        env:
+          ADMIN_SERVICE_TOKEN: ${{ secrets.ADMIN_SERVICE_TOKEN }}
+        run: |
+          if [ -z "$ADMIN_SERVICE_TOKEN" ]; then echo "No ADMIN_SERVICE_TOKEN secret in GitHub — list not read (route deployed; needs an admin sign-in)."; exit 0; fi
+          curl -sS -m 60 -A "Mozilla/5.0" -H "Authorization: Bearer $ADMIN_SERVICE_TOKEN" -H 'x-tenant-slug: tripcod' https://api.tripcod.com/api/admin/supplier-logs/hotel-certification?limit=20 \
+            | python3 -c "import json,sys;d=json.load(sys.stdin);print(json.dumps([{k:p[k] for k in ('bookingId','scenario','covered','missing','calls')} for p in d.get('packs',[])],indent=1))"
+
+      - name: Roll back API and Admin together on any failure
+        if: failure()
+        run: |
+          [ -n "${TRIPCOD_API_NEW:-}" ] && python3 "$RUNNER_TEMP/cf.py" rollback tripcod-api "$TRIPCOD_API_ROLLBACK" || true
+          [ -n "${TRIPCOD_ADMIN_NEW:-}" ] && python3 "$RUNNER_TEMP/cf.py" rollback tripcod-admin "$TRIPCOD_ADMIN_ROLLBACK" || true
+          echo ROLLED_BACK
