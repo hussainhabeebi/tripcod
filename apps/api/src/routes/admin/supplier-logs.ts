@@ -252,6 +252,24 @@ async function collectHotelPack(c: any, bookingId: string) {
       search.push(x);
     }
   }
+  // Listing calls logged before they were filed by correlationId sit in the
+  // browser request's folder: find them by the correlationId in their request body.
+  if (correlationIds.size && own.length && !search.some((x) => hotelStep(x.endpoint, null).step === "Search")) {
+    const first = new Date(own[0].at);
+    const listings = await c.get("db").select({ endpoint: supplierExchanges.endpoint, startedAt: supplierExchanges.startedAt,
+      requestKey: supplierExchanges.requestKey, responseKey: supplierExchanges.responseKey })
+      .from(supplierExchanges)
+      .where(and(eq(supplierExchanges.tenantId, tenantId), eq(supplierExchanges.endpoint, "/hms/v3/hotel/listing"),
+        gte(supplierExchanges.startedAt, new Date(first.getTime() - 6 * 3600_000)), lte(supplierExchanges.startedAt, first)))
+      .orderBy(desc(supplierExchanges.startedAt)).limit(60);
+    for (const l of listings) {
+      let request: StoredCall["request"] = null;
+      try { request = JSON.parse(await textOf(c, l.requestKey)); } catch { continue; }
+      if (!correlationIds.has(String((request?.body as any)?.correlationId ?? ""))) continue;
+      search.push({ folder: l.requestKey.split("/").slice(2, 3).join(""), at: new Date(l.startedAt).toISOString(), seq: 0,
+        slug: "hms-v3-hotel-listing", requestKey: l.requestKey, responseKey: l.responseKey, endpoint: l.endpoint, request });
+    }
+  }
   const calls = [...search, ...own].sort((a, b) => a.at.localeCompare(b.at) || a.seq - b.seq);
   const steps = new Set<HotelStep>();
   for (const x of calls) steps.add(hotelStep(x.endpoint, x.request?.body).step);
