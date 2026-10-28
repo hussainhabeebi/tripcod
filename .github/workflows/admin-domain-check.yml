@@ -43,3 +43,15 @@ jobs:
           for c in $(cat chunks.txt); do curl -sS -m 30 "https://admin.tripcod.com$c" -o c.js; if grep -q "Hotel UAT certification logs" c.js; then echo "SECTION_FOUND_IN $c"; fi; done
           curl -sS -m 30 -o sl.html -w "supplier-logs page http=%{http_code} redirect=%{redirect_url}\n" https://admin.tripcod.com/supplier-logs
           grep -o '/_next/static/chunks/app/(dashboard)/supplier-logs/[^"]*\.js' sl.html | sort -u | head
+      - name: What the live /supplier-logs page renders (placeholder cookie; no data, no real session)
+        run: |
+          curl -sS -m 60 -A "Mozilla/5.0" -H "Cookie: tripcod_admin_token=placeholder" -o page.html -w "http=%{http_code}\n" https://admin.tripcod.com/supplier-logs
+          for t in "Supplier API Logs" "Request / response files" "Hotel UAT certification logs" "Download ZIP"; do
+            if grep -q "$t" page.html; then echo "IN_HTML: $t"; else echo "NOT_IN_HTML: $t"; fi
+          done
+          grep -o '/_next/static/chunks/[^"]*supplier-logs[^"]*\.js' page.html | sort -u | tee pagechunks.txt
+          for c in $(grep -o '/_next/static/chunks/[^"]*\.js' page.html | sort -u); do
+            curl -sS -m 30 "https://admin.tripcod.com$c" -o c.js
+            grep -q "Hotel UAT certification logs" c.js && echo "SECTION_CODE_IN $c"
+            grep -q "Request / response files" c.js && echo "RAW_CALLS_CODE_IN $c"
+          done; true
