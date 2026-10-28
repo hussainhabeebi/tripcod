@@ -6,6 +6,7 @@ import assert from "node:assert/strict";
 import { Hono } from "hono";
 import { TripjackHotelV3Client, type SupplierExchange } from "@tripcod/suppliers";
 import { hotelExchangeLink, hotelScenario, hotelStep, persistHotelExchanges } from "../src/lib/hotel-cert-logs.js";
+import { persistExchanges } from "../src/lib/api-exchanges.js";
 import { supplierLogsAdminRoutes } from "../src/routes/admin/supplier-logs.js";
 
 const SEARCH = "corr0123456789abcdef";
@@ -75,39 +76,42 @@ test("steps are named for TripJack and hold vs instant is read from paymentInfos
 
 // ── Storage + Admin ZIP ─────────────────────────────────────────────────────
 
-// Tiny fake of the drizzle calls used here: rows are matched by the literal
-// values found inside the WHERE condition (exchange id, booking id or search ids).
-function fakeDb() {
+// Production constraint: supplier_exchanges.booking_id REFERENCES bookings(id)
+// (flight bookings). Any other non-null booking_id is rejected like Postgres would.
+function fakeDb(flightBookingIds: string[] = []) {
   const rows: any[] = [];
-  const strings = (v: unknown, out = new Set<string>(), seen = new Set<unknown>(), depth = 0): Set<string> => {
-    if (depth > 12 || v === null || v === undefined) return out;
-    if (typeof v === "string") { out.add(v); return out; }
-    if (typeof v !== "object" || seen.has(v)) return out;
-    seen.add(v);
-    for (const [k, child] of Object.entries(v as object)) if (k !== "table" && k !== "config") strings(child, out, seen, depth + 1);
-    return out;
-  };
   const db: any = {
-    rows,
-    insert: () => ({ values: async (v: any) => { rows.push({ id: `x${rows.length + 1}`, ...v }); } }),
+    rows, rejected: 0,
+    insert: () => ({ values: async (v: any) => {
+      if (v.requestKey && v.bookingId && !flightBookingIds.includes(v.bookingId)) {
+        db.rejected++;
+        throw new Error('insert or update on table "supplier_exchanges" violates foreign key constraint "supplier_exchanges_booking_id_fkey"');
+      }
+      if (v.requestKey) rows.push({ id: `x${rows.length + 1}`, ...v, startedAt: v.startedAt });
+    } }),
+    // Only the legacy Review lookup queries Neon now: newest Review rows first.
     select: () => {
-      let cond: unknown;
-      const chain: any = {
-        from: () => chain, where: (c: unknown) => { cond = c; return chain; }, orderBy: () => chain,
-        limit: async () => {
-          const s = strings(cond);
-          const byId = rows.filter((r) => s.has(r.id));
-          if (byId.length) return byId;
-          const byBooking = rows.filter((r) => r.bookingId && s.has(r.bookingId));
-          if (byBooking.length) return byBooking;
-          const bySearch = rows.filter((r) => r.searchId && s.has(r.searchId));
-          return bySearch.length ? bySearch : rows.slice().reverse();   // list query: newest first
-        },
-      };
+      const chain: any = { from: () => chain, where: () => chain, orderBy: () => chain,
+        limit: async () => rows.filter((r) => r.endpoint === "/hms/v3/hotel/review").reverse() };
       return chain;
     },
   };
   return db;
+}
+
+function fakeR2() {
+  const files = new Map<string, string>();
+  return {
+    files,
+    put: async (k: string, v: string) => { files.set(k, v); },
+    get: async (k: string) => files.has(k) ? { text: async () => files.get(k)!, arrayBuffer: async () => new TextEncoder().encode(files.get(k)!).buffer } : null,
+    list: async ({ prefix, delimiter }: { prefix: string; delimiter?: string }) => {
+      const keys = [...files.keys()].filter((k) => k.startsWith(prefix)).sort();
+      if (!delimiter) return { objects: keys.map((key) => ({ key })), truncated: false };
+      const prefixes = [...new Set(keys.map((k) => k.slice(prefix.length)).filter((r) => r.includes(delimiter)).map((r) => prefix + r.slice(0, r.indexOf(delimiter) + 1)))];
+      return { objects: [], delimitedPrefixes: prefixes, truncated: false };
+    },
+  };
 }
 
 function unzip(bytes: Uint8Array): Record<string, string> {
@@ -124,25 +128,31 @@ function unzip(bytes: Uint8Array): Record<string, string> {
   return out;
 }
 
-test("Admin downloads one certification ZIP per TripJack hotel booking", async () => {
-  const exchanges = await recordedScenario();
-  const r2 = new Map<string, string>();
-  const env: any = {
-    DOCUMENTS_R2: {
-      put: async (k: string, v: string) => { r2.set(k, v); },
-      get: async (k: string) => r2.has(k) ? { text: async () => r2.get(k)!, arrayBuffer: async () => new TextEncoder().encode(r2.get(k)!).buffer } : null,
-    },
-    TENANT_CACHE_KV: { get: async () => JSON.stringify({ environment: "UAT" }) },
-  };
-  const db = fakeDb();
-  await persistHotelExchanges(env, db, "t1", exchanges, { requestId: "req-1" });
-  assert.equal(db.rows.length, 8);
-  assert.ok(db.rows.filter((r: any) => r.bookingId === TJ).length === 6, "review, book×2, details, confirm, cancel carry the booking ID");
-
+function adminApp(db: any) {
   const app = new Hono<any>();
   app.use("*", async (c, n) => { c.set("tenantId", "t1"); c.set("db", db); await n(); });
   app.route("/logs", supplierLogsAdminRoutes);
-  const res = await app.fetch(new Request(`http://x/logs/hotel-certification/${TJ}/zip`), env, { waitUntil() {}, passThroughOnException() {} } as any);
+  return (path: string, env: any) => app.fetch(new Request(`http://x/logs${path}`), env, { waitUntil() {}, passThroughOnException() {} } as any);
+}
+
+test("hotel calls are stored and indexed despite the flight-only booking_id constraint", async () => {
+  const r2 = fakeR2();
+  const db = fakeDb();
+  await persistHotelExchanges({ DOCUMENTS_R2: r2 } as any, db, "t1", await recordedScenario(), { requestId: "req-1" });
+  assert.equal(db.rejected, 0, "no index insert hits the foreign key");
+  assert.equal(db.rows.length, 8, "every call has an index row");
+  assert.ok(db.rows.every((r: any) => r.bookingId === null));
+  const bookingFiles = [...r2.files.keys()].filter((k) => k.startsWith(`api-logs/t1/booking-${TJ}/`));
+  assert.equal(bookingFiles.length, 12, "review, hold, details, confirm, book, cancel: request + response in the booking folder");
+});
+
+test("Admin downloads one certification ZIP per TripJack hotel booking", async () => {
+  const r2 = fakeR2();
+  const env: any = { DOCUMENTS_R2: r2, TENANT_CACHE_KV: { get: async () => JSON.stringify({ environment: "UAT" }) } };
+  const db = fakeDb();
+  await persistHotelExchanges(env, db, "t1", await recordedScenario(), { requestId: "req-1" });
+
+  const res = await adminApp(db)(`/hotel-certification/${TJ}/zip`, env);
   assert.equal(res.status, 200);
   assert.match(res.headers.get("Content-Disposition") ?? "", new RegExp(`tripjack-hotel-${TJ}.zip`));
   const files = unzip(new Uint8Array(await res.arrayBuffer()));
@@ -172,26 +182,31 @@ test("Admin downloads one certification ZIP per TripJack hotel booking", async (
   assert.deepEqual(summary.missing, []);
   assert.deepEqual(summary.covered, ["Search", "Review", "InstantBook", "HoldBook", "ConfirmHold", "BookingDetails", "Cancellation"]);
 
-  const bad = await app.fetch(new Request("http://x/logs/hotel-certification/..%2Fetc/zip"), env, { waitUntil() {}, passThroughOnException() {} } as any);
-  assert.equal(bad.status, 400);
+  assert.equal((await adminApp(db)("/hotel-certification/..%2Fetc/zip", env)).status, 400);
+  assert.equal((await adminApp(db)("/hotel-certification/TJNOTHING1/zip", env)).status, 404);
 });
 
-test("Admin lists hotel bookings with the UAT steps logged for each", async () => {
-  const r2 = new Map<string, string>();
-  const env: any = {
-    DOCUMENTS_R2: { put: async (k: string, v: string) => { r2.set(k, v); }, get: async (k: string) => r2.has(k) ? { text: async () => r2.get(k)! } : null },
-    TENANT_CACHE_KV: { get: async () => null },
-  };
+test("a hold logged before this fix (index rejected, Review in the search folder) still gets its full pack", async () => {
+  // Production state of TJP202803274047: search / review indexed by correlationId only;
+  // hold book + details written to R2 under booking-<id> but their index rows rejected.
+  const r2 = fakeR2();
+  const env: any = { DOCUMENTS_R2: r2, TENANT_CACHE_KV: { get: async () => null } };
   const db = fakeDb();
-  await persistHotelExchanges(env, db, "t1", (await recordedScenario()).slice(0, 5), { requestId: "req-1" });   // search → review → hold → details
-  const app = new Hono<any>();
-  app.use("*", async (c, n) => { c.set("tenantId", "t1"); c.set("db", db); await n(); });
-  app.route("/logs", supplierLogsAdminRoutes);
-  const res = await app.fetch(new Request("http://x/logs/hotel-certification"), env, { waitUntil() {}, passThroughOnException() {} } as any);
-  const { packs } = await res.json() as any;
+  const x = await recordedScenario();
+  await persistExchanges(env, db, "t1", x.slice(0, 3), { searchId: SEARCH, requestId: "old-search" });
+  await persistExchanges(env, db, "t1", x.slice(3, 5), { bookingId: TJ, requestId: "old-order" }).catch(() => {});
+  assert.equal(db.rejected, 2, "same rejection production saw");
+
+  const { packs } = await (await adminApp(db)("/hotel-certification", env)).json() as any;
   assert.equal(packs.length, 1);
   assert.equal(packs[0].bookingId, TJ);
   assert.equal(packs[0].scenario, "HOLD");
   assert.deepEqual(packs[0].covered, ["Search", "Review", "HoldBook", "BookingDetails"]);
   assert.deepEqual(packs[0].missing, []);
+
+  const files = unzip(new Uint8Array(await (await adminApp(db)(`/hotel-certification/${TJ}/zip`, env)).arrayBuffer()));
+  for (const n of ["HotelSearch", "HotelDetail", "HotelReview", "HotelHoldBook", "HotelBookingDetail"]) {
+    assert.ok(files[`${n}Request.json`] && files[`${n}Response.json`], `${n} recovered`);
+  }
+  assert.equal(JSON.parse(files["HotelHoldBookRequest.json"]).body.bookingId, TJ);
 });

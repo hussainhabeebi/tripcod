@@ -23,6 +23,9 @@ export async function persistExchanges(
   tenantId: string,
   exchanges: SupplierExchange[],
   link: { bookingId?: string | null; searchId?: string | null; requestId?: string | null },
+  // indexBookingId=false keeps link.bookingId for the R2 folder only: the index
+  // column references flight bookings(id), so hotel (TripJack) IDs can't go there.
+  opts: { indexBookingId?: boolean; onError?: (err: unknown, x: SupplierExchange) => Promise<void> | void } = {},
 ): Promise<void> {
   if (!exchanges.length) return;
   const scope = link.bookingId ? `booking-${link.bookingId}` : link.searchId ? `search-${link.searchId}` : `request-${link.requestId ?? "unlinked"}`;
@@ -54,12 +57,13 @@ export async function persistExchanges(
       }
 
       await db.insert(supplierExchanges).values({
-        tenantId, bookingId: link.bookingId ?? null, searchId: link.searchId ?? null, requestId: link.requestId ?? null,
+        tenantId, bookingId: opts.indexBookingId === false ? null : link.bookingId ?? null, searchId: link.searchId ?? null, requestId: link.requestId ?? null,
         supplier: x.supplier, endpoint: x.endpoint, url: x.url, httpStatus: x.status, durationMs: x.durationMs,
         error: x.error ?? null, requestKey, responseKey, startedAt: new Date(x.startedAt),
       });
     } catch (err) {
       console.error(`[api-exchanges] failed to store ${x.endpoint} log`, err);
+      try { await opts.onError?.(err, x); } catch { /* reporting must not throw */ }
     }
   }
 }

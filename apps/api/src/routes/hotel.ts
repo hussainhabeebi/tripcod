@@ -523,7 +523,9 @@ hotelRoutes.get("/bookings/:bookingId", async (c) => {
     const raw = await logged(c, "/oms/v3/hotel/booking-details", { bookingId }, () => client.bookingDetails(bookingId),
       (r) => ({ status: r?.order?.status }));
     const details = parseHotelBookingDetails(raw);
-    return c.json({ ...details, pending: !HOTEL_TERMINAL_STATUSES.includes(details.status) });
+    // Public by booking ID: status only — guest names stay behind the order key / Admin.
+    const { rooms, ...status } = details;
+    return c.json({ ...status, rooms: rooms.map((r: { guests: string[] } & Record<string, unknown>) => { const { guests: _guests, ...room } = r; return room; }), pending: !HOTEL_TERMINAL_STATUSES.includes(details.status) });
   } catch (err) {
     return hotelError(c, err, "Could not load the hotel booking");
   }
