@@ -12,7 +12,7 @@ test('hotel listing ID survives normalization, checkout URL and pricing', async 
   const { TripjackHotelV3Client, validHotelId } = await import(supplierUrl);
   const legacyUrl = url(source('apps/api/src/lib/hotel-city-legacy.ts'));
   const citySyncUrl = url(source('apps/api/src/lib/hotel-city-sync.ts').replaceAll('"./hotel-city-legacy.js"', JSON.stringify(legacyUrl)));
-  const lib = source('apps/api/src/lib/hotels.ts').replaceAll('"./hotel-city-sync.js"', JSON.stringify(citySyncUrl)).replace('"@tripcod/suppliers"', JSON.stringify(supplierUrl)).replace(/^import .* from "\.\/api-exchanges\.js";$/m, '');
+  const lib = source('apps/api/src/lib/hotels.ts').replaceAll('"./hotel-city-sync.js"', JSON.stringify(citySyncUrl)).replace('"@tripcod/suppliers"', JSON.stringify(supplierUrl)).replace(/^import .* from "\.\/api-exchanges\.js";$/m, '').replace(/^import .* from "\.\/hotel-cert-logs\.js";$/m, '');
   const { searchHotels } = await import(url(lib));
   const option = { optionId: 'option-123', pricing: { totalPrice: 100, currency: 'INR' } };
   const invalid = [undefined, null, '', 'undefined', 'null', 'NULL', 'bad id'];

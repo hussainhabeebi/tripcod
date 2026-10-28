@@ -16,6 +16,8 @@ import { creditWallet, getOrCreateCustomerWallet } from "./customer-wallet.js";
 import { refundNomodCharge, resolveNomodApiKey } from "./payment-gateway.js";
 import { logSupplierCall } from "./supplier-logger.js";
 import { hotelClient } from "./hotels.js";
+import { collectExchanges } from "./api-exchanges.js";
+import { persistHotelExchanges } from "./hotel-cert-logs.js";
 import type { ExchangeRecorder } from "@tripcod/suppliers";
 
 // camelCase field → column. JSON and timestamp columns are converted both ways.
@@ -217,8 +219,17 @@ export async function createHotelNomodLink(env: Env, tenantId: string, order: Ho
 
 export async function processHotelPayment(env: Env, db: Db, msg: HotelQueueMsg) {
   const { processPaidOrder } = await import("./hotel-orders.js");
-  const deps = await hotelOrderDeps(env, db, msg.tenantId, { pollMs: 60_000 });
-  const order = await processPaidOrder(deps, msg.hotelBookingId);
+  // Book / confirm-book after payment run here, outside any request: record them
+  // too, so instant and confirm-hold UAT logs exist (linked to the TripJack booking).
+  const collector = collectExchanges();
+  const deps = await hotelOrderDeps(env, db, msg.tenantId, { pollMs: 60_000, recorder: collector.recorder });
+  let order: Awaited<ReturnType<typeof processPaidOrder>> = null;
+  try {
+    order = await processPaidOrder(deps, msg.hotelBookingId);
+  } finally {
+    await persistHotelExchanges(env, db, msg.tenantId, collector.exchanges, { bookingId: order?.supplierBookingId ?? null, requestId: `hotel-queue-${msg.hotelBookingId}` })
+      .catch((err) => console.error("[hotel-order] exchange logs not stored", err));
+  }
   console.info(`[hotel-order] ${msg.hotelBookingId} after payment: ${order?.status ?? "missing"} / ${order?.supplierStatus ?? "-"}`);
 }
 
