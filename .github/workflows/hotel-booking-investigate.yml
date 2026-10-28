@@ -1,0 +1,89 @@
+name: Hotel booking log investigation (read-only)
+
+# Read-only look at one TripJack hotel booking's certification logs. Prints
+# metadata only (endpoints, status, times, file presence) — this repository is
+# public, so no request / response bodies, guest data or keys are printed.
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [verify/hotel-tjp202803274047]
+    paths: [.github/workflows/hotel-booking-investigate.yml]
+
+permissions:
+  contents: read
+
+env:
+  BOOKING: TJP202803274047
+  CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+  CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+  WRANGLER_SEND_METRICS: "false"
+
+jobs:
+  investigate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Neon — supplier_exchanges / supplier_api_logs for this booking (read-only)
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          PGOPTIONS: "-c default_transaction_read_only=on"
+        run: |
+          sudo apt-get install -y postgresql-client >/dev/null 2>&1 || true
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -v b="$BOOKING" -A -F ' | ' <<'SQL' | tee neon.txt
+          \echo == exchanges linked to the booking (booking_id) or naming it in the URL ==
+          SELECT id, endpoint, http_status, started_at, booking_id, search_id IS NOT NULL AS has_search, response_key IS NOT NULL AS has_response
+            FROM supplier_exchanges WHERE booking_id = :'b' OR url LIKE '%' || :'b' || '%' ORDER BY started_at;
+          \echo == supplier_api_logs mentioning the booking ==
+          SELECT endpoint, level, http_status, error_code, created_at FROM supplier_api_logs
+            WHERE request_summary::text LIKE '%' || :'b' || '%' ORDER BY created_at;
+          \echo == hotel exchanges per endpoint in the last 7 days (any booking) ==
+          SELECT endpoint, count(*) AS calls, count(booking_id) AS linked_to_booking, min(started_at), max(started_at)
+            FROM supplier_exchanges WHERE (endpoint LIKE '/hms/%' OR endpoint LIKE '/oms/v3/hotel/%') AND started_at > now() - interval '7 days'
+            GROUP BY endpoint ORDER BY endpoint;
+          SQL
+          psql "$DATABASE_URL" -At -v b="$BOOKING" -c "SELECT tenant_id FROM supplier_exchanges WHERE booking_id = :'b' OR url LIKE '%' || :'b' || '%' LIMIT 1" > tenant.txt || true
+          psql "$DATABASE_URL" -At -v b="$BOOKING" -c "
+            WITH first AS (SELECT min(started_at) t FROM supplier_exchanges WHERE booking_id = :'b' OR url LIKE '%' || :'b' || '%')
+            SELECT x.id || ' ' || x.started_at || ' ' || coalesce(x.search_id, '-') || ' ' || coalesce(x.response_key, '-')
+              FROM supplier_exchanges x, first
+             WHERE x.endpoint = '/hms/v3/hotel/review' AND x.booking_id IS NULL AND first.t IS NOT NULL
+               AND x.started_at BETWEEN first.t - interval '6 hours' AND first.t + interval '5 minutes'
+             ORDER BY x.started_at DESC LIMIT 40" > reviews.txt || true
+          echo "candidate unlinked Review calls in the 6 h before the booking: $(grep -c . reviews.txt || true)"
+
+      - name: R2 — stored files and which earlier Review returned this booking ID (presence only)
+        shell: python
+        run: |
+          import json, os, urllib.parse, urllib.request
+          base = "https://api.cloudflare.com/client/v4/accounts/" + os.environ["CLOUDFLARE_ACCOUNT_ID"] + "/r2/buckets/tripcod-documents"
+          H = {"Authorization": "Bearer " + os.environ["CLOUDFLARE_API_TOKEN"]}
+          b = os.environ["BOOKING"]
+          tenant = open("tenant.txt").read().strip()
+          if tenant:
+              prefix = f"api-logs/{tenant}/booking-{b}/"
+              r = urllib.request.Request(base + "/objects?" + urllib.parse.urlencode({"prefix": prefix, "per_page": 100}), headers=H)
+              objs = json.load(urllib.request.urlopen(r, timeout=60)).get("result", [])
+              print(json.dumps({"filesUnderBookingPrefix": [o["key"].split("/")[-1] for o in objs]}, indent=1))
+          matches = []
+          for line in open("reviews.txt").read().split("\n"):
+              if not line.strip(): continue
+              xid, t1, t2, search, key = line.split(" ", 4) if line.count(" ") >= 4 else (line.split(" ") + ["-"] * 5)[:5]
+              if key == "-": continue
+              try:
+                  body = urllib.request.urlopen(urllib.request.Request(base + "/objects/" + urllib.parse.quote(key, safe=""), headers=H), timeout=60).read().decode("utf-8", "replace")
+              except Exception as e:
+                  print("could not read", xid, e); continue
+              if b in body: matches.append({"reviewExchangeId": xid, "at": f"{t1} {t2}", "searchLinked": search != "-"})
+          print(json.dumps({"reviewCallsWhoseResponseHasThisBookingId": matches}, indent=1))
+
+      - name: D1 — website order for this booking (read-only SELECT)
+        run: |
+          npx -y wrangler@4.86.0 d1 execute tripcod-hotels --remote --json --command \
+            "SELECT id, mode, status, supplier_status, hold_deadline, payment_status, created_at, last_checked_at, json_extract(hotel, '$.name') AS hotel FROM hotel_bookings WHERE supplier_booking_id = '$BOOKING'" \
+            | python3 -c "import json,sys;print(json.dumps(json.load(sys.stdin)[0]['results'],indent=1))"
+
+      - name: Live status — TripJack Booking Details through the API (read-only; prints status fields only)
+        run: |
+          curl -sS -m 60 -A "Mozilla/5.0" -H 'x-tenant-slug: tripcod' "https://api.tripcod.com/api/hotels/bookings/$BOOKING" -o bd.json -w "http=%{http_code}\n" || true
+          python3 -c "import json;d=json.load(open('bd.json'));print(json.dumps({k:d.get(k) for k in ('bookingId','status','pending','holdDeadline','checkIn','checkOut','hotelName','errorCode','error')},indent=1))" || head -c 200 bd.json
