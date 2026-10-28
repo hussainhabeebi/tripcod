@@ -467,3 +467,35 @@ test("order route: expired review, hold not allowed and guest mismatch are rejec
   assert.equal(res.status, 400);
   assert.equal(((await res.json()) as any).errorCode, "INVALID_GUESTS");
 });
+
+test("a paid order waiting for TripJack shows 'Confirming with the hotel', never 'Awaiting payment' (TJP209903275079)", async () => {
+  const store = newStore();
+  const tj = tripjack(["PAYMENT_SUCCESS", "SUCCESS"]);
+  const { d } = deps(store, tj.client);
+  const order = await newOrder(store, "INSTANT");
+  assert.equal(publicOrder(order).statusText, "Awaiting payment");
+  const paid = await pay(d, order);                       // debited, queue not yet run
+  const view = publicOrder(paid);
+  assert.equal(view.status, "PROCESSING");
+  assert.equal(view.statusText, "Confirming with the hotel");
+  assert.equal(view.pending, true, "booking page keeps polling");
+  assert.equal(view.payment.status, "PAID");
+  assert.equal(view.payment.payable, false);
+  assert.equal(view.canCancel, false);
+  const done = (await processPaidOrder(d, order.id))!;
+  assert.equal(publicOrder(done).status, "CONFIRMED");
+  assert.equal(publicOrder(done).pending, false);
+  assert.equal(tj.calls.book.length, 1);
+});
+
+test("a paid hold awaiting confirm-book shows as confirming and can't be cancelled mid-confirm", async () => {
+  const store = newStore();
+  const tj = tripjack(["ON_HOLD"]);
+  const { d } = deps(store, tj.client);
+  const held = await placeHold(d, await newOrder(store, "HOLD"));
+  const paid = await pay(d, held);
+  assert.equal(publicOrder(paid, d.now!()).status, "PROCESSING");
+  assert.equal(cancelQuote(paid, d.now!()).eligible, false);
+  await assert.rejects(cancelOrder(d, paid, 0), /can't be cancelled/);
+  assert.equal(tj.calls.cancel.length, 0);
+});
