@@ -414,7 +414,8 @@ export async function refreshOrder(deps: HotelOrderDeps, order: HotelOrder, forc
 // ── Cancellation ─────────────────────────────────────────────────────────────
 
 export function cancelQuote(order: HotelOrder, now = Date.now()) {
-  const eligible = ["CONFIRMED", "ON_HOLD"].includes(order.status);
+  // A paid hold being confirmed can't be cancelled at the same time (it would race confirm-book).
+  const eligible = ["CONFIRMED", "ON_HOLD"].includes(order.status) && displayStatus(order) !== "PROCESSING";
   const paid = order.paymentStatus === "PAID";
   const amount = Number(order.amount);
   const opt = order.option as HotelV3Option;
@@ -471,15 +472,25 @@ export const STATUS_TEXT: Record<string, string> = {
   CANCELLED:            "Cancelled",
 };
 
+// What the customer sees. A paid order waiting for the queue to reach TripJack
+// (instant book, or confirm-book of a hold) is "Confirming with the hotel" —
+// never "Awaiting payment" or a plain hold — and keeps the page polling.
+export function displayStatus(order: HotelOrder): string {
+  if (order.paymentStatus === "PAID" && order.status === "PAYMENT_PENDING") return "PROCESSING";
+  if (order.paymentStatus === "PAID" && order.status === "ON_HOLD" && order.mode === "HOLD") return "PROCESSING";
+  return order.status;
+}
+
 export function publicOrder(order: HotelOrder, now = Date.now()) {
   const pay = payable(order, now);
   const quote = cancelQuote(order, now);
+  const status = displayStatus(order);
   return {
     id:                order.id,
     supplierBookingId: order.supplierBookingId,
     mode:              order.mode,
-    status:            order.status,
-    statusText:        STATUS_TEXT[order.status] ?? order.status,
+    status,
+    statusText:        STATUS_TEXT[status] ?? status,
     supplierStatus:    order.supplierStatus,
     confirmationNo:    order.confirmationNo,
     holdDeadline:      order.holdDeadline,
@@ -499,7 +510,7 @@ export function publicOrder(order: HotelOrder, now = Date.now()) {
     },
     cancellation:      order.cancellation,
     canCancel:         quote.eligible,
-    pending:           order.status === "PROCESSING" || order.status === "CANCELLATION_PENDING",
+    pending:           status === "PROCESSING" || status === "CANCELLATION_PENDING",
     createdAt:         order.createdAt,
   };
 }
