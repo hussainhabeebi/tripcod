@@ -1,9 +1,15 @@
-// Postgres store for website hotel orders (hotel_bookings) and the wiring of
-// hotel-orders.ts to the real TripJack client, payment refunds and the queue.
+// Cloudflare D1 store for website hotel orders (hotel_bookings, see
+// apps/api/d1-migrations) and the wiring of hotel-orders.ts to the real TripJack
+// client, payment refunds and the queue.
+//
+// Money and customers stay in Neon (wallet, users, supplier logs). D1 rows keep
+// the Neon tenant / user ids and the wallet ledger's payment_id refs, so each
+// side can be matched to the other; see reconcileWalletPayment.
 
+import type { D1Database } from "@cloudflare/workers-types";
 import type { Db } from "@tripcod/db";
-import { hotelBookings } from "@tripcod/db/schema";
-import { and, desc, eq, inArray, isNull, type SQL } from "drizzle-orm";
+import { walletTransactions } from "@tripcod/db/schema";
+import { eq } from "drizzle-orm";
 import type { Env } from "../types.js";
 import type { HotelOrder, HotelOrderDeps, HotelOrderStore, OrderGuard } from "./hotel-orders.js";
 import { creditWallet, getOrCreateCustomerWallet } from "./customer-wallet.js";
@@ -12,51 +18,101 @@ import { logSupplierCall } from "./supplier-logger.js";
 import { hotelClient } from "./hotels.js";
 import type { ExchangeRecorder } from "@tripcod/suppliers";
 
-export function dbHotelOrderStore(db: Db, tenantId?: string): HotelOrderStore {
-  const scoped = (cond: SQL) => tenantId ? and(cond, eq(hotelBookings.tenantId, tenantId))! : cond;
+// camelCase field → column. JSON and timestamp columns are converted both ways.
+const COLUMNS: Record<string, string> = {
+  id: "id", tenantId: "tenant_id", userId: "user_id", supplierBookingId: "supplier_booking_id", mode: "mode", status: "status",
+  supplierStatus: "supplier_status", confirmationNo: "confirmation_no", holdDeadline: "hold_deadline", hotel: "hotel",
+  occupancy: "occupancy", guests: "guests", option: "option", nationality: "nationality", amount: "amount", currency: "currency",
+  contactEmail: "contact_email", contactPhone: "contact_phone", dialCode: "dial_code", paymentStatus: "payment_status",
+  paymentGateway: "payment_gateway", paymentOrderId: "payment_order_id", paymentRef: "payment_ref", paymentUrl: "payment_url",
+  paidAt: "paid_at", refundAmount: "refund_amount", refundNote: "refund_note", supplierSubmittedAt: "supplier_submitted_at",
+  confirmSubmittedAt: "confirm_submitted_at", cancellation: "cancellation", accessKeyHash: "access_key_hash",
+  lastError: "last_error", lastCheckedAt: "last_checked_at", createdAt: "created_at", updatedAt: "updated_at",
+};
+const JSON_FIELDS = new Set(["hotel", "occupancy", "guests", "option", "cancellation"]);
+const DATE_FIELDS = new Set(["paidAt", "supplierSubmittedAt", "confirmSubmittedAt", "lastCheckedAt", "createdAt", "updatedAt"]);
+
+function toColumn(field: string, value: unknown): unknown {
+  if (value === undefined || value === null) return null;
+  if (JSON_FIELDS.has(field)) return JSON.stringify(value);
+  if (DATE_FIELDS.has(field)) return value instanceof Date ? value.toISOString() : String(value);
+  return value;
+}
+
+export function rowToOrder(row: Record<string, unknown>): HotelOrder {
+  const out: Record<string, unknown> = {};
+  for (const [field, column] of Object.entries(COLUMNS)) {
+    const v = row[column];
+    out[field] = v === null || v === undefined ? null
+      : JSON_FIELDS.has(field) ? JSON.parse(String(v))
+      : DATE_FIELDS.has(field) ? new Date(String(v))
+      : v;
+  }
+  return out as unknown as HotelOrder;
+}
+
+const inList = (values: string[]) => values.map(() => "?").join(", ");
+
+export function d1HotelOrderStore(d1: D1Database, tenantId?: string): HotelOrderStore {
+  const tenantClause = tenantId ? " AND tenant_id = ?" : "";
+  const tenantArgs = tenantId ? [tenantId] : [];
+  const one = async (sql: string, ...args: unknown[]) => {
+    const row = await d1.prepare(sql).bind(...args).first<Record<string, unknown>>();
+    return row ? rowToOrder(row) : null;
+  };
   return {
     async insert(row) {
-      const [created] = await db.insert(hotelBookings).values(row).onConflictDoNothing().returning();
-      return created ?? null;
+      const now = new Date().toISOString();
+      const full: Record<string, unknown> = { ...row, id: crypto.randomUUID(), paymentStatus: "UNPAID", createdAt: now, updatedAt: now };
+      const fields = Object.keys(full).filter((f) => COLUMNS[f]);
+      // A second order for the same TripJack booking (or payment ref) inserts nothing.
+      return one(`INSERT INTO hotel_bookings (${fields.map((f) => COLUMNS[f]).join(", ")}) VALUES (${inList(fields)})
+        ON CONFLICT DO NOTHING RETURNING *`, ...fields.map((f) => toColumn(f, full[f])));
     },
-    async get(id) {
-      const [row] = await db.select().from(hotelBookings).where(scoped(eq(hotelBookings.id, id))).limit(1);
-      return row ?? null;
-    },
-    async bySupplierBooking(tenant, supplierBookingId) {
-      const [row] = await db.select().from(hotelBookings)
-        .where(and(eq(hotelBookings.tenantId, tenant), eq(hotelBookings.supplierBookingId, supplierBookingId))).limit(1);
-      return row ?? null;
-    },
+    get: (id) => one(`SELECT * FROM hotel_bookings WHERE id = ?${tenantClause}`, id, ...tenantArgs),
+    bySupplierBooking: (tenant, supplierBookingId) =>
+      one("SELECT * FROM hotel_bookings WHERE tenant_id = ? AND supplier_booking_id = ?", tenant, supplierBookingId),
     async byPaymentOrder(ids) {
       if (!ids.length) return null;
-      const [row] = await db.select().from(hotelBookings).where(inArray(hotelBookings.paymentOrderId, ids)).limit(1);
-      return row ?? null;
+      return one(`SELECT * FROM hotel_bookings WHERE payment_order_id IN (${inList(ids)}) LIMIT 1`, ...ids);
     },
     async listByUser(tenant, userId) {
-      return db.select().from(hotelBookings)
-        .where(and(eq(hotelBookings.tenantId, tenant), eq(hotelBookings.userId, userId)))
-        .orderBy(desc(hotelBookings.createdAt)).limit(100);
+      const { results } = await d1.prepare("SELECT * FROM hotel_bookings WHERE tenant_id = ? AND user_id = ? ORDER BY created_at DESC LIMIT 100")
+        .bind(tenant, userId).all<Record<string, unknown>>();
+      return results.map(rowToOrder);
     },
+    // Conditional update: the guard is part of the WHERE clause, so concurrent
+    // claims (payment slot, supplier submission) can't both succeed.
     async update(id, patch, guard?: OrderGuard) {
-      const conds: SQL[] = [eq(hotelBookings.id, id)];
-      if (guard?.status) conds.push(inArray(hotelBookings.status, guard.status));
-      if (guard?.paymentStatus) conds.push(inArray(hotelBookings.paymentStatus, guard.paymentStatus));
-      if (guard?.supplierSubmittedAtNull) conds.push(isNull(hotelBookings.supplierSubmittedAt));
-      if (guard?.confirmSubmittedAtNull) conds.push(isNull(hotelBookings.confirmSubmittedAt));
-      const [row] = await db.update(hotelBookings).set({ ...patch, updatedAt: new Date() })
-        .where(scoped(and(...conds)!)).returning();
-      return row ?? null;
+      const fields = Object.keys(patch).filter((f) => COLUMNS[f] && f !== "id" && f !== "tenantId" && f !== "createdAt");
+      const sets = [...fields.map((f) => `${COLUMNS[f]} = ?`), "updated_at = ?"];
+      const args: unknown[] = [...fields.map((f) => toColumn(f, (patch as Record<string, unknown>)[f])), new Date().toISOString()];
+      const where = ["id = ?"]; args.push(id);
+      if (tenantId) { where.push("tenant_id = ?"); args.push(tenantId); }
+      if (guard?.status) { where.push(`status IN (${inList(guard.status)})`); args.push(...guard.status); }
+      if (guard?.paymentStatus) { where.push(`payment_status IN (${inList(guard.paymentStatus)})`); args.push(...guard.paymentStatus); }
+      if (guard?.supplierSubmittedAtNull) where.push("supplier_submitted_at IS NULL");
+      if (guard?.confirmSubmittedAtNull) where.push("confirm_submitted_at IS NULL");
+      return one(`UPDATE hotel_bookings SET ${sets.join(", ")} WHERE ${where.join(" AND ")} RETURNING *`, ...args);
     },
   };
+}
+
+// Has the Neon wallet ledger got this debit / credit reference? (cross-database link)
+export async function walletTxExists(db: Db, paymentId: string): Promise<boolean> {
+  const [row] = await db.select({ id: walletTransactions.id }).from(walletTransactions).where(eq(walletTransactions.paymentId, paymentId)).limit(1);
+  return Boolean(row);
 }
 
 // Full refund of a captured hotel payment to where it came from.
 export async function refundHotelPayment(env: Env, db: Db, order: HotelOrder, amount: number, reason: string): Promise<{ ok: boolean; note: string }> {
   if (order.paymentGateway === "WALLET" && order.userId) {
+    // One refund credit per wallet debit: the ref ties it to that debit, and a retry finds it.
+    const ref = `hotel_refund_${order.paymentOrderId ?? order.id}`;
+    if (await walletTxExists(db, ref)) return { ok: true, note: "Refund already credited to the Tripcod wallet." };
     const wallet = await getOrCreateCustomerWallet(db, order.tenantId, order.userId);
     await creditWallet(db, wallet.id, amount, "REFUND_CREDIT", {
-      bookingId: order.id, paymentId: `hotel_refund_${order.id}`, note: `Refund for hotel booking ${order.supplierBookingId}`,
+      bookingId: order.id, paymentId: ref, note: `Refund for hotel booking ${order.supplierBookingId}`,
     });
     return { ok: true, note: `${order.currency} ${amount.toFixed(2)} returned to the Tripcod wallet.` };
   }
@@ -97,11 +153,12 @@ export interface HotelQueueMsg { type: "HOTEL_PAYMENT_CAPTURED"; hotelBookingId:
 
 export async function hotelOrderDeps(env: Env, db: Db, tenantId: string, opts: { recorder?: ExchangeRecorder; waitUntil?: (p: Promise<unknown>) => void; pollMs?: number } = {}): Promise<HotelOrderDeps> {
   return {
-    store:   dbHotelOrderStore(db, tenantId),
+    store:   d1HotelOrderStore(env.HOTEL_DB, tenantId),
     client:  await hotelClient(env, tenantId, opts.recorder),
     call:    supplierCall(db, tenantId, opts.waitUntil),
     refund:  (order, amount, reason) => refundHotelPayment(env, db, order, amount, reason),
     enqueue: async (id) => { await env.BOOKING_QUEUE.send({ type: "HOTEL_PAYMENT_CAPTURED", hotelBookingId: id, tenantId } satisfies HotelQueueMsg); },
+    walletDebited: (ref) => walletTxExists(db, ref),
     pollMs:  opts.pollMs,
   };
 }
@@ -167,10 +224,10 @@ export async function processHotelPayment(env: Env, db: Db, msg: HotelQueueMsg) 
 
 // Nomod charge events for hotel orders. Returns null when no hotel order uses these ids.
 export async function handleHotelNomodEvent(env: Env, db: Db, type: string, chargeId: string | undefined, candidates: string[]) {
-  const order = await dbHotelOrderStore(db).byPaymentOrder(candidates);
+  const order = await d1HotelOrderStore(env.HOTEL_DB).byPaymentOrder(candidates);
   if (!order || order.paymentGateway !== "NOMOD") return null;
   const { recordPaid } = await import("./hotel-orders.js");
-  const store = dbHotelOrderStore(db, order.tenantId);
+  const store = d1HotelOrderStore(env.HOTEL_DB, order.tenantId);
   if (type === "charge.completed") {
     if (order.paymentStatus !== "PENDING") return { hotelOrder: order.id, duplicate: true };
     await recordPaid({
