@@ -1,0 +1,47 @@
+name: Hotel hold auto-cancellation check (read-only)
+
+# TJP202803274047 (TripJack UAT, Test Case 1): after the hold deadline (23:30 IST),
+# read TripJack's status, record that Booking Details call in the booking's logs,
+# and confirm the certification ZIP shows the supplier's cancellation.
+# No booking, payment, cancellation request or deploy. Metadata-only output (public repo).
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [verify/hotel-tjp-autocancel]
+    paths: [.github/release/autocancel-run.txt]
+
+permissions:
+  contents: read
+
+env:
+  BOOKING: TJP202803274047
+  CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+  CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Hold deadline has passed (23:30 IST = 18:00 UTC)
+        run: |
+          now=$(date -u +%s); deadline=$(date -u -d '2026-10-28T18:00:00Z' +%s)
+          [ "$now" -gt "$deadline" ] || { echo "Too early: deadline not reached"; exit 1; }
+      - name: TripJack status now (Booking Details via the API's public status route; status fields only)
+        run: |
+          curl -sS -m 60 -A "Mozilla/5.0" -H 'x-tenant-slug: tripcod' "https://api.tripcod.com/api/hotels/bookings/$BOOKING" -o bd.json -w "http=%{http_code}\n"
+          python3 -c "import json;d=json.load(open('bd.json'));print(json.dumps({k:d.get(k) for k in ('bookingId','status','pending','holdDeadline','errorCode')}))"
+          sleep 20   # the API stores the raw request / response in the background
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - name: Certification ZIP from production logs (read-only) shows the cancellation
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          EXPECT_STATUS: CANCELLED
+        run: |
+          cp .github/release/verify-hotel-pack.mts apps/api/.verify-hotel-pack.mts
+          cd apps/api && node --import ../../node_modules/.pnpm/tsx@4.23.12/node_modules/tsx/dist/loader.mjs .verify-hotel-pack.mts "$BOOKING"
