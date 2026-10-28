@@ -2,6 +2,7 @@ import type { Handler } from "hono";
 import { emailAgentTopup } from "../../lib/transactional-emails.js";
 import { payments, bookings, walletTransactions } from "@tripcod/db/schema";
 import { creditAgentWallet } from "../../lib/agent-program.js";
+import { handleHotelNomodEvent } from "../../lib/hotel-order-store.js";
 import { and, eq, inArray } from "drizzle-orm";
 import type { Env, Variables } from "../../types.js";
 
@@ -51,6 +52,12 @@ export const nomodWebhook: Handler<{ Bindings: Env; Variables: Variables }> = as
     : [];
 
   if (!payment) {
+    // Website hotel booking (hotel_bookings, separate from flight payments).
+    const hotel = await handleHotelNomodEvent(c.env, db, type, chargeId, candidates);
+    if (hotel) {
+      console.info(`[nomod-webhook] ${type} charge=${chargeId ?? "?"} hotel order=${hotel.hotelOrder}`);
+      return c.json({ ok: true, ...hotel });
+    }
     // Agency wallet top-up (agent portal): credited once when the charge completes.
     for (const id of candidates.filter((x) => /^[\w-]{6,64}$/.test(x)).slice(0, 25)) {
       const topup = await c.env.SESSIONS_KV.get(`agent_topup:${id}`, "json").catch(() => null) as { tenantId: string; agentId: string; walletId: string; amount: number; currency: string; userId: string | null } | null;

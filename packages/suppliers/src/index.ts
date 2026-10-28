@@ -9,6 +9,11 @@ export {
   parseHotelBookingDetails, HOTEL_TERMINAL_STATUSES,
   type HotelV3Room, type HotelV3Option, type HotelV3Pricing, type HotelV3Content, type HotelV3ListingHotel,
 } from "./tripjack/hotel-v3.js";
+export {
+  HOTEL_OCCUPANCY_LIMITS, PAN_PATTERN, occupancyErrors, toTripjackRooms, encodeOccupancy, decodeOccupancy, occupancyTotals,
+  describeRoom, guestErrors, guestTitles, leadPanRequired, cancellationChargeAt, freeCancellationUntil, penaltyTime,
+  type RoomOccupancy, type HotelGuestInput, type GuestRules,
+} from "./tripjack/hotel-occupancy.js";
 export type {
   HotelSearchParams, NormalizedHotel, HotelPreBookResult,
   HotelBookParams, HotelBookResult, HotelCancelResult,

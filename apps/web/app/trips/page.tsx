@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { apiCall, inr, readCustomerToken, STATUS_LABEL } from "../lib/customer-api";
 import styles from "./trips.module.css";
+import { HotelStays } from "./HotelStays";
 
 interface TripRow {
   id: string; status: string; pnr: string | null; origin: string; destination: string;
@@ -83,6 +84,7 @@ export default function TripsPage() {
               {trips.length ? <button type="button" className={styles.secondaryAction} onClick={() => setFilter("all")}>View all bookings</button>
                 : <a className={styles.primaryAction} href="/">Search flights</a>}
             </section>}
+        <HotelStays />
       </>}
   </div></main>;
 }

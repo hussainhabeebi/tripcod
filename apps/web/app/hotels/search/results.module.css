@@ -35,3 +35,6 @@
 @media (max-width: 1023px) { .card { grid-template-columns: 220px minmax(0,1fr); } .imageArea { grid-row: span 2; } .priceArea { grid-column: 2; margin: 0 18px 18px; padding: 14px 0 0; border-left: 0; border-top: 1px solid #e7ecf2; flex-direction: row; align-items: center; justify-content: space-between; text-align: left; gap: 12px; } .info { padding: 18px; } }
 @media (max-width: 600px) { .page { padding: 16px 16px 32px; } .summary { padding: 18px; align-items: flex-start; flex-direction: column; gap: 14px; margin-bottom: 18px; } .context { gap: 6px 12px; line-height: 1.5; } .card { display: flex; flex-direction: column; } .imageArea { min-height: 0; aspect-ratio: 16 / 9; } .noImage { min-height: 0; } .info { padding: 16px; } .info h2 { font-size: 18px; } .priceArea { margin: 0 16px 16px; padding-top: 14px; flex-direction: column; align-items: stretch; gap: 14px; } .book { width: 100%; box-sizing: border-box; } .price { font-size: 24px; } }
 @media (prefers-reduced-motion: reduce) { .book { transition: none; } }
+.occupancy { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0 0; padding: 0; list-style: none; font-size: 12px; color: #52647b; }
+.occupancy li { padding: 4px 9px; border: 1px solid #dde5ef; border-radius: 99px; background: white; }
+.occupancy b { color: #10243e; margin-right: 4px; }
