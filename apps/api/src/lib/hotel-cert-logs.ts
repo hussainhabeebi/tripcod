@@ -14,6 +14,7 @@
 import type { SupplierExchange } from "@tripcod/suppliers";
 import type { Env, Variables } from "../types.js";
 import { persistExchanges } from "./api-exchanges.js";
+import { logSupplierCall } from "./supplier-logger.js";
 
 const json = (text: string | null | undefined): any => {
   if (!text) return null;
@@ -47,7 +48,90 @@ export async function persistHotelExchanges(
     if (!groups.has(key)) groups.set(key, { link, items: [] });
     groups.get(key)!.items.push(x);
   }
-  for (const { link, items } of groups.values()) await persistExchanges(env, db, tenantId, items, link);
+  for (const { link, items } of groups.values()) {
+    // The R2 folder carries the TripJack booking ID; the Neon index row can't
+    // (supplier_exchanges.booking_id references flight bookings). A failed write
+    // is reported in Supplier logs instead of disappearing.
+    await persistExchanges(env, db, tenantId, items, link, {
+      indexBookingId: false,
+      onError: (err, x) => logSupplierCall(db, {
+        tenantId, supplier: "TRIPJACK", endpoint: x.endpoint, level: "ERROR", errorCode: "RAW_LOG_NOT_STORED",
+        errorMessage: `Raw request / response log not stored: ${err instanceof Error ? err.message : String(err)}`.slice(0, 500),
+        requestSummary: { bookingId: link.bookingId, searchId: link.searchId, requestId: link.requestId },
+      }),
+    });
+  }
+}
+
+// ── Raw files in R2 (source of truth for certification packs) ───────────────
+// Keys: api-logs/<tenant>/<booking-<id>|search-<id>|request-<id>>/<stamp>-<seq>-<slug>-<request|response>.<json|txt>
+
+export interface R2Like {
+  list(opts: { prefix: string; delimiter?: string; cursor?: string; limit?: number }): Promise<{ objects: { key: string }[]; delimitedPrefixes?: string[]; truncated?: boolean; cursor?: string }>;
+  get(key: string): Promise<{ text(): Promise<string>; arrayBuffer(): Promise<ArrayBuffer> } | null>;
+}
+
+export interface StoredCall {
+  folder: string; at: string; seq: number; slug: string;
+  requestKey: string; responseKey: string | null;
+  endpoint: string;                // gateway path = TripJack path
+  request: { method?: string; url?: string; headers?: Record<string, string>; body?: unknown } | null;
+}
+
+const FILE = /^(\d{4}-\d\d-\d\dT\d\d-\d\d-\d\d-\d{3}Z)-(\d+)-(.+)-(request|response)\.(json|txt)$/;
+const stampToIso = (s: string) => s.replace(/^(\d{4}-\d\d-\d\dT\d\d)-(\d\d)-(\d\d)-(\d{3})Z$/, "$1:$2:$3.$4Z");
+export const isHotelSlug = (slug: string) => slug.startsWith("oms-v3-hotel-") || slug.startsWith("hms-");
+
+async function listAll(r2: R2Like, prefix: string, max = 400) {
+  const keys: string[] = [];
+  let cursor: string | undefined;
+  do {
+    const page = await r2.list({ prefix, cursor, limit: 500 });
+    keys.push(...page.objects.map((o) => o.key));
+    cursor = page.truncated ? page.cursor : undefined;
+  } while (cursor && keys.length < max);
+  return keys;
+}
+
+// Every hotel call stored in one folder, oldest first, with its request JSON.
+export async function storedHotelCalls(r2: R2Like, tenantId: string, folder: string): Promise<StoredCall[]> {
+  const prefix = `api-logs/${tenantId}/${folder}/`;
+  const byBase = new Map<string, { at: string; seq: number; slug: string; requestKey?: string; responseKey?: string }>();
+  for (const key of await listAll(r2, prefix)) {
+    const m = FILE.exec(key.slice(prefix.length));
+    if (!m || !isHotelSlug(m[3])) continue;
+    const base = `${m[1]}-${m[2]}-${m[3]}`;
+    const e = byBase.get(base) ?? { at: stampToIso(m[1]), seq: Number(m[2]), slug: m[3] };
+    if (m[4] === "request") e.requestKey = key; else e.responseKey = key;
+    byBase.set(base, e);
+  }
+  const calls: StoredCall[] = [];
+  for (const e of byBase.values()) {
+    if (!e.requestKey) continue;
+    let request: StoredCall["request"] = null;
+    try { request = JSON.parse(await (await r2.get(e.requestKey))!.text()); } catch { /* unreadable */ }
+    let endpoint = "/" + e.slug.replace(/-/g, "/");
+    try { if (request?.url) endpoint = new URL(String(request.url)).pathname; } catch { /* keep slug */ }
+    calls.push({ folder, at: e.at, seq: e.seq, slug: e.slug, requestKey: e.requestKey, responseKey: e.responseKey ?? null, endpoint, request });
+  }
+  return calls.sort((a, b) => a.at.localeCompare(b.at) || a.seq - b.seq);
+}
+
+// TripJack hotel booking folders (flight folders are Tripcod UUIDs).
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+export async function hotelBookingFolders(r2: R2Like, tenantId: string, max = 1000): Promise<string[]> {
+  const prefix = `api-logs/${tenantId}/booking-`;
+  const ids: string[] = [];
+  let cursor: string | undefined;
+  do {
+    const page = await r2.list({ prefix, delimiter: "/", cursor, limit: 1000 });
+    for (const p of page.delimitedPrefixes ?? []) {
+      const id = p.slice(prefix.length).replace(/\/$/, "");
+      if (ID.test(id) && !UUID.test(id)) ids.push(id);
+    }
+    cursor = page.truncated ? page.cursor : undefined;
+  } while (cursor && ids.length < max);
+  return ids;
 }
 
 // ── Certification pack ──────────────────────────────────────────────────────

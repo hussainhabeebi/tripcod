@@ -61,7 +61,10 @@ hotelsAdminRoutes.get("/bookings/:bookingId", async (c) => {
   const client = await hotelClient(c.env, c.get("tenantId"), hotelRecorder(c));
   try {
     const raw = await logged(c, "/oms/v3/hotel/booking-details", { bookingId, source: "admin" }, () => client.bookingDetails(bookingId));
-    return c.json({ details: parseHotelBookingDetails(raw), raw });
+    const details = parseHotelBookingDetails(raw);
+    // An admin lookup also updates the website order (e.g. a hold the supplier auto-cancelled).
+    await syncOrder(c, bookingId, details);
+    return c.json({ details, raw });
   } catch (err) {
     return hotelError(c, err, "Could not load the hotel booking");
   }
