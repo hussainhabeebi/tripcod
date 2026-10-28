@@ -7,7 +7,7 @@ import { API, apiHeaders } from "@/lib/api";
 
 type Pack = {
   bookingId: string; firstCallAt: string; lastCallAt: string; calls: number; failedCalls: number;
-  scenario: string; covered: string[]; missing: string[];
+  scenario: string; covered: string[]; missing: string[]; searchAndReviewFromSearchLogs?: boolean;
   order: { id: string; mode: string; status: string; supplierStatus: string | null; hotel: string | null } | null;
 };
 
@@ -31,6 +31,7 @@ export function HotelCertificationPacks() {
   const [packs, setPacks] = useState<Pack[] | null>(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState("");
+  const [lookup, setLookup] = useState("");
 
   const load = useCallback(async () => {
     setPacks(null); setError("");
@@ -51,7 +52,7 @@ export function HotelCertificationPacks() {
   };
 
   return (
-    <section style={{ marginTop: 28, background: "#0f172a", border: "1px solid #1e293b", borderRadius: 10, padding: 16 }}>
+    <section id="hotel-uat-logs" style={{ marginBottom: 24, background: "#0f172a", border: "1px solid #1e293b", borderRadius: 10, padding: 16 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, flexWrap: "wrap", marginBottom: 6 }}>
         <h2 style={{ fontSize: 16, fontWeight: 700, color: "#f1f5f9", margin: 0 }}>Hotel UAT certification logs (TripJack Hotel API v3)</h2>
         <button type="button" style={pill} onClick={() => void load()}>Reload</button>
@@ -60,6 +61,12 @@ export function HotelCertificationPacks() {
         One ZIP per TripJack hotel booking ID: the original request (TripJack URL + apikey) and response JSON for Search, Review, Instant book or Hold,
         Confirm hold, Booking details and Cancellation, plus HotelBookingSummary.json with the scenario, the correlation / booking IDs and any missing step.
       </p>
+      <form style={{ display: "flex", gap: 8, flexWrap: "wrap", margin: "0 0 12px" }}
+        onSubmit={(e) => { e.preventDefault(); const id = lookup.trim(); if (id) void get(id); }}>
+        <input value={lookup} onChange={(e) => setLookup(e.target.value)} placeholder="TripJack booking ID, e.g. TJP209903275079"
+          aria-label="TripJack hotel booking ID" style={input} />
+        <button type="submit" style={dl} disabled={!lookup.trim() || busy === lookup.trim()}>{busy && busy === lookup.trim() ? "Preparing…" : "Download ZIP"}</button>
+      </form>
       {error && <p style={{ color: "#fca5a5", fontSize: 13 }}>{error}</p>}
       {!packs ? <p style={{ color: "#64748b", fontSize: 13 }}>Loading…</p> : !packs.length ? (
         <p style={{ color: "#64748b", fontSize: 13 }}>No hotel booking has been reviewed yet. A pack appears here as soon as a hotel room reaches Review.</p>
@@ -73,7 +80,10 @@ export function HotelCertificationPacks() {
                   <td style={td}>{new Date(p.lastCallAt).toLocaleString("en-IN", { timeZone: "Asia/Kolkata" })}</td>
                   <td style={{ ...td, fontFamily: "monospace", color: "#e2e8f0" }}>{p.bookingId}</td>
                   <td style={td}>{p.scenario.replace(/_/g, " ").toLowerCase()}</td>
-                  <td style={td}>{p.covered.map((s) => <span key={s} style={chip}>{STEP_LABEL[s] ?? s}</span>)}</td>
+                  <td style={td}>
+                    {p.covered.map((s) => <span key={s} style={chip}>{STEP_LABEL[s] ?? s}</span>)}
+                    {p.searchAndReviewFromSearchLogs && <span style={{ ...chip, color: "#94a3b8" }} title="Logged before booking folders existed; the ZIP adds them from the search logs">Search + Review from search logs</span>}
+                  </td>
                   <td style={{ ...td, color: p.missing.length ? "#fbbf24" : "#4ade80" }}>{p.missing.length ? p.missing.map((s) => STEP_LABEL[s] ?? s).join(", ") : "none"}</td>
                   <td style={td}>{p.calls}{p.failedCalls ? <span style={{ color: "#f87171" }}> ({p.failedCalls} failed)</span> : null}</td>
                   <td style={{ ...td, fontSize: 12, color: "#94a3b8" }}>{p.order ? `${p.order.hotel ?? ""} · ${p.order.mode} · ${p.order.status}` : "—"}</td>
@@ -90,6 +100,7 @@ export function HotelCertificationPacks() {
 
 const pill: React.CSSProperties = { background: "#1e293b", color: "#f1f5f9", border: "1px solid #334155", borderRadius: 8, padding: "7px 12px", fontSize: 13, fontWeight: 600, cursor: "pointer" };
 const dl: React.CSSProperties = { background: "#2563eb", color: "#fff", border: 0, borderRadius: 6, padding: "6px 10px", fontSize: 12, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" };
+const input: React.CSSProperties = { flex: "1 1 260px", maxWidth: 360, background: "#020617", color: "#f1f5f9", border: "1px solid #334155", borderRadius: 8, padding: "7px 10px", fontSize: 13, fontFamily: "monospace" };
 const chip: React.CSSProperties = { display: "inline-block", background: "#1e293b", color: "#93c5fd", borderRadius: 99, padding: "2px 8px", fontSize: 11, margin: "0 4px 4px 0" };
 const th: React.CSSProperties = { padding: "8px 12px", textAlign: "left", fontSize: 11, fontWeight: 700, color: "#475569", textTransform: "uppercase", whiteSpace: "nowrap" };
 const td: React.CSSProperties = { padding: "8px 12px", verticalAlign: "top", color: "#cbd5e1" };

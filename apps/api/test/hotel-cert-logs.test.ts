@@ -186,6 +186,13 @@ test("Admin downloads one certification ZIP per TripJack hotel booking", async (
   assert.deepEqual(summary.missing, []);
   assert.deepEqual(summary.covered, ["Search", "Review", "InstantBook", "HoldBook", "ConfirmHold", "BookingDetails", "Cancellation"]);
 
+  const { packs } = await (await adminApp(db)("/hotel-certification", env)).json() as any;
+  assert.equal(packs.length, 1);
+  assert.equal(packs[0].bookingId, TJ);
+  assert.equal(packs[0].scenario, "HOLD_THEN_CONFIRM_CANCELLED");
+  assert.equal(packs[0].searchAndReviewFromSearchLogs, false);
+  assert.deepEqual(packs[0].missing, []);
+
   assert.equal((await adminApp(db)("/hotel-certification/..%2Fetc/zip", env)).status, 400);
   assert.equal((await adminApp(db)("/hotel-certification/TJNOTHING1/zip", env)).status, 404);
 });
@@ -207,7 +214,9 @@ test("a hold logged before this fix (index rejected, Review in the search folder
   assert.equal(packs.length, 1);
   assert.equal(packs[0].bookingId, TJ);
   assert.equal(packs[0].scenario, "HOLD");
-  assert.deepEqual(packs[0].covered, ["Search", "Review", "HoldBook", "BookingDetails"]);
+  // The fast list reads the booking folder only; the ZIP below recovers Search + Review.
+  assert.deepEqual(packs[0].covered, ["HoldBook", "BookingDetails"]);
+  assert.equal(packs[0].searchAndReviewFromSearchLogs, true);
   assert.deepEqual(packs[0].missing, []);
 
   const files = unzip(new Uint8Array(await (await adminApp(db)(`/hotel-certification/${TJ}/zip`, env)).arrayBuffer()));

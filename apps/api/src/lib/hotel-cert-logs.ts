@@ -168,3 +168,27 @@ export function hotelScenario(steps: Set<HotelStep>) {
     missing: required.filter((s) => !steps.has(s)),
   };
 }
+
+// Cheap per-booking summary for the Admin list: file names only (one R2 list),
+// plus the Book request(s) to tell Hold from Instant. The ZIP does the full work.
+export async function hotelFolderSummary(r2: R2Like, tenantId: string, bookingId: string) {
+  const prefix = `api-logs/${tenantId}/booking-${bookingId}/`;
+  const calls: { at: string; endpoint: string; requestKey: string }[] = [];
+  for (const key of await listAll(r2, prefix)) {
+    const m = FILE.exec(key.slice(prefix.length));
+    if (!m || m[4] !== "request" || !isHotelSlug(m[3])) continue;
+    const endpoint = m[3].startsWith("oms-v3-hotel-cancel-booking") ? "/oms/v3/hotel/cancel-booking"
+      : m[3].replace(/^(hms|oms)-v3-hotel-/, (_s, host) => `/${host}/v3/hotel/`);
+    calls.push({ at: stampToIso(m[1]), endpoint, requestKey: key });
+  }
+  calls.sort((a, b) => a.at.localeCompare(b.at));
+  const steps = new Set<HotelStep>();
+  for (const x of calls) {
+    let body: unknown = null;
+    if (x.endpoint === "/oms/v3/hotel/book") {
+      try { body = JSON.parse(await (await r2.get(x.requestKey))!.text())?.body ?? null; } catch { /* unreadable */ }
+    }
+    steps.add(hotelStep(x.endpoint, body).step);
+  }
+  return { calls: calls.length, firstAt: calls[0]?.at ?? null, lastAt: calls[calls.length - 1]?.at ?? null, steps };
+}

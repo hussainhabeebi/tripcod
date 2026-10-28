@@ -6,7 +6,7 @@ import { buildZip } from "../../lib/zip.js";
 import { certificationRequest, tripjackHost } from "../../lib/certification.js";
 import { tripjackEnvironment } from "../../lib/hotels.js";
 import {
-  hotelBookingFolders, hotelScenario, hotelStep, storedHotelCalls, type HotelStep, type R2Like, type StoredCall,
+  hotelBookingFolders, hotelFolderSummary, hotelScenario, hotelStep, storedHotelCalls, type HotelStep, type R2Like, type StoredCall,
 } from "../../lib/hotel-cert-logs.js";
 import { d1HotelOrderStore } from "../../lib/hotel-order-store.js";
 import type { Env, Variables } from "../../types.js";
@@ -276,22 +276,34 @@ async function collectHotelPack(c: any, bookingId: string) {
   return { calls, steps, correlationIds: [...correlationIds] };
 }
 
+// Fast list: one R2 listing per booking (file names) + its Book request. Search /
+// Review of bookings logged before PR #15 live in the search logs; the ZIP adds them.
 supplierLogsAdminRoutes.get("/hotel-certification", async (c) => {
   const limit = Math.min(parseInt(c.req.query("limit") ?? "50") || 50, 100);
   const tenantId = c.get("tenantId");
+  const r2 = c.env.DOCUMENTS_R2 as R2Like;
   const store = c.env.HOTEL_DB ? d1HotelOrderStore(c.env.HOTEL_DB, tenantId) : null;
   const packs = [];
-  for (const bookingId of await hotelBookingFolders(c.env.DOCUMENTS_R2 as R2Like, tenantId)) {
-    const { calls, steps } = await collectHotelPack(c, bookingId);
-    if (!calls.length) continue;
-    const order = store ? await store.bySupplierBooking(tenantId, bookingId).catch(() => null) : null;
+  for (const bookingId of await hotelBookingFolders(r2, tenantId)) {
+    const summary = await hotelFolderSummary(r2, tenantId, bookingId);
+    if (!summary.calls) continue;
+    const inSearchLogs = !summary.steps.has("Review");
+    if (!inSearchLogs) summary.steps.add("Search");   // the Review's search is in the ZIP
+    const scenario = hotelScenario(summary.steps);
     packs.push({
-      bookingId, firstCallAt: calls[0].at, lastCallAt: calls[calls.length - 1].at, calls: calls.length, failedCalls: 0, ...hotelScenario(steps),
-      order: order ? { id: order.id, mode: order.mode, status: order.status, supplierStatus: order.supplierStatus, hotel: (order.hotel as any)?.name ?? null } : null,
+      bookingId, firstCallAt: summary.firstAt, lastCallAt: summary.lastAt!, calls: summary.calls, failedCalls: 0, ...scenario,
+      missing: inSearchLogs ? scenario.missing.filter((m) => m !== "Search" && m !== "Review") : scenario.missing,
+      searchAndReviewFromSearchLogs: inSearchLogs,
+      order: null as null | { id: string; mode: string; status: string; supplierStatus: string | null; hotel: string | null },
     });
   }
   packs.sort((a, b) => b.lastCallAt.localeCompare(a.lastCallAt));
-  return c.json({ packs: packs.slice(0, limit) });
+  const page = packs.slice(0, limit);
+  for (const p of page) {
+    const order = store ? await store.bySupplierBooking(tenantId, p.bookingId).catch(() => null) : null;
+    if (order) p.order = { id: order.id, mode: order.mode, status: order.status, supplierStatus: order.supplierStatus, hotel: (order.hotel as any)?.name ?? null };
+  }
+  return c.json({ packs: page });
 });
 
 supplierLogsAdminRoutes.get("/hotel-certification/:bookingId/zip", async (c) => {

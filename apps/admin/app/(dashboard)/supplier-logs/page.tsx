@@ -125,6 +125,8 @@ export default async function SupplierLogsPage({
         </p>
       </div>
 
+      <HotelCertificationPacks />
+
       {/* Error banner */}
       {fetchError && (
         <div style={{
@@ -251,7 +253,6 @@ export default async function SupplierLogsPage({
         )}
       </div>
 
-      <HotelCertificationPacks />
       <RawApiCalls initialScope="hotel" />
     </div>
   );
