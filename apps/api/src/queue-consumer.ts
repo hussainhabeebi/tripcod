@@ -26,6 +26,7 @@ import { parseBookingDetails } from "./lib/trips.js";
 import { sendWhatsApp, buildBookingConfirmationMessage } from "./lib/notify.js";
 import { emailLayout, sendMail } from "./lib/email.js";
 import { escapeHtml, WEB_URL } from "./lib/customer-notify.js";
+import { processHotelPayment, type HotelQueueMsg } from "./lib/hotel-order-store.js";
 
 // ── Message type discriminated union ─────────────────────────────
 
@@ -58,7 +59,7 @@ interface NotifyOtpMsg {
   tenantId: string;
 }
 
-type BookingQueueMsg   = InitiatePaymentMsg | PaymentCapturedMsg;
+type BookingQueueMsg   = InitiatePaymentMsg | PaymentCapturedMsg | HotelQueueMsg;
 type NotifyQueueMsg    = NotifyBookingMsg | NotifyOtpMsg;
 
 // ── Booking Queue consumer ────────────────────────────────────────
@@ -84,7 +85,10 @@ export async function handleBookingQueue(
     try {
       const data = msg.body;
 
-      if (data.type === "INITIATE_PAYMENT") {
+      if (data.type === "HOTEL_PAYMENT_CAPTURED") {
+        // Hotel orders: TripJack book / confirm-book once per order (idempotent on retry).
+        await processHotelPayment(env, db, data);
+      } else if (data.type === "INITIATE_PAYMENT") {
         await handleInitiatePayment(db, env, data);
       } else if (data.type === "PAYMENT_CAPTURED") {
         await recordQueueReceipt(env, data.orderId, msg.attempts);

@@ -3,10 +3,17 @@
 //   POST /api/hotels/search             city (or hotel IDs) → hotels with cheapest option
 //   POST /api/hotels/detail             all options for one hotel (+ static details)
 //   POST /api/hotels/review             re-validate an option → TripJack bookingId + final price
-//   POST /api/hotels/book               instant (paymentInfos) or hold booking, then poll status
+//   POST /api/hotels/orders             guests + Instant (pay first) or Hold → Tripcod order
+//   GET  /api/hotels/orders/mine        signed-in customer's hotel bookings (My Trips)
+//   GET  /api/hotels/orders/:id         order (re-reads TripJack Booking Details while it can change)
+//   GET  /api/hotels/orders/:id/payment-options   card (Nomod) / wallet availability
+//   POST /api/hotels/orders/:id/pay     card link or wallet debit → TripJack book / confirm-book after capture
+//   GET  /api/hotels/orders/:id/cancel-quote      charge + refund from the supplier's policy
+//   POST /api/hotels/orders/:id/cancel  TripJack cancel-booking after the customer confirms the charge
 //   GET  /api/hotels/bookings/:id       booking details (status polling)
-//   Confirm-hold, cancel, booking list and the city sync are Admin-only
-//   (/api/admin/hotels) so a booking ID alone can't cancel or charge a booking.
+//   Order routes need the order's access key (X-Hotel-Order-Key) or the signed-in
+//   customer who made it. Admin keeps its own confirm / cancel / list routes
+//   (/api/admin/hotels) and the city sync.
 //   GET  /api/hotels/nationalities      nationality list (ISO2 + TripJack countryId)
 //
 // Every TripJack call is written to Admin → Supplier logs with the full error.
@@ -15,13 +22,24 @@ import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import {
-  HOTEL_TERMINAL_STATUSES, validHotelId, isHotelError, normalizeOption, parseHotelBookingDetails,
-  type TripjackHotelV3Client,
+  HOTEL_OCCUPANCY_LIMITS, HOTEL_TERMINAL_STATUSES, validHotelId, isHotelError, normalizeOption, parseHotelBookingDetails,
+  guestErrors, occupancyErrors, type RoomOccupancy, type TripjackHotelV3Client,
 } from "@tripcod/suppliers";
+import { optionalCustomerId } from "../lib/optional-customer.js";
+import { WEB_URL } from "../lib/customer-notify.js";
+import {
+  CUSTOMER_WALLET_CURRENCY, debitWallet, getOrCreateCustomerWallet, roundMoney,
+} from "../lib/customer-wallet.js";
+import {
+  HotelOrderError, REVIEW_TTL_SECONDS, buildOrderRow, canAccess, cancelOrder, cancelQuote, claimPayment, newAccessKey,
+  payable, placeHold, publicOrder, recordPaid, refreshOrder, releasePayment, reviewKey, sha256Hex,
+  type HotelOrder, type HotelOrderDeps, type ReviewSnapshot,
+} from "../lib/hotel-orders.js";
+import { cardPaymentAvailable, createHotelNomodLink, hotelOrderDeps } from "../lib/hotel-order-store.js";
 import type { Env, Variables } from "../types.js";
 import { logSupplierCall } from "../lib/supplier-logger.js";
 import {
-  SEARCH_TTL_MS, hotelExchanges, hotelRecorder, cheapest, hotelClient, hotelContent, nationalityId, searchHotels, tripjackEnvironment,
+  SEARCH_TTL_MS, hotelExchanges, hotelRecorder, cheapest, hotelClient, hotelContent, nationalityId, nightsBetween, searchHotels,
 } from "../lib/hotels.js";
 
 // ── Logging helpers ─────────────────────────────────────────────────────────
@@ -97,20 +115,27 @@ export function hotelError(c: any, err: any, fallback: string) {
 
 // ── Schemas ─────────────────────────────────────────────────────────────────
 
+const LIM = HOTEL_OCCUPANCY_LIMITS;
+// TripJack needs one age per child: childAge.length must equal children.
 const roomSchema = z.object({
-  adults:    z.number().int().min(1).max(9).default(1),
-  children:  z.number().int().min(0).max(4).default(0),
-  childAge:  z.array(z.number().int().min(0).max(17)).optional(),
-  childAges: z.array(z.number().int().min(0).max(17)).optional(),   // older clients
+  adults:    z.number().int().min(LIM.minAdultsPerRoom).max(LIM.maxAdultsPerRoom).default(1),
+  children:  z.number().int().min(0).max(LIM.maxChildrenPerRoom).default(0),
+  childAge:  z.array(z.number().int().min(LIM.minChildAge).max(LIM.maxChildAge)).max(LIM.maxChildrenPerRoom).optional(),
+  childAges: z.array(z.number().int().min(LIM.minChildAge).max(LIM.maxChildAge)).max(LIM.maxChildrenPerRoom).optional(),   // older clients
+}).refine((r) => (r.childAge ?? r.childAges ?? []).length === r.children, {
+  message: "Each child needs an age (childAge must have one age per child)", path: ["childAge"],
 }).transform((r) => ({
   adults: r.adults,
   ...(r.children ? { children: r.children, childAge: r.childAge ?? r.childAges ?? [] } : {}),
 }));
 
+const occupancyOf = (rooms: { adults: number; childAge?: number[] }[]): RoomOccupancy[] =>
+  rooms.map((r) => ({ adults: r.adults, childAges: r.childAge ?? [] }));
+
 const stayFields = {
   checkIn:     z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   checkOut:    z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-  rooms:       z.array(roomSchema).min(1).max(9).default([{ adults: 1, children: 0 }]),
+  rooms:       z.array(roomSchema).min(1).max(LIM.maxRooms).default([{ adults: 1, children: 0 }]),
   nationality: z.string().min(2).max(6).default("IN"),
   currency:    z.string().length(3).toUpperCase().default("INR"),
 };
@@ -133,7 +158,7 @@ const reviewSchema = detailSchema.extend({
 });
 
 const guestSchema = z.object({
-  title:     z.string().min(1),
+  title:     z.string().min(1).max(10),
   firstName: z.string().min(1),
   lastName:  z.string().min(1),
   type:      z.enum(["ADULT", "CHILD"]).default("ADULT"),
@@ -141,15 +166,14 @@ const guestSchema = z.object({
   passport:  z.string().min(5).optional(),
 });
 
-const bookSchema = z.object({
-  bookingId:    z.string().min(5),
-  amount:       z.number().positive(),
-  rooms:        z.array(z.object({ guests: z.array(guestSchema).min(1) })).min(1),
+// The price, hotel and occupancy come from the server-side Review snapshot, not the browser.
+const orderSchema = z.object({
+  bookingId:    z.string().min(5).max(64).regex(/^[A-Za-z0-9_-]+$/),
+  mode:         z.enum(["INSTANT", "HOLD"]),
+  rooms:        z.array(z.object({ guests: z.array(guestSchema).min(1).max(LIM.maxAdultsPerRoom + LIM.maxChildrenPerRoom) })).min(1).max(LIM.maxRooms),
   contactEmail: z.string().email(),
-  contactPhone: z.string().min(6),
+  contactPhone: z.string().min(6).max(20),
   dialCode:     z.string().regex(/^\+?\d{1,4}$/).default("+91"),
-  gstInfo:      z.object({ gstNumber: z.string().min(5), registeredName: z.string().min(2) }).optional(),
-  hold:         z.boolean().default(false),
 });
 
 export const hotelRoutes = new Hono<{ Bindings: Env; Variables: Variables }>();
@@ -250,14 +274,32 @@ hotelRoutes.post("/review", validJson(reviewSchema, "review"), async (c) => {
       () => client.review({ correlationId: p.correlationId, optionId, reviewHash: reviewHash!, hid: p.hid }),
       (r) => ({ bookingId: r.bookingId, totalPrice: r.option?.pricing?.totalPrice }));
     const option = normalizeOption(review.option);
+    const onholdAllowed = String(review.onholdAllowed) === "true";
+    const info = (await hotelContent(c.env, client, [p.hid]).catch(() => ({} as Awaited<ReturnType<typeof hotelContent>>)))[p.hid];
+    const hotel: ReviewSnapshot["hotel"] = {
+      hid: p.hid, name: review.hotelName || info?.name || "", address: info?.address ?? "", city: info?.city ?? "",
+      countryCode: (info?.countryCode ?? "").toUpperCase(), stars: info?.starRating ?? 0, image: info?.images?.[0],
+      checkIn: p.checkIn, checkOut: p.checkOut, nights: nightsBetween(p.checkIn, p.checkOut),
+    };
+    const occupancy = occupancyOf(p.rooms);
+    // The order is priced from this snapshot (TripJack's reviewed total), never from the browser.
+    const snapshot: ReviewSnapshot = {
+      tenantId: c.get("tenantId"), bookingId: review.bookingId, hid: p.hid, correlationId: p.correlationId, hotel, occupancy,
+      nationality: /^[A-Za-z]{2}$/.test(p.nationality) ? p.nationality.toUpperCase() : "IN", currency: p.currency,
+      option, onholdAllowed, reviewedAt: new Date().toISOString(),
+    };
+    await c.env.SESSIONS_KV.put(reviewKey(snapshot.tenantId, review.bookingId), JSON.stringify(snapshot), { expirationTtl: REVIEW_TTL_SECONDS });
     return c.json({
       bookingId:     review.bookingId,
       hid:           p.hid,
       hotelName:     review.hotelName,
+      hotel,
+      occupancy,
       option,
       optionChanged: optionId !== p.optionId,
       priceChanged:  listedPrice !== undefined && Math.abs(listedPrice - option.pricing.totalPrice) > 0.01,
-      onholdAllowed: String(review.onholdAllowed) === "true",
+      onholdAllowed,
+      reviewExpiresAt: new Date(Date.now() + REVIEW_TTL_SECONDS * 1000).toISOString(),
     });
   } catch (err) {
     return hotelError(c, err, "Could not confirm this room");
@@ -281,47 +323,194 @@ export async function pollDetails(c: any, client: TripjackHotelV3Client, booking
   return last;
 }
 
-hotelRoutes.post("/book", validJson(bookSchema, "book"), async (c) => {
+// ── Orders (guests, Instant / Hold, payment, cancellation) ──────────────────
+
+// Mounted under /orders: order IDs, keys and supplier IDs are linked in the raw API logs.
+async function orderDeps(c: any, pollMs?: number): Promise<HotelOrderDeps> {
+  const deps = await hotelOrderDeps(c.env, c.get("db"), c.get("tenantId"), {
+    recorder: hotelRecorder(c), waitUntil: (p) => c.executionCtx.waitUntil(p), pollMs,
+  });
+  // Supplier calls inside a request also go through `logged` (same request ID as the raw exchange files).
+  return { ...deps, call: (endpoint, summary, fn) => logged(c, endpoint, summary, fn) };
+}
+
+function orderError(c: any, err: any, fallback: string) {
+  if (err instanceof HotelOrderError) return c.json({ error: err.message, errorCode: err.code, ...err.extra }, err.status);
+  return hotelError(c, err, fallback);
+}
+
+// The order, if the caller may see it: the signed-in customer who made it, or the order's key.
+async function accessibleOrder(c: any, deps: Pick<HotelOrderDeps, "store">): Promise<HotelOrder> {
+  const order = await deps.store.get(c.req.param("id"));
+  const userId = await optionalCustomerId(c);
+  if (!order || !(await canAccess(order, { userId, key: c.req.header("X-Hotel-Order-Key") ?? null }))) {
+    throw new HotelOrderError("Hotel booking not found", 404, "NOT_FOUND");
+  }
+  return order;
+}
+
+hotelRoutes.post("/orders", validJson(orderSchema, "order"), async (c) => {
   const p = c.req.valid("json");
   const tenantId = c.get("tenantId");
-  const client = await hotelClient(c.env, tenantId, hotelRecorder(c));
-  // Production has no customer hotel payment step yet: never charge the TripJack
-  // wallet from the website there — place a hold that Admin confirms after payment.
-  const production = (await tripjackEnvironment(c.env, tenantId)) === "PRODUCTION";
-  const hold = p.hold || production;
-  const phone = p.contactPhone.replace(/\D/g, "");
   try {
-    const res = await logged(c, "/oms/v3/hotel/book", {
-      bookingId: p.bookingId, mode: hold ? "HOLD" : "INSTANT", amount: p.amount,
-      rooms: p.rooms.length, guests: p.rooms.reduce((n, r) => n + r.guests.length, 0), contactEmail: p.contactEmail,
-    }, () => client.book({
-      bookingId: p.bookingId,
-      roomTravellerInfo: p.rooms.map((r) => ({
-        travellerInfo: r.guests.map((g) => ({
-          ti: g.title, pt: g.type, fN: g.firstName.trim(), lN: g.lastName.trim(),
-          ...(g.pan ? { pan: g.pan.toUpperCase() } : {}), ...(g.passport ? { pNum: g.passport } : {}),
-        })),
-      })),
-      deliveryInfo: { emails: [p.contactEmail], contacts: [phone.slice(-10)], code: [p.dialCode.startsWith("+") ? p.dialCode : `+${p.dialCode}`] },
-      ...(p.gstInfo ? { gstInfo: p.gstInfo } : {}),
-      ...(hold ? {} : { paymentInfos: [{ amount: p.amount }] }),
-    }));
+    const review = await c.env.SESSIONS_KV.get(reviewKey(tenantId, p.bookingId), "json") as ReviewSnapshot | null;
+    if (!review) throw new HotelOrderError("Your room price check has expired. Please choose the room again to get a fresh price.", 410, "REVIEW_EXPIRED");
+    if (p.mode === "HOLD" && !review.onholdAllowed) throw new HotelOrderError("This room can't be held — the supplier only allows instant booking for it.", 400, "HOLD_NOT_ALLOWED");
+    const guests = p.rooms.map((r) => r.guests);
+    const problems = [...occupancyErrors(review.occupancy), ...guestErrors(review.occupancy, guests, {
+      nationality: review.nationality, hotelCountryCode: review.hotel.countryCode,
+      panRequired: review.option.compliance.panRequired, passportRequired: review.option.compliance.passportRequired,
+    })];
+    if (problems.length) throw new HotelOrderError(problems[0], 400, "INVALID_GUESTS", { issues: problems });
 
-    const bookingId = res.bookingId || p.bookingId;
-    // TripJack confirms asynchronously (up to 180 s): poll briefly here; the
-    // client keeps polling GET /bookings/:id after that.
-    const details = await logged(c, "/oms/v3/hotel/booking-details", { bookingId, reason: "post-book poll" },
-      () => pollDetails(c, client, bookingId, 25_000), (d) => ({ status: d?.status }));
-    return c.json({
-      bookingId,
-      mode:    hold ? "HOLD" : "INSTANT",
-      status:  details?.status ?? "IN_PROGRESS",
-      pending: !details || !HOTEL_TERMINAL_STATUSES.includes(details.status),
-      details,
-      ...(production && !p.hold ? { note: "Reserved on hold — our team confirms it once payment is received." } : {}),
-    }, 201);
+    const accessKey = newAccessKey();
+    const deps = await orderDeps(c);
+    const row = buildOrderRow({
+      review, mode: p.mode, userId: await optionalCustomerId(c), guests,
+      contactEmail: p.contactEmail, contactPhone: p.contactPhone, dialCode: p.dialCode, accessKeyHash: await sha256Hex(accessKey),
+    });
+    const created = await deps.store.insert(row);
+    if (!created) {
+      // Double submit: the first order owns this TripJack booking.
+      const existing = await deps.store.bySupplierBooking(tenantId, p.bookingId);
+      throw new HotelOrderError("This room is already being booked. Open the booking you started, or choose the room again.", 409, "ORDER_EXISTS",
+        { orderId: existing?.id });
+    }
+    let order = created;
+    if (p.mode === "HOLD") {
+      try { order = await placeHold(deps, created); }
+      catch (err: any) { return c.json({ error: hotelErrorMessage(err, "The supplier could not hold this room."), errorCode: "HOLD_FAILED", order: publicOrder(err?.order ?? created), key: accessKey }, 502); }
+    }
+    return c.json({ order: publicOrder(order), key: accessKey }, 201);
   } catch (err) {
-    return hotelError(c, err, "Hotel booking failed");
+    return orderError(c, err, "Could not start the hotel booking");
+  }
+});
+
+function hotelErrorMessage(err: any, fallback: string) {
+  if (isHotelError(err, "SOLD_OUT")) return "This room was just sold out. Please choose another option.";
+  if (isHotelError(err, "SESSION_EXPIRED")) return "Your search has expired. Please search again.";
+  return err?.message ? `${fallback} (${String(err.message).slice(0, 200)})` : fallback;
+}
+
+hotelRoutes.get("/orders/mine", async (c) => {
+  const userId = await optionalCustomerId(c);
+  if (!userId) return c.json({ error: "Sign in to see your hotel bookings", errorCode: "SIGN_IN" }, 401);
+  const deps = await orderDeps(c);
+  const rows = await deps.store.listByUser(c.get("tenantId"), userId);
+  return c.json({ orders: rows.map((o) => publicOrder(o)) });
+});
+
+hotelRoutes.get("/orders/:id", async (c) => {
+  try {
+    const deps = await orderDeps(c, 0);
+    const order = await accessibleOrder(c, deps);
+    const fresh = await refreshOrder(deps, order, c.req.query("refresh") === "1");
+    return c.json({ order: publicOrder(fresh) });
+  } catch (err) {
+    return orderError(c, err, "Could not load the hotel booking");
+  }
+});
+
+hotelRoutes.get("/orders/:id/payment-options", async (c) => {
+  try {
+    const deps = await orderDeps(c, 0);
+    const order = await accessibleOrder(c, deps);
+    const userId = await optionalCustomerId(c);
+    let wallet: { available: boolean; balance: number | null; reason: string | null } = { available: false, balance: null, reason: "Sign in to pay from your Tripcod wallet." };
+    if (userId && userId === order.userId) {
+      const w = await getOrCreateCustomerWallet(c.get("db"), c.get("tenantId"), userId);
+      const balance = Number(w.balance);
+      const covers = order.currency === CUSTOMER_WALLET_CURRENCY && balance >= roundMoney(Number(order.amount));
+      wallet = { available: covers, balance, reason: covers ? null : order.currency !== CUSTOMER_WALLET_CURRENCY
+        ? `The wallet pays ${CUSTOMER_WALLET_CURRENCY} bookings only.` : "Your wallet balance doesn't cover this booking." };
+    } else if (userId) {
+      wallet.reason = "This booking was started without signing in, so the wallet can't be used for it.";
+    }
+    const pay = payable(order);
+    return c.json({
+      payable: pay.ok, reason: pay.ok ? null : pay.reason,
+      card: { available: await cardPaymentAvailable(c.env, c.get("tenantId")), gateway: "NOMOD" },
+      wallet,
+      // UPI / payment apps: not offered — the active gateway (Nomod) has no UPI flow and Razorpay is switched off.
+      upi: { available: false, reason: "UPI isn't available with the current payment provider." },
+      amount: Number(order.amount), currency: order.currency,
+    });
+  } catch (err) {
+    return orderError(c, err, "Could not load payment options");
+  }
+});
+
+hotelRoutes.post("/orders/:id/pay", zValidator("json", z.object({ method: z.enum(["CARD", "WALLET"]) })), async (c) => {
+  const { method } = c.req.valid("json");
+  const tenantId = c.get("tenantId");
+  try {
+    const deps = await orderDeps(c, 0);
+    let order = await accessibleOrder(c, deps);
+    if (order.mode === "HOLD") order = await refreshOrder(deps, order, true);   // the hold must still exist
+    if (order.paymentStatus === "PENDING") {
+      // An open card link for this order is reused rather than opening a second charge.
+      if (method === "CARD" && order.paymentGateway === "NOMOD" && order.paymentUrl && payable(order).ok) return c.json({ paymentUrl: order.paymentUrl, reused: true });
+      throw new HotelOrderError("A payment for this booking is already in progress. Complete it or wait a minute and reload.", 409, "PAYMENT_IN_PROGRESS");
+    }
+    const pay = payable(order);
+    if (!pay.ok) throw new HotelOrderError(pay.reason, 409, pay.code);
+
+    if (method === "WALLET") {
+      const userId = await optionalCustomerId(c);
+      if (!userId || userId !== order.userId) throw new HotelOrderError("Sign in with the account that made this booking to pay from the wallet.", 403, "WALLET_SIGN_IN");
+      if (order.currency !== CUSTOMER_WALLET_CURRENCY) throw new HotelOrderError(`The wallet pays ${CUSTOMER_WALLET_CURRENCY} bookings only.`, 400, "WALLET_CURRENCY");
+      const ref = `hotel_wallet_${order.id}_${Date.now()}`;
+      const slot = await claimPayment(deps.store, order, "WALLET", ref);
+      if (!slot) throw new HotelOrderError("A payment for this booking is already in progress.", 409, "PAYMENT_IN_PROGRESS");
+      const wallet = await getOrCreateCustomerWallet(c.get("db"), tenantId, userId);
+      const balance = await debitWallet(c.get("db"), wallet.id, Number(order.amount), "BOOKING_DEBIT", {
+        bookingId: order.id, paymentId: ref, note: `Hotel booking ${order.supplierBookingId}`, performedById: userId,
+      });
+      if (balance === null) {
+        await releasePayment(deps.store, slot);
+        throw new HotelOrderError("Your wallet balance doesn't cover this booking. You have not been charged.", 402, "WALLET_INSUFFICIENT");
+      }
+      const paid = await recordPaid(deps, slot, ref);
+      return c.json({ paid: true, order: publicOrder(paid ?? slot), balance });
+    }
+
+    // CARD (Nomod hosted checkout). Claim first so two clicks can't open two charges.
+    const slot = await claimPayment(deps.store, order, "NOMOD", null);
+    if (!slot) throw new HotelOrderError("A payment for this booking is already in progress.", 409, "PAYMENT_IN_PROGRESS");
+    let link: { id: string; url: string };
+    try {
+      link = await createHotelNomodLink(c.env, tenantId, slot, `${WEB_URL}/hotels/booking/${slot.id}`);
+    } catch (err: any) {
+      await releasePayment(deps.store, slot);
+      throw new HotelOrderError(err?.message ?? "Card payment could not be started.", err?.status === 503 ? 503 : 502, "CARD_UNAVAILABLE");
+    }
+    await deps.store.update(slot.id, { paymentOrderId: link.id, paymentUrl: link.url }, { paymentStatus: ["PENDING"] });
+    return c.json({ paymentUrl: link.url });
+  } catch (err) {
+    return orderError(c, err, "Payment could not be started");
+  }
+});
+
+hotelRoutes.get("/orders/:id/cancel-quote", async (c) => {
+  try {
+    const deps = await orderDeps(c, 0);
+    const order = await refreshOrder(deps, await accessibleOrder(c, deps), true);
+    return c.json({ quote: cancelQuote(order), order: publicOrder(order) });
+  } catch (err) {
+    return orderError(c, err, "Could not load the cancellation terms");
+  }
+});
+
+hotelRoutes.post("/orders/:id/cancel", zValidator("json", z.object({ confirm: z.literal(true), expectedCharge: z.number().min(0) })), async (c) => {
+  const { expectedCharge } = c.req.valid("json");
+  try {
+    const deps = await orderDeps(c, 15_000);
+    const order = await refreshOrder(deps, await accessibleOrder(c, deps), true);
+    const result = await cancelOrder(deps, order, expectedCharge);
+    return c.json({ order: publicOrder(result) });
+  } catch (err) {
+    return orderError(c, err, "Could not cancel the hotel booking");
   }
 });
 

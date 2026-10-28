@@ -3,6 +3,8 @@
 import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { readPrefCurrency, savePrefCurrency } from "../lib/currency-pref";
+import { encodeOccupancy, type RoomOccupancy } from "@tripcod/suppliers/hotel-occupancy";
+import { GuestRooms } from "./GuestRooms";
 
 const CITIES = [
   { code: "DXB", city: "Dubai",         country: "AE" },
@@ -129,8 +131,8 @@ export default function HotelsPage() {
   const [city,     setCity]     = useState<City | null>(null);
   const [checkIn,  setCheckIn]  = useState("");
   const [checkOut, setCheckOut] = useState("");
-  const [rooms,    setRooms]    = useState(1);
-  const [adults,   setAdults]   = useState(1);
+  // Room-wise guests: adults, children and each child's age per room.
+  const [occupancy, setOccupancy] = useState<RoomOccupancy[]>([{ adults: 1, childAges: [] }]);
   const [currency, setCurrencyState] = useState<CurrencyCode>("INR");
   // Same currency as flights: chosen once for the visit.
   useEffect(() => { const c = readPrefCurrency(); if (c === "INR" || c === "AED" || c === "USD") setCurrencyState(c); }, []);
@@ -165,8 +167,7 @@ export default function HotelsPage() {
       cityName: city.city,
       checkIn,
       checkOut,
-      rooms:    String(rooms),
-      adults:   String(adults),
+      occ:      encodeOccupancy(occupancy),
       currency,
       nationality,
     });
@@ -230,18 +231,7 @@ export default function HotelsPage() {
                 </div>
               </div>
               <div className="hw-occupancy">
-              <label className="hw-select-label">
-                <span>Rooms</span>
-                <select className="hw-select" value={rooms} onChange={(e) => setRooms(Number(e.target.value))}>
-                  {[1, 2, 3, 4, 5].map((n) => <option key={n} value={n}>{n}</option>)}
-                </select>
-              </label>
-              <label className="hw-select-label">
-                <span>Adults/room</span>
-                <select className="hw-select" value={adults} onChange={(e) => setAdults(Number(e.target.value))}>
-                  {[1, 2, 3, 4].map((n) => <option key={n} value={n}>{n}</option>)}
-                </select>
-              </label>
+                <GuestRooms value={occupancy} onChange={setOccupancy} />
               </div>
               <button type="submit" className={searching ? "hw-search-btn search-btn-loading" : "hw-search-btn"} disabled={searching}>
                 {searching
@@ -267,7 +257,7 @@ export default function HotelsPage() {
 
           <div className="hw-perks">
             <span>✓ Destination and date search</span>
-            <span>✓ Room details in results</span>
+            <span>✓ Different guests in each room</span>
             <span>✓ Cancellation terms shown per stay</span>
           </div>
         </div>
@@ -347,7 +337,7 @@ const css = `
 .hw-cur-active, .hw-cur-active:hover { background: #4B4D4F; border-color: #4B4D4F; color: white; }
 .hw-nat { display: inline-flex; align-items: center; gap: 8px; margin-top: 12px; font-size: 12px; color: #53647a; font-weight: 650; }
 .hw-nat select { border: 1px solid #d0d5dd; border-radius: 8px; padding: 6px 8px; font-size: 13px; background: #fff; color: #1e293b; max-width: 220px; }
-.hw-occupancy { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: 10px; min-width: 0; }
+.hw-occupancy { min-width: 0; }
 .hw-select-label { display: flex; flex-direction: column; gap: 6px; min-width: 0; font-size: 10px; color: #53647a; font-weight: 750; text-transform: uppercase; letter-spacing: .045em; }
 .hw-select {
   width: 100%; min-width: 0; min-height: 47px; border: 1px solid #d8e2ec; border-radius: 9px; padding: 8px 10px;

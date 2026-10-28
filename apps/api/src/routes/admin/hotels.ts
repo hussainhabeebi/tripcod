@@ -8,6 +8,19 @@ import { parseHotelBookingDetails } from "@tripcod/suppliers";
 import type { Env, Variables } from "../../types.js";
 import { cityIndexStatus, hotelClient, hotelExchanges, hotelRecorder, syncCityIndex } from "../../lib/hotels.js";
 import { hotelError, logged, pollDetails } from "../hotel.js";
+import { applySupplierStatus } from "../../lib/hotel-orders.js";
+import { hotelOrderDeps } from "../../lib/hotel-order-store.js";
+
+// Keeps a website hotel order (if this TripJack booking has one) in step with the supplier.
+async function syncOrder(c: any, bookingId: string, details: ReturnType<typeof parseHotelBookingDetails> | null) {
+  try {
+    const deps = await hotelOrderDeps(c.env, c.get("db"), c.get("tenantId"));
+    const order = await deps.store.bySupplierBooking(c.get("tenantId"), bookingId);
+    if (order && details) await applySupplierStatus(deps, order, details);
+  } catch (err) {
+    console.error(`[admin-hotels] order sync for ${bookingId} failed`, err);
+  }
+}
 
 export const hotelsAdminRoutes = new Hono<{ Bindings: Env; Variables: Variables }>();
 // Booking actions keep raw request / response logs (the city sync pages are too large to keep).
@@ -61,6 +74,7 @@ hotelsAdminRoutes.post("/bookings/:bookingId/confirm", zValidator("json", z.obje
   try {
     await logged(c, "/oms/v3/hotel/confirm-book", { bookingId, amount }, () => client.confirmBook(bookingId, amount));
     const details = await pollDetails(c, client, bookingId, 20_000);
+    await syncOrder(c, bookingId, details);
     return c.json({ bookingId, status: details?.status ?? "IN_PROGRESS", details });
   } catch (err) {
     return hotelError(c, err, "Could not confirm the hotel booking");
@@ -73,6 +87,7 @@ hotelsAdminRoutes.post("/bookings/:bookingId/cancel", async (c) => {
   try {
     await logged(c, "/oms/v3/hotel/cancel-booking", { bookingId }, () => client.cancel(bookingId));
     const details = parseHotelBookingDetails(await client.bookingDetails(bookingId).catch(() => ({})));
+    await syncOrder(c, bookingId, details);
     return c.json({ bookingId, status: details.status || "CANCELLATION_REQUESTED", details });
   } catch (err) {
     return hotelError(c, err, "Could not cancel the hotel booking");
