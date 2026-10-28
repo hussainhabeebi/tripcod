@@ -1,0 +1,71 @@
+name: Hotel release - read-only credential and checkpoint preflight
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [codex/hotel-city-sync-resume]
+    paths: [.github/workflows/hotel-release-preflight.yml]
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    name: Read deployed API/Admin versions and hotel checkpoint
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - name: Verify existing credentials using GET requests only
+        shell: python
+        run: |
+          import hashlib, json, os, urllib.request, urllib.error
+          token = os.environ.get("CLOUDFLARE_API_TOKEN", "")
+          account = os.environ.get("CLOUDFLARE_ACCOUNT_ID", "")
+          if not token or not account:
+              raise SystemExit("Existing Cloudflare deployment secrets are missing or unavailable to this workflow.")
+          base = "https://api.cloudflare.com/client/v4/accounts/" + account
+          def get(path, optional=False):
+              request = urllib.request.Request(base + path, headers={"Authorization": "Bearer " + token}, method="GET")
+              try:
+                  with urllib.request.urlopen(request, timeout=60) as response:
+                      data = response.read(32 * 1024 * 1024 + 1)
+                      if len(data) > 32 * 1024 * 1024:
+                          raise SystemExit("Read-only preflight stopped: object exceeds runner inspection size guard.")
+                      return data, response.headers
+              except urllib.error.HTTPError as error:
+                  if optional and error.code == 404:
+                      return None, {}
+                  raise SystemExit("Cloudflare read access failed: HTTP " + str(error.code) + " for " + path.split("/objects/")[0])
+          for worker in ("tripcod-api", "tripcod-admin"):
+              data, _ = get("/workers/scripts/" + worker + "/deployments")
+              payload = json.loads(data)
+              if not payload.get("success"):
+                  raise SystemExit("Could not read deployed Worker version metadata.")
+              deployments = payload["result"]["deployments"]
+              if not deployments:
+                  raise SystemExit("No recorded deployment; rollback gate remains blocked.")
+              print(json.dumps({"worker": worker, "deploymentId": deployments[0]["id"], "versions": deployments[0]["versions"]}))
+          data, _ = get("/workers/scripts/tripcod-api/settings")
+          settings = json.loads(data).get("result", {})
+          print(json.dumps({"worker": "tripcod-api", "configuredLimits": settings.get("limits"), "migrationTag": settings.get("migration_tag"), "note": "No hosted memory/plan certification; no settings changed."}))
+          found = False
+          for key in ("city-regions.partial.json", "city-regions.sync-v2.json", "city-regions.json", "city-regions.v2.json"):
+              data, headers = get("/r2/buckets/tripcod-documents/objects/hotel-static/" + key, optional=True)
+              if data is None:
+                  print(json.dumps({"object": key, "exists": False}))
+                  continue
+              value = json.loads(data)
+              summary = {"object": key, "exists": True, "bytes": len(data), "etag": headers.get("ETag"), "sha256": hashlib.sha256(data).hexdigest(), "pages": value.get("pages"), "regions": value.get("count"), "cursorPresent": bool(value.get("cursor")), "complete": value.get("complete", False)}
+              if key in ("city-regions.partial.json", "city-regions.sync-v2.json"):
+                  found = True
+                  if not isinstance(value.get("pages"), int) or value["pages"] < 152:
+                      raise SystemExit("Saved checkpoint is below the reported152 pages. Stop; do not reset or deploy.")
+                  if not value.get("complete") and not value.get("exhausted") and not value.get("cursor"):
+                      raise SystemExit("Saved cursor missing. Stop; preserve all data.")
+              print(json.dumps(summary))
+          if not found:
+              raise SystemExit("No saved checkpoint found; production release remains blocked.")
+          print("Read-only preflight complete. No deployment, supplier request, sync continuation, credential edit or data write was performed.")
