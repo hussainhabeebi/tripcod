@@ -90,3 +90,5 @@ jobs:
           if not found:
               raise SystemExit("No saved checkpoint found; production release remains blocked.")
           print("Read-only preflight complete. No deployment, supplier request, sync continuation, credential edit or data write was performed.")
+
+# Recheck after owner-confirmed Workers Paid activation, 2026-10-28.
