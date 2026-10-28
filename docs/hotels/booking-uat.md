@@ -9,7 +9,7 @@ Flow: **Search (room-wise guests) → Results → Room selection → Checkout (g
 | Search | Rooms & guests picker: per-room adults (1–9), children (0–4) with an age (0–17) for every child, up to 9 rooms. URL `occ=2_4_9-3_7-2_1`; older `rooms`/`adults` links still work. Sent to TripJack as `rooms: [{ adults, children, childAge }]`. API rejects a child without an age. |
 | Room selection | New `/hotels/hotel` page: every `/hms/v3/hotel/pricing` option for the occupancy, room names per room, meal, PAN / passport flags, full cancellation policy. |
 | Checkout | `/hotels/book`: Review (live price + TripJack bookingId), room-wise guest forms (adults + children), PAN (Indian guests: lead guest when the option needs it or the hotel is outside India), passport when required, cancellation policy, taxes and total, Instant or Hold (Hold only when Review returns `onholdAllowed`), Card (existing Nomod) or Wallet (existing INR customer wallet, full cover only). No UPI / app option: the active gateway has none (Razorpay is switched off). |
-| Orders API | `/api/hotels/orders*` (see `apps/api/src/routes/hotel.ts`). Price, hotel and occupancy come from a server-side Review snapshot (KV, 30 min), never the browser. The old public `POST /api/hotels/book` (instant booking with no customer payment) is removed. |
+| Orders API | `/api/hotels/orders*` (see `apps/api/src/routes/hotel.ts`). Orders live in **Cloudflare D1** (`tripcod-hotels`, binding `HOTEL_DB`, schema `apps/api/d1-migrations/`), not Neon. Price, hotel and occupancy come from a server-side Review snapshot (KV, 30 min), never the browser. The old public `POST /api/hotels/book` (instant booking with no customer payment) is removed. |
 | Booking details | `/hotels/booking/[id]`: live status from Booking Details, hold deadline (`ddt`), payment / refund state, pay or confirm a held booking, cancel with the policy charge and an explicit confirmation. |
 | My Trips | "Hotel stays" list for signed-in customers. |
 | Admin | Existing confirm / cancel routes also update the matching website order. |
@@ -27,9 +27,26 @@ Flow: **Search (room-wise guests) → Results → Room selection → Checkout (g
 
 Domestic + international instant booking · hold and confirm · hold cancellation · expired hold auto-cancelled by supplier · paid hold released before confirm (refund) · cancellation within and outside the deadline · cancel accepted but still SUCCESS · rejected cancellation · multiple rooms with different adults/children (2+2, 3+1, 2+1) · PAN rules · duplicate payment / webhook / queue retry · timeout without resubmission.
 
+## Databases: D1 for hotel orders, Neon for everything else
+
+| Data | Where | Link |
+| --- | --- | --- |
+| Hotel orders, holds, cancellations, payment refs (Nomod link / charge ids, wallet debit ref) | D1 `hotel_bookings` | — |
+| Customers (`users`), tenants | Neon | D1 keeps `user_id` / `tenant_id` as plain text (no cross-database FK). Customers are never deleted by the app (only agency staff), so orders can't be orphaned that way. |
+| Wallet balance + ledger | Neon | D1 `payment_order_id` = Neon `wallet_transactions.payment_id` of the debit; refund credit uses `hotel_refund_<debit ref>`. |
+| Flight bookings, flight payments | Neon (unchanged) | none — hotel orders never write `bookings` / `payments`. |
+| Supplier logs / raw exchanges | Neon (unchanged) | keyed by TripJack booking id / order id. |
+
+Cross-database risks and how they are handled:
+
+- **Wallet debit (Neon) + order PAID (D1) are two writes.** The D1 claim stores the debit ref *before* Neon is touched. A wallet payment still `PENDING` after 60 s is settled from the Neon ledger (`reconcileWalletPayment`): debit found → `PAID` and booked; not found → slot released. Runs on every order read and payment attempt.
+- **Refund credit twice.** The wallet refund checks the Neon ledger for `hotel_refund_<debit ref>` first, and the D1 claim (`PAID → REFUND_PENDING`) lets only one caller refund.
+- **Nomod webhook.** Flight payments are matched in Neon first; only unmatched link ids are looked up in D1. Nomod link ids are unique, so no event can match both.
+- **No Neon hotel table.** Neon migration `0012_hotel_bookings.sql` was removed before it was ever applied (the earlier release stopped at its backup gate), so the normal `deploy.yml` migration loop never creates it.
+
 ## Release gates (not done in this change)
 
-1. **Migration** `packages/db/drizzle/migrations/0012_hotel_bookings.sql` (new table only) must be applied before the API is released; order routes fail without it.
+1. **D1 migration** `apps/api/d1-migrations/0001_hotel_bookings.sql` (`wrangler d1 migrations apply tripcod-hotels --remote`) must be applied before the API is released; D1 Time Travel gives the restore point.
 2. **Deployment** is pending. A push to `main` normally runs the broad `deploy.yml` (all migrations + API, web, portal, admin). Release only API + web + this migration through an approved, targeted procedure.
 3. **Live UAT** has not been run: no TripJack, Nomod or wallet request was made. Run the scenarios above against TripJack UAT with UAT credentials; check child traveller titles (`Master` / `Miss`) and PAN handling against TripJack's responses.
 4. The Nomod webhook must keep reaching `/webhooks/nomod`; hotel orders are matched by the stored link id.
