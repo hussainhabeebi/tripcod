@@ -1,0 +1,71 @@
+name: Hotel wallet payment investigation (read-only)
+
+# TJP209903275079: wallet shows paid, booking shows "Awaiting payment".
+# Read-only: D1 SELECT, Neon read-only session, R2 GET, TripJack Booking Details.
+# Prints statuses / amounts / times / codes only — no names, contacts or keys (public repo).
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [verify/hotel-wallet-tjp209903275079]
+    paths: [.github/workflows/hotel-wallet-investigate.yml]
+
+permissions:
+  contents: read
+
+env:
+  BOOKING: TJP209903275079
+  CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+  CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+  WRANGLER_SEND_METRICS: "false"
+
+jobs:
+  investigate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: D1 order
+        run: |
+          npx -y wrangler@4.86.0 d1 execute tripcod-hotels --remote --json --command \
+            "SELECT id, mode, status, supplier_status, payment_status, payment_gateway, payment_order_id, amount, currency, paid_at, supplier_submitted_at, confirm_submitted_at, refund_amount, refund_note, last_error, last_checked_at, created_at, updated_at, user_id IS NOT NULL AS signed_in FROM hotel_bookings WHERE supplier_booking_id = '$BOOKING'" \
+            | python3 -c "import json,sys;r=json.load(sys.stdin)[0]['results'];print(json.dumps(r,indent=1));open('order_id.txt','w').write(r[0]['id'] if r else '');open('tenant.txt','w').write('')"
+      - name: Neon — wallet ledger, supplier logs (read-only)
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          PGOPTIONS: "-c default_transaction_read_only=on"
+        run: |
+          sudo apt-get install -y postgresql-client >/dev/null 2>&1 || true
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -v o="$(cat order_id.txt)" -v b="$BOOKING" -A -F ' | ' <<'SQL'
+          \echo == wallet transactions for the order ==
+          SELECT type, amount, balance_before, balance_after, payment_id, created_at FROM wallet_transactions
+           WHERE booking_id = :'o' OR payment_id LIKE 'hotel_%' || :'o' || '%' ORDER BY created_at;
+          \echo == supplier_api_logs mentioning the booking / order ==
+          SELECT endpoint, level, http_status, error_code, left(coalesce(error_message, ''), 160) AS error, created_at FROM supplier_api_logs
+           WHERE request_summary::text LIKE '%' || :'b' || '%' OR request_summary::text LIKE '%' || :'o' || '%' ORDER BY created_at;
+          SQL
+          psql "$DATABASE_URL" -At -v b="$BOOKING" > tenant.txt <<'SQL'
+          SELECT tenant_id FROM supplier_api_logs WHERE request_summary::text LIKE '%' || :'b' || '%' LIMIT 1;
+          SQL
+      - name: R2 — raw files and Book / Booking Details response status fields
+        shell: python
+        run: |
+          import json, os, urllib.parse, urllib.request
+          base = "https://api.cloudflare.com/client/v4/accounts/" + os.environ["CLOUDFLARE_ACCOUNT_ID"] + "/r2/buckets/tripcod-documents/objects"
+          H = {"Authorization": "Bearer " + os.environ["CLOUDFLARE_API_TOKEN"]}
+          tenant, b = open("tenant.txt").read().strip(), os.environ["BOOKING"]
+          if not tenant: raise SystemExit("no tenant found")
+          prefix = f"api-logs/{tenant}/booking-{b}/"
+          keys = [o["key"] for o in json.load(urllib.request.urlopen(urllib.request.Request(base + "?" + urllib.parse.urlencode({"prefix": prefix, "per_page": 1000}), headers=H)))["result"]]
+          for k in sorted(keys):
+              name = k[len(prefix):]
+              line = {"file": name}
+              if name.endswith("-response.json") and ("hotel-book-" in name or "confirm-book" in name or "booking-details" in name):
+                  d = json.loads(urllib.request.urlopen(urllib.request.Request(base + "/" + urllib.parse.quote(k, safe=""), headers=H)).read())
+                  line.update({"statusSuccess": (d.get("status") or {}).get("success"), "orderStatus": (d.get("order") or {}).get("status"),
+                               "orderAmount": (d.get("order") or {}).get("amount"),
+                               "errors": [{"code": e.get("errCode"), "message": str(e.get("message", ""))[:120]} for e in (d.get("errors") or [])][:3]})
+              print(json.dumps(line))
+      - name: TripJack status now (read-only Booking Details; status fields only)
+        run: |
+          curl -sS -m 60 -A "Mozilla/5.0" -H 'x-tenant-slug: tripcod' "https://api.tripcod.com/api/hotels/bookings/$BOOKING" -o bd.json -w "http=%{http_code}\n"
+          python3 -c "import json;d=json.load(open('bd.json'));print(json.dumps({k:d.get(k) for k in ('bookingId','status','pending','amount','totalPrice','confirmationNo','errorCode','error')}))"
