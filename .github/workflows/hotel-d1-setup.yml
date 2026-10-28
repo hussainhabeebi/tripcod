@@ -1,0 +1,47 @@
+name: Hotel D1 setup (create empty tripcod-hotels, verify Time Travel)
+
+# Creates the empty D1 database for website hotel orders if it does not exist,
+# and reads its Time Travel bookmark. Touches no Worker, Neon data or other resource.
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [release/hotel-d1-setup]
+    paths: [.github/workflows/hotel-d1-setup.yml]
+
+permissions:
+  contents: read
+
+jobs:
+  setup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      WRANGLER_SEND_METRICS: "false"
+    steps:
+      - name: D1 access, create-if-missing, report id
+        shell: python
+        run: |
+          import json, os, urllib.request, urllib.error
+          base = "https://api.cloudflare.com/client/v4/accounts/" + os.environ["CLOUDFLARE_ACCOUNT_ID"]
+          def call(path, payload=None):
+              r = urllib.request.Request(base + path, data=None if payload is None else json.dumps(payload).encode(), method="GET" if payload is None else "POST",
+                  headers={"Authorization": "Bearer " + os.environ["CLOUDFLARE_API_TOKEN"], "Content-Type": "application/json"})
+              try:
+                  with urllib.request.urlopen(r, timeout=60) as res: return json.load(res)
+              except urllib.error.HTTPError as e:
+                  raise SystemExit(f"BLOCKER: Cloudflare D1 API {path} → HTTP {e.code}: {e.read()[:300]!r} (token may lack D1 permission)")
+          found = [d for d in call("/d1/database?name=tripcod-hotels")["result"] if d.get("name") == "tripcod-hotels"]
+          if found:
+              db = found[0]; print("existing database")
+          else:
+              db = call("/d1/database", {"name": "tripcod-hotels"})["result"]; print("created empty database")
+          info = call(f"/d1/database/{db['uuid']}")["result"]
+          print("D1_DATABASE_ID=" + db["uuid"])
+          print(json.dumps({"name": info.get("name"), "tables": info.get("num_tables"), "sizeBytes": info.get("file_size"), "version": info.get("version"), "region": info.get("running_in_region")}))
+      - name: Time Travel (backup / point-in-time recovery) bookmark
+        run: |
+          npx -y wrangler@4.86.0 d1 time-travel info tripcod-hotels --json | tee tt.json
+          grep -q '"bookmark"' tt.json && echo TIME_TRAVEL_VERIFIED || { echo "BLOCKER: no Time Travel bookmark"; exit 1; }
