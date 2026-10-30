@@ -179,6 +179,8 @@ jobs:
           echo "PHONEPE enum value present: $(q "SELECT EXISTS (SELECT 1 FROM pg_enum e JOIN pg_type t ON t.oid=e.enumtypid WHERE t.typname='payment_gateway' AND e.enumlabel='PHONEPE')")"
           echo "payments.environment present: $(q "SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='payments' AND column_name='environment')")"
           echo "payment_events present: $(q "SELECT to_regclass('payment_events') IS NOT NULL")"
+          echo "0012 indexes present: $(q "SELECT COALESCE(string_agg(indexname, ', '), 'none') FROM pg_indexes WHERE indexname IN ('payments_gateway_order_idx','payments_one_capture_per_booking_idx')")"
+          if [ "$(q "SELECT to_regclass('payment_events') IS NOT NULL")" = t ]; then echo "payment_events rows: $(q "SELECT count(*) FROM payment_events")"; fi
           dup_orders=$(q "SELECT count(*) FROM (SELECT gateway, gateway_order_id FROM payments WHERE gateway_order_id IS NOT NULL GROUP BY 1,2 HAVING count(*) > 1) d")
           dup_capture=$(q "SELECT count(*) FROM (SELECT booking_id FROM payments WHERE status='SUCCESS' AND gateway::text IN ('NOMOD','PHONEPE','RAZORPAY') GROUP BY 1 HAVING count(*) > 1) d")
           echo "Duplicate gateway order ids: $dup_orders · bookings with >1 captured card payment: $dup_capture"
@@ -257,7 +259,15 @@ jobs:
         if: env.MODE == 'release'
         run: |
           curl -fsS https://api.tripcod.com/health
-          opts=$(curl -fsS -H "x-tenant-slug: tripcod" https://api.tripcod.com/api/checkout/payment-options); echo "$opts"
+          # Activation takes a few seconds to reach the edge, and the previous version has
+          # no /api/checkout/payment-options route: wait (max 90 s) until the new one answers.
+          opts=""
+          for i in $(seq 1 18); do
+            opts=$(curl -fsS -H "x-tenant-slug: tripcod" https://api.tripcod.com/api/checkout/payment-options) && break
+            opts=""; sleep 5
+          done
+          test -n "$opts" || { echo "New API version not serving after 90 s"; exit 1; }
+          echo "$opts"
           echo "$opts" | python3 -c 'import json,sys; g=json.load(sys.stdin)["gateways"]; assert g["PHONEPE"] is False, "PhonePe is offered"; print("PhonePe off; Nomod", g["NOMOD"])'
           # D1 reachable from the new API: an unknown order is a clean 404, not a 500.
           code=$(curl -s -o /dev/null -w "%{http_code}" -H "x-tenant-slug: tripcod" https://api.tripcod.com/api/hotels/orders/release-probe-00000000)
