@@ -1,0 +1,61 @@
+name: TripJack egress check (read-only)
+
+# Read-only: which host the API Worker sends TripJack calls to, what the gateway
+# forwards to, and TripJack's address families. Hostnames / statuses only (public logs).
+on:
+  push:
+    branches: [verify/tripjack-egress]
+    paths: [.github/release/egress-run.txt]
+
+permissions:
+  contents: read
+
+env:
+  CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+  CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+  DATABASE_URL: ${{ secrets.DATABASE_URL }}
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Gateway health / ready (public endpoints)
+        run: |
+          for p in health ready; do curl -sS -m 20 -D - "https://proxy.tripcod.com/$p" | grep -iE '^(HTTP|server|cf-ray|via)|status|upstream' || true; echo; done
+          echo "unauthenticated route →" $(curl -sS -m 20 -o /dev/null -w "%{http_code}" -X POST https://proxy.tripcod.com/fms/v1/review)
+      - name: Worker TripJack settings (names / hosts only)
+        shell: python
+        run: |
+          import json, os, urllib.request, urllib.parse
+          base = "https://api.cloudflare.com/client/v4/accounts/" + os.environ["CLOUDFLARE_ACCOUNT_ID"]
+          def get(p, raw=False):
+              r = urllib.request.Request(base + p, headers={"Authorization": "Bearer " + os.environ["CLOUDFLARE_API_TOKEN"]})
+              with urllib.request.urlopen(r, timeout=60) as res: return res.read() if raw else json.load(res)["result"]
+          names = sorted(s["name"] for s in get("/workers/scripts/tripcod-api/secrets") if "TRIPJACK" in s["name"])
+          print("tripcod-api TripJack secrets present:", names)
+          for b in get("/workers/scripts/tripcod-api/settings").get("bindings", []):
+              if "TRIPJACK" in b["name"]:
+                  v = b.get("text", "")
+                  print("plain var", b["name"], "→", urllib.parse.urlparse(v).netloc if v.startswith("http") else "(set)")
+          tenant = "4c86636b-fb0a-4948-92ff-d62d602642b8"
+          try:
+              s = json.loads(get(f"/storage/kv/namespaces/80e6bb7866794b1ea4eef2e1a4065040/values/admin_settings:{tenant}:integration:tripjack", raw=True))
+              print("Admin TripJack setting:", {"enabled": s.get("enabled"), "environment": s.get("environment"), "savedBaseUrlHost": urllib.parse.urlparse(s.get("baseUrl") or "").netloc})
+          except Exception as e: print("Admin TripJack setting: not readable", type(e).__name__)
+      - name: Host the Worker actually called for recent flight requests (from raw logs)
+        run: |
+          psql "$DATABASE_URL" -At <<'SQL' > keys.txt
+          select request_key from supplier_exchanges where endpoint like '/fms/%' or endpoint like '/oms/v1/%' or endpoint like '/air-search%' order by started_at desc limit 5;
+          SQL
+          while read -r k; do
+            [ -z "$k" ] && continue
+            curl -sS -m 30 -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+              "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/r2/buckets/tripcod-documents/objects/$(python3 -c 'import sys,urllib.parse;print(urllib.parse.quote(sys.argv[1],safe=""))' "$k")" \
+              | python3 -c 'import sys,json,urllib.parse
+          try: d=json.load(sys.stdin); u=urllib.parse.urlparse(d.get("url","")); print("called", u.netloc, u.path, d.get("at") or "")
+          except Exception: print("called (unreadable)")'
+          done < keys.txt
+      - name: TripJack hosts — address families (context only)
+        run: |
+          for h in apitest.tripjack.com api.tripjack.com; do echo "$h A: $(dig +short A $h | tr '\n' ' ') AAAA: $(dig +short AAAA $h | tr '\n' ' ')"; done
