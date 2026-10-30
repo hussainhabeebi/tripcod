@@ -71,6 +71,10 @@ export interface HotelOrderDeps {
   enqueue: (orderId: string) => Promise<void>;
   // Neon wallet ledger lookup by payment_id (the order lives in D1, the money in Neon).
   walletDebited?: (paymentRef: string) => Promise<boolean>;
+  // PhonePe order status (the source of truth for a UPI payment; webhooks only trigger it).
+  phonepeStatus?: (merchantOrderId: string) => Promise<{ state: string; amountPaise: number; transactionId: string | null } | null>;
+  // Admin → Transactions ledger (Neon payment_events).
+  ledger?: (order: HotelOrder, event: string, fields?: { status?: string; amount?: number | string; gatewayRef?: string | null; message?: string }) => Promise<void>;
   now?:    () => number;
   sleep?:  (ms: number) => Promise<void>;
   pollMs?: number;   // how long to wait for a terminal TripJack status
@@ -339,7 +343,7 @@ export function deadlinePassed(deadline: string, now = Date.now()): boolean {
 }
 
 // Claims the single payment slot: UNPAID / REFUNDED → PENDING for this gateway.
-export async function claimPayment(store: HotelOrderStore, order: HotelOrder, gateway: "NOMOD" | "WALLET", paymentOrderId: string | null) {
+export async function claimPayment(store: HotelOrderStore, order: HotelOrder, gateway: "NOMOD" | "WALLET" | "PHONEPE", paymentOrderId: string | null) {
   return store.update(order.id, {
     paymentStatus: "PENDING", paymentGateway: gateway, paymentOrderId, paymentRef: null, paymentUrl: null, refundAmount: null, refundNote: null,
   }, { paymentStatus: ["UNPAID", "REFUNDED"] });
@@ -350,12 +354,36 @@ export async function releasePayment(store: HotelOrderStore, order: HotelOrder) 
 }
 
 // Payment captured (Nomod webhook / wallet debit): mark PAID once, then queue the supplier step.
-export async function recordPaid(deps: Pick<HotelOrderDeps, "store" | "enqueue" | "now">, order: HotelOrder, paymentRef: string): Promise<HotelOrder | null> {
+export async function recordPaid(deps: Pick<HotelOrderDeps, "store" | "enqueue" | "now" | "ledger">, order: HotelOrder, paymentRef: string): Promise<HotelOrder | null> {
   const paid = await deps.store.update(order.id, {
     paymentStatus: "PAID", paymentRef, paidAt: new Date(deps.now?.() ?? Date.now()), paymentUrl: null,
   }, { paymentStatus: ["PENDING"] });
-  if (paid) await deps.enqueue(paid.id);
+  if (paid) {
+    await deps.ledger?.(paid, "CAPTURED", { status: "SUCCESS", amount: paid.amount, gatewayRef: paymentRef });
+    await deps.enqueue(paid.id);
+  }
   return paid;
+}
+
+// A PhonePe (UPI) payment is confirmed only by PhonePe's order-status API, with
+// the exact amount in paise; a failed / expired order frees the payment slot.
+export async function reconcilePhonePePayment(deps: HotelOrderDeps, order: HotelOrder): Promise<HotelOrder> {
+  if (order.paymentStatus !== "PENDING" || order.paymentGateway !== "PHONEPE" || !order.paymentOrderId || !deps.phonepeStatus) return order;
+  const st = await deps.phonepeStatus(order.paymentOrderId).catch((err) => { console.error(`[hotel-order] PhonePe status ${order.paymentOrderId}`, err); return null; });
+  if (!st) return order;
+  if (st.state === "COMPLETED") {
+    if (order.currency !== "INR" || st.amountPaise !== Math.round(Number(order.amount) * 100)) {
+      await deps.ledger?.(order, "AMOUNT_MISMATCH", { status: "MANUAL_REVIEW", amount: st.amountPaise / 100, gatewayRef: order.paymentOrderId,
+        message: `Expected ${order.currency} ${Number(order.amount).toFixed(2)}, PhonePe reported INR ${(st.amountPaise / 100).toFixed(2)} — not booked` });
+      return (await deps.store.update(order.id, { lastError: "PhonePe amount mismatch — check Admin → Transactions" }, { paymentStatus: ["PENDING"] })) ?? order;
+    }
+    return (await recordPaid(deps, order, st.transactionId || order.paymentOrderId)) ?? order;
+  }
+  if (st.state === "FAILED") {
+    await deps.ledger?.(order, "FAILED", { status: "FAILED", gatewayRef: order.paymentOrderId, message: "PhonePe order failed or expired" });
+    return (await releasePayment(deps.store, order)) ?? order;
+  }
+  return order;
 }
 
 // Sends a paid order to TripJack: book (instant) or confirm-book (hold). Safe to
@@ -399,6 +427,7 @@ export async function reconcileWalletPayment(deps: HotelOrderDeps, order: HotelO
 
 export async function refreshOrder(deps: HotelOrderDeps, order: HotelOrder, force = false): Promise<HotelOrder> {
   order = await reconcileWalletPayment(deps, order);
+  order = await reconcilePhonePePayment(deps, order);
   const now = deps.now?.() ?? Date.now();
   // Paid but never sent (queue message lost): recover after a minute.
   if (order.paymentStatus === "PAID" && order.paidAt && now - order.paidAt.getTime() > 60_000

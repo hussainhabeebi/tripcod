@@ -15,7 +15,8 @@ import { resolveFlightSuppliers } from "./routes/search.js";
 import {
   acquireBookingLock, errorDetail, explainMissingPnr, isTestBooking, logBookingEvent, recordBookingError, recordQueueReceipt, releaseBookingLock,
 } from "./lib/booking-recovery.js";
-import { createRazorpayOrder, createNomodCheckout, createRefundRazorpay, RAZORPAY_ENABLED, refundNomodCharge, resolveNomodApiKey } from "./lib/payment-gateway.js";
+import { createRazorpayOrder, createNomodCheckout, createRefundRazorpay, RAZORPAY_ENABLED } from "./lib/payment-gateway.js";
+import { refundPayment } from "./lib/payment-core.js";
 import { creditBookingBonus, creditWallet } from "./lib/customer-wallet.js";
 import { rewardReferral } from "./lib/referral.js";
 import { agentWallet, creditAgentWallet, settleAgentBooking } from "./lib/agent-program.js";
@@ -337,14 +338,15 @@ async function triggerAutoRefund(
     return;
   }
 
+  // The captured card/UPI charge for this booking (never a failed or older attempt).
   const [payment] = await db
-    .select({ gateway: payments.gateway, gatewayOrderId: payments.gatewayOrderId, amount: payments.amount, currency: payments.currency })
+    .select()
     .from(payments)
-    .where(eq(payments.bookingId, bookingId))
+    .where(and(eq(payments.bookingId, bookingId), eq(payments.status, "SUCCESS")))
     .limit(1);
 
   if (!payment) {
-    console.warn(`[autoRefund] No payment record for booking ${bookingId}`);
+    console.warn(`[autoRefund] No captured payment for booking ${bookingId}`);
     return;
   }
 
@@ -363,30 +365,13 @@ async function triggerAutoRefund(
       await db.update(payments).set({
         status:    "REFUNDED",
         updatedAt: new Date(),
-      }).where(eq(payments.bookingId, bookingId));
+      }).where(eq(payments.id, payment.id));
       console.info(`[autoRefund] Razorpay refund ${refundId} issued for booking ${bookingId}`);
-    } else if (payment.gateway === "NOMOD") {
-      const [bk] = await db.select({ tenantId: bookings.tenantId }).from(bookings).where(eq(bookings.id, bookingId)).limit(1);
-      const apiKey = bk ? await resolveNomodApiKey(env, bk.tenantId) : env.NOMOD_API_KEY;
-      if (!apiKey) {
-        console.error("[autoRefund] Nomod API key not configured; refund manually from the Nomod dashboard");
-        return;
-      }
-      // Refund the full charge in the currency it was taken in (may be AED).
-      const chargeAmount = Number(payment.amount);
-      const outcome = await refundNomodCharge(apiKey, gatewayPaymentId, chargeAmount, "Booking could not be ticketed");
-      if (!outcome.ok) {
-        console.error(`[autoRefund] Nomod refund for booking ${bookingId} not confirmed: ${outcome.error}`);
-        return;
-      }
-      await db.update(payments).set({
-        status:           "REFUNDED",
-        refundedAmount:   chargeAmount.toFixed(2),
-        refundGatewayRef: `nomod:${outcome.refundId}`,
-        refundCompletedAt: new Date(),
-        updatedAt:        new Date(),
-      }).where(eq(payments.bookingId, bookingId));
-      console.info(`[autoRefund] Nomod refund ${outcome.refundId} issued for booking ${bookingId}`);
+    } else {
+      // Nomod / PhonePe: full charge, in the currency it was taken in (may be AED).
+      const outcome = await refundPayment(db, env, payment, { reason: "Booking could not be ticketed" });
+      if (outcome.ok) console.info(`[autoRefund] ${payment.gateway} refund ${outcome.refundRef} issued for booking ${bookingId}`);
+      else console.error(`[autoRefund] ${payment.gateway} refund for booking ${bookingId} not confirmed: ${outcome.error}`);
     }
   } catch (refundErr) {
     // Refund failure must never swallow the original booking failure — log and continue
@@ -417,7 +402,7 @@ async function handlePaymentCaptured(
     .where(eq(payments.gatewayOrderId, data.orderId))
     .limit(1);
 
-  if (!payment) {
+  if (!payment?.bookingId) {
     throw new Error(`Payment for order ${data.orderId} not found`);
   }
 

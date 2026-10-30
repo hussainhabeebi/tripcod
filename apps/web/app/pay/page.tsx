@@ -5,6 +5,7 @@
 
 import BookingProgress from "../components/BookingProgress";
 import { useEffect, useState } from "react";
+import PaymentMethodPicker, { usePaymentOptions, type OnlineGateway } from "../components/PaymentMethodPicker";
 
 const API = process.env.NEXT_PUBLIC_API_URL ?? "https://api.tripcod.com";
 
@@ -18,6 +19,8 @@ export default function PayHeldFarePage() {
   const [held, setHeld] = useState<Held | null>(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const paymentOptions = usePaymentOptions();
+  const [gateway, setGateway] = useState<OnlineGateway>("NOMOD");
 
   useEffect(() => {
     const q = new URLSearchParams(window.location.search);
@@ -37,7 +40,7 @@ export default function PayHeldFarePage() {
       const res = await fetch(`${API}/api/payments/checkout`, {
         method: "POST",
         headers: { "Content-Type": "application/json", "x-tenant-slug": "tripcod", "X-Checkout-Token": ids.t },
-        body: JSON.stringify({ bookingId: ids.b, gateway: "NOMOD" }),
+        body: JSON.stringify({ bookingId: ids.b, gateway: gateway === "PHONEPE" && held?.currency === "INR" ? "PHONEPE" : "NOMOD" }),
       });
       const d = await res.json().catch(() => ({}));
       if (!res.ok || !d.paymentUrl) throw new Error(d.error ?? "The payment page couldn't open. You have not been charged.");
@@ -73,6 +76,7 @@ export default function PayHeldFarePage() {
         </section>
       )}
       {error && <p role="alert" style={{ color: "#b91c1c" }}>{error}</p>}
+      {payable && <PaymentMethodPicker options={paymentOptions} currency={held.currency} value={gateway} onChange={setGateway} />}
       {payable && (
         <button type="button" onClick={pay} disabled={busy}
           style={{ width: "100%", height: 52, border: 0, borderRadius: 14, background: "#4B4D4F", color: "#fff", fontSize: 16, fontWeight: 800, cursor: "pointer", opacity: busy ? .7 : 1 }}>

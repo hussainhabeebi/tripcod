@@ -1,4 +1,4 @@
-// POST /api/payments/checkout  — create Razorpay order or NoMod payment link
+// POST /api/payments/checkout  — create a Nomod payment link or PhonePe PG v2 order (Razorpay disabled)
 // POST /api/payments/verify    — verify Razorpay signature and confirm booking
 // GET  /api/payments/checkout/:bookingId — poll payment status (used by queue-based flow)
 // GET  /api/payments/:bookingId — get raw payment record
@@ -12,6 +12,7 @@ import { eq, and } from "drizzle-orm";
 import type { Env, Variables } from "../types.js";
 import { issueTripToken } from "./trips.js";
 import { RAZORPAY_ENABLED } from "../lib/payment-gateway.js";
+import { createGatewayCheckout, gatewayAvailability, latestPayment, pendingPhonePe, reconcilePhonePe, webUrl } from "../lib/checkout-gateways.js";
 import { convertAmount, getAedRate } from "../lib/fx.js";
 
 export const paymentRoutes = new Hono<{ Bindings: Env; Variables: Variables }>();
@@ -43,13 +44,17 @@ paymentRoutes.get("/config", async (c) => {
   const tenantId = c.get("tenantId");
   const settings = await getTenantPaymentSettings(c.env, tenantId);
   const razorpayConfigured = RAZORPAY_ENABLED && Boolean(settings?.razorpay?.enabled && (settings.razorpay.keyId || c.env.RAZORPAY_KEY_ID));
-  const nomodConfigured = Boolean(settings?.nomod?.enabled && (settings.nomod.apiKey || c.env.NOMOD_API_KEY));
+  const avail = gatewayAvailability(c.env, settings);
+  const nomodConfigured = avail.NOMOD;
   const preferred = settings?.defaultGateway === "NOMOD" && nomodConfigured
     ? "NOMOD"
     : razorpayConfigured ? "RAZORPAY" : nomodConfigured ? "NOMOD" : null;
   const aedRate = await getAedRate(c.env, tenantId, c.executionCtx);
   return c.json({
-    defaultGateway: preferred, gateways: { RAZORPAY: razorpayConfigured, NOMOD: nomodConfigured },
+    defaultGateway: preferred ?? (avail.PHONEPE ? "PHONEPE" : null),
+    gateways: { RAZORPAY: razorpayConfigured, NOMOD: nomodConfigured, PHONEPE: avail.PHONEPE },
+    // PhonePe takes INR only; UAT means test money (never shown as live to customers).
+    phonepe: avail.PHONEPE ? { environment: avail.phonepeEnvironment, currencies: ["INR"] } : null,
     // Card payments can be made in INR, or in AED at the admin-set rate (INR per 1 AED).
     currencies: { INR: true, AED: Boolean(nomodConfigured && aedRate) }, aedRate,
   });
@@ -59,7 +64,7 @@ paymentRoutes.get("/config", async (c) => {
 
 const checkoutSchema = z.object({
   bookingId: z.string(),
-  gateway:   z.enum(["RAZORPAY", "NOMOD"]).default("NOMOD"),
+  gateway:   z.enum(["RAZORPAY", "NOMOD", "PHONEPE"]).default("NOMOD"),
   currency:  z.enum(["INR", "AED", "USD"]).optional(),
 });
 
@@ -157,54 +162,15 @@ paymentRoutes.post("/checkout", zValidator("json", checkoutSchema), async (c) =>
     return c.json({ orderId: order.id, keyId, amount: order.amount, currency: order.currency });
   }
 
-  if (gateway === "NOMOD") {
-    const { apiKey } = resolvePaymentKeys(c.env, settings, "NOMOD") as { apiKey: string };
-    if (!settings?.nomod?.enabled || !apiKey) {
-      throw new HTTPException(503, { message: "Nomod is not enabled or its API key is missing" });
-    }
-
+  if (gateway === "NOMOD" || gateway === "PHONEPE") {
     const checkoutToken = c.req.header("X-Checkout-Token") ?? "";
-    const resultUrl = `https://tripcod.com/checkout/payment-result?bookingId=${encodeURIComponent(bookingId)}&token=${encodeURIComponent(checkoutToken)}`;
-    const amount = amountFull.toFixed(2);
-    const linkRes = await fetch("https://api.nomod.com/v1/links", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "X-API-KEY": apiKey },
-      body: JSON.stringify({
-        currency: cur,
-        items: [{ name: `Tripcod flight booking ${bookingId.slice(0, 8)}`, amount, quantity: 1 }],
-        title: "Tripcod flight booking",
-        note: `Payment for booking ${bookingId}`,
-        shipping_address_required: false,
-        allow_tip: false,
-        allow_tabby: settings.nomod.allowTabby ?? true,
-        allow_tamara: settings.nomod.allowTamara ?? true,
-        allow_service_fee: false,
-        payment_expiry_limit: 1,
-        success_url: `${resultUrl}&result=success`,
-        failure_url: `${resultUrl}&result=failed`,
-      }),
-      signal: AbortSignal.timeout(10_000),
+    const result = await createGatewayCheckout(db, c.env, {
+      tenantId, settings, gateway, target: { kind: "FLIGHT", bookingId },
+      amount: amountFull, currency: cur as "INR" | "AED" | "USD",
+      returnUrl: `${webUrl(c.env)}/checkout/payment-result?bookingId=${encodeURIComponent(bookingId)}&token=${encodeURIComponent(checkoutToken)}&gateway=${gateway}`,
+      title: "Tripcod flight booking", fx,
     });
-
-    const raw = await linkRes.text();
-    let link: { id?: string; url?: string; amount?: string; currency?: string; error?: { message?: string } } = {};
-    try { link = raw ? JSON.parse(raw) : {}; } catch {}
-    if (!linkRes.ok || !link.id || !link.url) {
-      const message = link.error?.message || raw.slice(0, 240) || `HTTP ${linkRes.status}`;
-      throw new HTTPException(502, { message: `Nomod link failed: ${message}` });
-    }
-
-    await db.insert(payments).values({
-      bookingId,
-      gateway: "NOMOD",
-      gatewayOrderId: link.id,
-      amount: String(amountFull),
-      currency: cur as "INR" | "AED" | "USD",
-      status: "PENDING",
-      gatewayResponse: { linkId: link.id, linkUrl: link.url, ...(fx ? { fx } : {}) },
-    });
-
-    return c.json({ paymentUrl: link.url, orderId: link.id, amount: Number(link.amount ?? amount), currency: link.currency ?? cur, ...(fx ? { fx } : {}) });
+    return c.json({ ...result, ...(fx ? { fx } : {}) });
   }
 
   throw new HTTPException(400, { message: "Unsupported gateway" });
@@ -310,20 +276,15 @@ paymentRoutes.get("/:bookingId", async (c) => {
 
   if (!booking) throw new HTTPException(404, { message: "Booking not found" });
 
-  const [payment] = await db
-    .select({
-      id:               payments.id,
-      gateway:          payments.gateway,
-      gatewayOrderId:   payments.gatewayOrderId,
-      gatewayPaymentId: payments.gatewayPaymentId,
-      amount:           payments.amount,
-      currency:         payments.currency,
-      status:           payments.status,
-      createdAt:        payments.createdAt,
-    })
-    .from(payments)
-    .where(eq(payments.bookingId, bookingId))
-    .limit(1);
+  // Back from PhonePe: confirm with PhonePe's status API (the webhook may lag).
+  for (const pending of await pendingPhonePe(db, { kind: "FLIGHT", bookingId })) {
+    await reconcilePhonePe(db, c.env, pending, "RETURN_PAGE", { throttle: true }).catch((err) => console.error("[phonepe] status check failed", err));
+  }
+  const row = await latestPayment(db, { kind: "FLIGHT", bookingId });
+  const payment = row ? {
+    id: row.id, gateway: row.gateway, gatewayOrderId: row.gatewayOrderId, gatewayPaymentId: row.gatewayPaymentId,
+    amount: row.amount, currency: row.currency, status: row.status, createdAt: row.createdAt,
+  } : undefined;
 
   // Once paid, hand the browser a read-only trip token so it can move on to the
   // itinerary confirmation page (the checkout token expires after 20 minutes).

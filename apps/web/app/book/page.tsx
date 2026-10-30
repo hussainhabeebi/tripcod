@@ -1,5 +1,6 @@
 "use client";
 
+import PaymentMethodPicker, { usePaymentOptions, type OnlineGateway } from "../components/PaymentMethodPicker";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { SeatPicker, seatCss, type SegmentSeatMap } from "./SeatPicker";
 import { ScanDocument, type ScannedTraveller } from "../components/ScanDocument";
@@ -223,6 +224,8 @@ export default function BookPage() {
     return () => window.removeEventListener(CURRENCY_EVENT, onChange);
   }, []);
   const aedRate = rates.AED ?? null;
+  const paymentOptions = usePaymentOptions();
+  const [gateway, setGateway] = useState<OnlineGateway>("NOMOD");
   const [reviewing, setReviewing] = useState(false);
   const [error, setError] = useState("");
   const [fareExpired, setFareExpired] = useState(false);
@@ -532,10 +535,12 @@ export default function BookPage() {
   const t = flightClock;
 
   async function startNomodPayment(bookingId: string, checkoutToken: string) {
+    // PhonePe charges INR; Nomod can also charge AED.
+    const useGateway = gateway === "PHONEPE" && payCurrency === "INR" ? "PHONEPE" : "NOMOD";
     const res = await fetch(`${apiUrl}/api/payments/checkout`, {
       method:  "POST",
       headers: { "Content-Type": "application/json", "x-tenant-slug": "tripcod", "X-Checkout-Token": checkoutToken },
-      body:    JSON.stringify({ bookingId, gateway: "NOMOD", ...(payCurrency === "AED" && aedRate ? { currency: "AED" } : {}) }),
+      body:    JSON.stringify({ bookingId, gateway: useGateway, ...(useGateway === "NOMOD" && payCurrency === "AED" && aedRate ? { currency: "AED" } : {}) }),
     }).catch(() => null);
     const data = res ? await res.json().catch(() => ({})) as { paymentUrl?: string; error?: string } : {};
     if (!res?.ok || !data.paymentUrl) {
@@ -862,7 +867,7 @@ export default function BookPage() {
                 catch (x: any) { setError(x?.message ?? "The payment page couldn't open."); setSubmitting(false); }
               }}
               style={{ flex: "1 1 180px", background: "#fff", color: "#0f172a", border: "1.5px solid #e2e8f0", borderRadius: 10, padding: "12px 14px", fontWeight: 800, cursor: "pointer" }}>
-              Pay with card (Nomod)
+              {gateway === "PHONEPE" && payCurrency === "INR" ? "Pay with UPI / card (PhonePe)" : "Pay with card (Nomod)"}
             </button>
           </div>
         </div>
@@ -1152,6 +1157,9 @@ export default function BookPage() {
           </div>
         )}
 
+        {(reviewing || pendingPayment) && !walletOffer && (
+          <PaymentMethodPicker options={paymentOptions} currency={payCurrency} value={gateway} onChange={setGateway} />
+        )}
         <div className="spacer" />
         <div className="pay">
           <div>

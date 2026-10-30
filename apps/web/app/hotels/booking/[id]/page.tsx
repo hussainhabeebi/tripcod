@@ -22,7 +22,7 @@ type Order = {
   canCancel: boolean; pending: boolean;
 };
 type Quote = { eligible: boolean; reason: string | null; paid: boolean; amount: number; currency: string; charge: number; refund: number; basis: string };
-type PayOptions = { payable: boolean; reason: string | null; card: { available: boolean }; wallet: { available: boolean; balance: number | null; reason: string | null } };
+type PayOptions = { payable: boolean; reason: string | null; card: { available: boolean }; wallet: { available: boolean; balance: number | null; reason: string | null }; upi?: { available: boolean; testMode?: boolean; reason: string | null } };
 
 const LOOK: Record<string, { cls: string; icon: string; title: (o: Order) => string; text: (o: Order) => string }> = {
   CONFIRMED:  { cls: "s-ok", icon: "✓", title: () => "Booking confirmed", text: (o) => `The hotel supplier confirmed your booking${o.confirmationNo ? ` (hotel confirmation ${o.confirmationNo})` : ""}.` },
@@ -46,7 +46,8 @@ export default function HotelBookingPage() {
   const [payOpts, setPayOpts] = useState<PayOptions | null>(null);
   const [quote, setQuote] = useState<Quote | null>(null);
   const [agree, setAgree] = useState(false);
-  const paymentReturn = useRef<"success" | "failed" | null>(null);
+  // "return": back from PhonePe, which doesn't say how it went — the API asks PhonePe.
+  const paymentReturn = useRef<"success" | "failed" | "return" | null>(null);
   const started = useRef(Date.now());
 
   const load = useCallback(async (k: string, refresh = false) => {
@@ -66,7 +67,7 @@ export default function HotelBookingPage() {
     setKey(k);
     const q = new URLSearchParams(window.location.search);
     const hash = new URLSearchParams(window.location.hash.slice(1));
-    paymentReturn.current = q.get("payment") === "success" ? "success" : q.get("payment") === "failed" ? "failed" : null;
+    paymentReturn.current = q.get("payment") === "success" ? "success" : q.get("payment") === "failed" ? "failed" : q.get("payment") === "return" ? "return" : null;
     if (paymentReturn.current === "failed") setNotice("The payment didn't go through. You have not been charged — you can try again below.");
     if (hash.get("error")) setNotice(hash.get("error")!);
     // Drop the key from the address bar once it is saved in this browser.
@@ -77,7 +78,7 @@ export default function HotelBookingPage() {
   // Poll while TripJack or the payment is still settling.
   useEffect(() => {
     if (!order) return;
-    const awaitingWebhook = paymentReturn.current === "success" && order.payment.status === "PENDING";
+    const awaitingWebhook = (paymentReturn.current === "success" || paymentReturn.current === "return") && order.payment.status === "PENDING";
     if (!order.pending && !awaitingWebhook) return;
     if (Date.now() - started.current > 10 * 60_000) return;
     const t = window.setTimeout(() => void load(key), 5000);
@@ -86,11 +87,11 @@ export default function HotelBookingPage() {
 
   // Payment options when the booking can be paid.
   useEffect(() => {
-    if (!order?.payment.payable || order.payment.status === "PENDING" && paymentReturn.current === "success") { setPayOpts(null); return; }
+    if (!order?.payment.payable || order.payment.status === "PENDING" && (paymentReturn.current === "success" || paymentReturn.current === "return")) { setPayOpts(null); return; }
     orderApi<PayOptions>(`/orders/${id}/payment-options`, { key }).then(setPayOpts).catch(() => setPayOpts(null));
   }, [order?.payment.payable, order?.payment.status, id, key]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  async function pay(method: "CARD" | "WALLET") {
+  async function pay(method: "CARD" | "WALLET" | "UPI") {
     setBusy(true); setNotice("");
     try {
       const d = await orderApi<{ paymentUrl?: string; order?: Order }>(`/orders/${id}/pay`, { key, body: { method } });
@@ -154,7 +155,9 @@ export default function HotelBookingPage() {
             <div className="status-icon" aria-hidden="true">{order.pending ? <span className="spinner" /> : look.icon}</div>
             <div>
               <h1>{look.title(order)}</h1>
-              <p>{paymentReturn.current === "success" && order.payment.status === "PENDING" ? "Payment received by the payment page — waiting for the payment confirmation. Nothing is confirmed yet." : look.text(order)}</p>
+              <p>{paymentReturn.current === "success" && order.payment.status === "PENDING" ? "Payment received by the payment page — waiting for the payment confirmation. Nothing is confirmed yet."
+                : paymentReturn.current === "return" && order.payment.status === "PENDING" ? "Checking your payment with PhonePe — nothing is confirmed yet. Please keep this page open."
+                : look.text(order)}</p>
             </div>
           </section>
 
@@ -209,6 +212,11 @@ export default function HotelBookingPage() {
                     <button type="button" className="btn" disabled={busy || !payOpts.card.available} onClick={() => pay("CARD")}>
                       {payOpts.card.available ? `Pay ${money(order.amount, order.currency)} by card` : "Card payment unavailable"}
                     </button>
+                    {payOpts.upi?.available && (
+                      <button type="button" className="btn btn-light" disabled={busy} onClick={() => pay("UPI")}>
+                        Pay {money(order.amount, order.currency)} by UPI / netbanking (PhonePe{payOpts.upi.testMode ? " · test mode" : ""})
+                      </button>
+                    )}
                     {payOpts.wallet.available
                       ? <button type="button" className="btn btn-light" disabled={busy} onClick={() => pay("WALLET")}>Pay from wallet (balance {money(payOpts.wallet.balance ?? 0, "INR")})</button>
                       : payOpts.wallet.reason && <small style={{ color: "#667085" }}>Wallet: {payOpts.wallet.reason}</small>}
@@ -260,7 +268,7 @@ export default function HotelBookingPage() {
 }
 
 function paymentLine(o: Order) {
-  const via = o.payment.gateway === "WALLET" ? "Tripcod wallet" : o.payment.gateway === "NOMOD" ? "card" : "";
+  const via = o.payment.gateway === "WALLET" ? "Tripcod wallet" : o.payment.gateway === "NOMOD" ? "card" : o.payment.gateway === "PHONEPE" ? "UPI (PhonePe)" : "";
   switch (o.payment.status) {
     case "PAID": return `Paid${via ? ` by ${via}` : ""}${o.payment.paidAt ? ` on ${new Date(o.payment.paidAt).toLocaleDateString("en-IN")}` : ""}.`;
     case "PENDING": return "Payment started — waiting for the payment provider.";

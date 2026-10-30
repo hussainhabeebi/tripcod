@@ -1,6 +1,8 @@
 import type { Handler } from "hono";
 import { emailAgentTopup } from "../../lib/transactional-emails.js";
-import { payments, bookings, walletTransactions } from "@tripcod/db/schema";
+import { payments, walletTransactions } from "@tripcod/db/schema";
+import { capturePayment, logPaymentEvent, markPaymentFailed } from "../../lib/payment-core.js";
+import { captureDeps } from "../../lib/payment-queue.js";
 import { creditAgentWallet } from "../../lib/agent-program.js";
 import { handleHotelNomodEvent } from "../../lib/hotel-order-store.js";
 import { and, eq, inArray } from "drizzle-orm";
@@ -45,7 +47,7 @@ export const nomodWebhook: Handler<{ Bindings: Env; Variables: Variables }> = as
   const candidates = collectIds(event);
   const [payment] = candidates.length
     ? await db
-        .select({ id: payments.id, bookingId: payments.bookingId, status: payments.status, gatewayOrderId: payments.gatewayOrderId, amount: payments.amount })
+        .select({ id: payments.id, bookingId: payments.bookingId, status: payments.status, gatewayOrderId: payments.gatewayOrderId })
         .from(payments)
         .where(and(eq(payments.gateway, "NOMOD"), inArray(payments.gatewayOrderId, candidates)))
         .limit(1)
@@ -53,7 +55,11 @@ export const nomodWebhook: Handler<{ Bindings: Env; Variables: Variables }> = as
 
   if (!payment) {
     // Website hotel booking (hotel_bookings, separate from flight payments).
-    const hotel = await handleHotelNomodEvent(c.env, db, type, chargeId, candidates);
+    const reported = Number(charge.total ?? charge.amount);
+    const hotel = await handleHotelNomodEvent(c.env, db, type, chargeId, candidates, {
+      amount: Number.isFinite(reported) && reported > 0 ? reported : undefined,
+      currency: typeof charge.currency === "string" ? charge.currency : undefined,
+    });
     if (hotel) {
       console.info(`[nomod-webhook] ${type} charge=${chargeId ?? "?"} hotel order=${hotel.hotelOrder}`);
       return c.json({ ok: true, ...hotel });
@@ -76,34 +82,34 @@ export const nomodWebhook: Handler<{ Bindings: Env; Variables: Variables }> = as
     return c.json({ ok: true, matched: false });
   }
 
-  console.info(`[nomod-webhook] ${type} charge=${chargeId ?? "?"} link=${payment.gatewayOrderId} booking=${payment.bookingId}`);
+  console.info(`[nomod-webhook] ${type} charge=${chargeId ?? "?"} link=${payment.gatewayOrderId} payment=${payment.id}`);
+  const deps = captureDeps(c.env);
 
   if (type === "charge.completed") {
-    if (payment.status === "SUCCESS") return c.json({ ok: true, duplicate: true });
-
-    await db.update(payments)
-      .set({ status: "SUCCESS", gatewayPaymentId: chargeId ?? payment.gatewayOrderId, updatedAt: new Date() })
-      .where(eq(payments.id, payment.id));
-    await db.update(bookings)
-      .set({ status: "PAYMENT_PENDING", updatedAt: new Date() })
-      .where(eq(bookings.id, payment.bookingId));
-
-    await c.env.BOOKING_QUEUE.send({
-      type:             "PAYMENT_CAPTURED",
-      gatewayPaymentId: chargeId ?? payment.gatewayOrderId,
-      orderId:          payment.gatewayOrderId,
-      amount:           Number(payment.amount),
-    });
-  } else if (type === "charge.failed" || type === "charge.cancelled") {
-    if (payment.status === "PENDING") {
-      await db.update(payments)
-        .set({ status: "FAILED", updatedAt: new Date() })
-        .where(eq(payments.id, payment.id));
-    }
+    const reported = Number(charge.total ?? charge.amount);
+    const outcome = await capturePayment(db, c.env, {
+      paymentId: payment.id,
+      gatewayPaymentId: chargeId ?? payment.gatewayOrderId!,
+      paidAmount: Number.isFinite(reported) && reported > 0 ? reported : undefined,
+      paidCurrency: typeof charge.currency === "string" ? charge.currency : undefined,
+      source: "NOMOD_WEBHOOK",
+      raw: event,
+    }, deps);
+    return c.json({ ok: true, outcome });
+  }
+  if (type === "charge.failed" || type === "charge.cancelled") {
+    await markPaymentFailed(db, payment.id, `Nomod ${type}`, event);
   } else if (type === "charge.refunded") {
+    // Refunds we start are recorded when Nomod accepts them; this catches
+    // refunds made from the Nomod dashboard.
     await db.update(payments)
-      .set({ status: "REFUNDED", updatedAt: new Date() })
-      .where(eq(payments.id, payment.id));
+      .set({ status: "REFUNDED", refundCompletedAt: new Date(), updatedAt: new Date() })
+      .where(and(eq(payments.id, payment.id), inArray(payments.status, ["SUCCESS", "PARTIAL_REFUND"])));
+    await logPaymentEvent(db, { paymentId: payment.id, product: "FLIGHT", referenceId: payment.bookingId,
+      gateway: "NOMOD", event: "REFUND_COMPLETED", status: "DONE", gatewayRef: chargeId, message: "Nomod charge.refunded webhook", raw: event });
+  } else {
+    await logPaymentEvent(db, { paymentId: payment.id, product: "FLIGHT", referenceId: payment.bookingId,
+      gateway: "NOMOD", event: "WEBHOOK", status: type, gatewayRef: chargeId });
   }
 
   return c.json({ ok: true });

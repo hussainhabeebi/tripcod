@@ -26,7 +26,7 @@ const CANCEL_LABEL: Record<string, string> = {
   SUCCESS: "Cancelled", REJECTED: "Cancellation was not accepted by the airline", FAILED: "Cancellation request failed",
 };
 
-const REFUND_TO: Record<string, string> = { WALLET: "your Tripcod wallet", NOMOD: "your original card / payment method", MANUAL: "your original payment method" };
+const REFUND_TO: Record<string, string> = { WALLET: "your Tripcod wallet", NOMOD: "your original card / payment method", PHONEPE: "your original UPI / card / bank account (PhonePe)", MANUAL: "your original payment method" };
 
 const fmtTime = (s: string) => { const d = new Date(s); return isNaN(+d) ? s : d.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: false }); };
 const fmtDate = (s: string | null) => { if (!s) return "—"; const d = new Date(s); return isNaN(+d) ? s : d.toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short", year: "numeric" }); };
@@ -120,7 +120,7 @@ export default function TripDetail({ mode, id }: { mode: Mode; id?: string }) {
           <strong>{CANCEL_LABEL[latestCancel.status] ?? latestCancel.status}</strong>
           <p style={{ margin: "4px 0 0", color: "#475569", fontSize: 14 }}>
             {latestCancel.status === "SUCCESS" && latestCancel.refundStatus === "DONE"
-              ? `${inr(latestCancel.refundAmount ?? 0, trip.currency)} refunded to ${REFUND_TO[latestCancel.refundMethod] ?? "your original payment method"} on ${fmtDate(latestCancel.refundedAt)}.${latestCancel.refundMethod === "NOMOD" ? " It can take 5–10 working days to appear on your statement." : ""}`
+              ? `${inr(latestCancel.refundAmount ?? 0, trip.currency)} refunded to ${REFUND_TO[latestCancel.refundMethod] ?? "your original payment method"} on ${fmtDate(latestCancel.refundedAt)}.${latestCancel.refundMethod === "NOMOD" || latestCancel.refundMethod === "PHONEPE" ? " It can take 5–10 working days to appear on your statement." : ""}`
               : latestCancel.status === "SUCCESS"
                 ? `Refund of ${inr(latestCancel.refundAmount ?? 0, trip.currency)} to ${REFUND_TO[latestCancel.refundMethod] ?? "your original payment method"} is being processed.`
                 : ["SUBMITTED", "PROCESSING"].includes(latestCancel.status)
@@ -190,7 +190,7 @@ export default function TripDetail({ mode, id }: { mode: Mode; id?: string }) {
         <div style={row}><span>Total paid</span><strong>{inr(trip.totalAmount, trip.currency)}</strong></div>
         {trip.payments.map((p) => (
           <div key={p.id} style={row}>
-            <small style={{ color: "#64748b" }}>{p.gateway === "WALLET" ? "Tripcod wallet" : p.gateway === "NOMOD" ? "Card (Nomod)" : p.gateway} · {fmtDate(p.createdAt)}</small>
+            <small style={{ color: "#64748b" }}>{p.gateway === "WALLET" ? "Tripcod wallet" : p.gateway === "NOMOD" ? "Card (Nomod)" : p.gateway === "PHONEPE" ? "UPI / card (PhonePe)" : p.gateway} · {fmtDate(p.createdAt)}</small>
             <small style={{ fontWeight: 700, color: p.status === "SUCCESS" ? "#166534" : "#475569" }}>{p.status.replace("_", " ").toLowerCase()}</small>
           </div>
         ))}

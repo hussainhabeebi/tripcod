@@ -35,7 +35,8 @@ import {
   payable, placeHold, publicOrder, recordPaid, refreshOrder, releasePayment, reviewKey, sha256Hex,
   type HotelOrder, type HotelOrderDeps, type ReviewSnapshot,
 } from "../lib/hotel-orders.js";
-import { cardPaymentAvailable, createHotelNomodLink, hotelOrderDeps } from "../lib/hotel-order-store.js";
+import { cardPaymentAvailable, createHotelNomodLink, createHotelPhonePeOrder, hotelOrderDeps, upiPaymentAvailable } from "../lib/hotel-order-store.js";
+import { resolvePhonePeConfig } from "../lib/phonepe.js";
 import type { Env, Variables } from "../types.js";
 import { logSupplierCall } from "../lib/supplier-logger.js";
 import {
@@ -432,8 +433,12 @@ hotelRoutes.get("/orders/:id/payment-options", async (c) => {
       payable: pay.ok, reason: pay.ok ? null : pay.reason,
       card: { available: await cardPaymentAvailable(c.env, c.get("tenantId")), gateway: "NOMOD" },
       wallet,
-      // UPI / payment apps: not offered — the active gateway (Nomod) has no UPI flow and Razorpay is switched off.
-      upi: { available: false, reason: "UPI isn't available with the current payment provider." },
+      // UPI / cards / netbanking via PhonePe PG v2 (INR only; off until Admin enables it and its secrets are set).
+      upi: await (async () => {
+        const on = await upiPaymentAvailable(c.env, c.get("tenantId"));
+        return { available: on && order.currency === "INR", gateway: "PHONEPE", testMode: on && resolvePhonePeConfig(c.env)?.environment === "UAT",
+          reason: !on ? "UPI isn't available right now." : order.currency !== "INR" ? "UPI is available for INR bookings only." : null };
+      })(),
       amount: Number(order.amount), currency: order.currency,
     });
   } catch (err) {
@@ -441,7 +446,7 @@ hotelRoutes.get("/orders/:id/payment-options", async (c) => {
   }
 });
 
-hotelRoutes.post("/orders/:id/pay", zValidator("json", z.object({ method: z.enum(["CARD", "WALLET"]) })), async (c) => {
+hotelRoutes.post("/orders/:id/pay", zValidator("json", z.object({ method: z.enum(["CARD", "WALLET", "UPI"]) })), async (c) => {
   const { method } = c.req.valid("json");
   const tenantId = c.get("tenantId");
   try {
@@ -453,6 +458,7 @@ hotelRoutes.post("/orders/:id/pay", zValidator("json", z.object({ method: z.enum
     if (order.paymentStatus === "PENDING") {
       // An open card link for this order is reused rather than opening a second charge.
       if (method === "CARD" && order.paymentGateway === "NOMOD" && order.paymentUrl && payable(order).ok) return c.json({ paymentUrl: order.paymentUrl, reused: true });
+      if (method === "UPI" && order.paymentGateway === "PHONEPE" && order.paymentUrl && payable(order).ok) return c.json({ paymentUrl: order.paymentUrl, reused: true });
       throw new HotelOrderError("A payment for this booking is already in progress. Complete it or wait a minute and reload.", 409, "PAYMENT_IN_PROGRESS");
     }
     const pay = payable(order);
@@ -477,6 +483,22 @@ hotelRoutes.post("/orders/:id/pay", zValidator("json", z.object({ method: z.enum
       return c.json({ paid: true, order: publicOrder(paid ?? slot), balance });
     }
 
+    if (method === "UPI") {
+      // PhonePe hosted checkout; confirmed by the status API (webhook or this page's reload).
+      const slot = await claimPayment(deps.store, order, "PHONEPE", null);
+      if (!slot) throw new HotelOrderError("A payment for this booking is already in progress.", 409, "PAYMENT_IN_PROGRESS");
+      let pp: { id: string; url: string };
+      try {
+        pp = await createHotelPhonePeOrder(c.env, tenantId, slot, `${WEB_URL}/hotels/booking/${slot.id}?payment=return`);
+      } catch (err: any) {
+        await releasePayment(deps.store, slot);
+        throw new HotelOrderError(err?.message ?? "UPI payment could not be started.", err?.status === 503 || err?.status === 400 ? err.status : 502, "UPI_UNAVAILABLE");
+      }
+      const opened = await deps.store.update(slot.id, { paymentOrderId: pp.id, paymentUrl: pp.url }, { paymentStatus: ["PENDING"] });
+      if (opened) await deps.ledger?.(opened, "CHECKOUT_CREATED", { status: "PENDING", amount: opened.amount, gatewayRef: pp.id });
+      return c.json({ paymentUrl: pp.url });
+    }
+
     // CARD (Nomod hosted checkout). Claim first so two clicks can't open two charges.
     const slot = await claimPayment(deps.store, order, "NOMOD", null);
     if (!slot) throw new HotelOrderError("A payment for this booking is already in progress.", 409, "PAYMENT_IN_PROGRESS");
@@ -487,7 +509,8 @@ hotelRoutes.post("/orders/:id/pay", zValidator("json", z.object({ method: z.enum
       await releasePayment(deps.store, slot);
       throw new HotelOrderError(err?.message ?? "Card payment could not be started.", err?.status === 503 ? 503 : 502, "CARD_UNAVAILABLE");
     }
-    await deps.store.update(slot.id, { paymentOrderId: link.id, paymentUrl: link.url }, { paymentStatus: ["PENDING"] });
+    const opened = await deps.store.update(slot.id, { paymentOrderId: link.id, paymentUrl: link.url }, { paymentStatus: ["PENDING"] });
+    if (opened) await deps.ledger?.(opened, "CHECKOUT_CREATED", { status: "PENDING", amount: opened.amount, gatewayRef: link.id });
     return c.json({ paymentUrl: link.url });
   } catch (err) {
     return orderError(c, err, "Payment could not be started");

@@ -499,3 +499,55 @@ test("a paid hold awaiting confirm-book shows as confirming and can't be cancell
   await assert.rejects(cancelOrder(d, paid, 0), /can't be cancelled/);
   assert.equal(tj.calls.cancel.length, 0);
 });
+
+// ── UPI (PhonePe PG v2) ─────────────────────────────────────────────────────
+
+test("UPI: paid only when PhonePe's status API reports the exact amount; queued once", async () => {
+  const { reconcilePhonePePayment } = await import("../src/lib/hotel-orders.js");
+  const store = newStore();
+  const { d, queued } = deps(store, {});
+  const ledger: string[] = [];
+  let state = { state: "PENDING", amountPaise: 3000000, transactionId: "TX9" as string | null };
+  d.phonepeStatus = async () => state;
+  d.ledger = async (_o, event) => { ledger.push(event); };
+  const order = await newOrder(store, "INSTANT");
+  const slot = (await claimPayment(store, order, "PHONEPE", "TCHU_ABC_1"))!;
+  assert.equal((await reconcilePhonePePayment(d, slot)).paymentStatus, "PENDING");
+
+  state = { state: "COMPLETED", amountPaise: 100, transactionId: "TX9" };   // ₹1 reported for a ₹30,000 order
+  let o = await reconcilePhonePePayment(d, slot);
+  assert.equal(o.paymentStatus, "PENDING");
+  assert.deepEqual(queued, []);
+  assert.ok(ledger.includes("AMOUNT_MISMATCH"));
+
+  state = { state: "COMPLETED", amountPaise: 3000000, transactionId: "TX9" };
+  o = await refreshOrder(d, (await store.get(slot.id))!);
+  assert.equal(o.paymentStatus, "PAID");
+  assert.equal(o.paymentRef, "TX9");
+  await refreshOrder(d, o);                  // webhook + page reload: no second booking
+  assert.deepEqual(queued, [slot.id]);
+  assert.ok(ledger.includes("CAPTURED"));
+});
+
+test("UPI: a failed PhonePe order frees the payment slot for a retry", async () => {
+  const { reconcilePhonePePayment } = await import("../src/lib/hotel-orders.js");
+  const store = newStore();
+  const { d } = deps(store, {});
+  d.phonepeStatus = async () => ({ state: "FAILED", amountPaise: 0, transactionId: null });
+  const order = await newOrder(store, "INSTANT");
+  const slot = (await claimPayment(store, order, "PHONEPE", "TCHU_ABC_2"))!;
+  const o = await reconcilePhonePePayment(d, slot);
+  assert.equal(o.paymentStatus, "UNPAID");
+  assert.ok(await claimPayment(store, o, "NOMOD", null), "customer can pay again");
+});
+
+test("UPI refunds only use the credentials of the order's PhonePe environment", async () => {
+  const { refundHotelPayment } = await import("../src/lib/hotel-order-store.js");
+  const db: any = { insert: () => ({ values: async () => {} }) };
+  const order = { ...(await newOrder(newStore(), "INSTANT")), paymentGateway: "PHONEPE", paymentOrderId: "TCHP_LIVE_1", paymentStatus: "PAID" } as HotelOrder;
+  // Worker on UAT, order taken in Production → never refunded with UAT credentials.
+  const env: any = { PHONEPE_UAT_CLIENT_ID: "u", PHONEPE_UAT_CLIENT_SECRET: "s", PHONEPE_UAT_CLIENT_VERSION: "1", SESSIONS_KV: { get: async () => null, put: async () => {} } };
+  const r = await refundHotelPayment(env, db, order, 30000, "test");
+  assert.equal(r.ok, false);
+  assert.match(r.note, /needs the team/);
+});

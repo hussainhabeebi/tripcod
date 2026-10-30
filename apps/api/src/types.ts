@@ -41,6 +41,20 @@ export interface Env {
   NOMOD_API_KEY:          string;
   NOMOD_API_SECRET:       string;
   NOMOD_WEBHOOK_SECRET:   string;
+  // PhonePe PG v2 — separate UAT and Production credentials (see lib/phonepe.ts).
+  // PHONEPE_ENV=PRODUCTION is honoured only on the production Worker.
+  PHONEPE_ENV?:                   string;
+  PHONEPE_UAT_CLIENT_ID?:         string;
+  PHONEPE_UAT_CLIENT_SECRET?:     string;
+  PHONEPE_UAT_CLIENT_VERSION?:    string;
+  PHONEPE_UAT_WEBHOOK_USERNAME?:  string;
+  PHONEPE_UAT_WEBHOOK_PASSWORD?:  string;
+  PHONEPE_PROD_CLIENT_ID?:        string;
+  PHONEPE_PROD_CLIENT_SECRET?:    string;
+  PHONEPE_PROD_CLIENT_VERSION?:   string;
+  PHONEPE_PROD_WEBHOOK_USERNAME?: string;
+  PHONEPE_PROD_WEBHOOK_PASSWORD?: string;
+  PUBLIC_WEB_URL?:                string;   // customer site for payment return URLs (default https://tripcod.com)
   RESEND_API_KEY:         string;
   EMAIL_FROM?:            string;   // default sender address (must be verified in Resend), e.g. bookings@tripcod.com
   EMAIL_REPLY_TO?:        string;   // default reply-to address

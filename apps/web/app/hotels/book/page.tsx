@@ -1,5 +1,6 @@
 "use client";
 
+import { usePaymentOptions } from "../../components/PaymentMethodPicker";
 import { FormEvent, useEffect, useState } from "react";
 import { ScanDocument, type ScannedTraveller } from "../../components/ScanDocument";
 import {
@@ -59,7 +60,9 @@ export default function HotelBookPage() {
   const [dialCode,    setDialCode]    = useState("+91");
   const [guests,      setGuests]      = useState<Guest[][]>([]);
   const [mode,        setMode]        = useState<"INSTANT" | "HOLD">("INSTANT");
-  const [method,      setMethod]      = useState<"CARD" | "WALLET">("CARD");
+  const [method,      setMethod]      = useState<"CARD" | "WALLET" | "UPI">("CARD");
+  // UPI / netbanking via PhonePe, when Admin has enabled it (INR only).
+  const paymentOptions = usePaymentOptions();
   const [wallet,      setWallet]      = useState<number | null>(null);
   const [accepted,    setAccepted]    = useState(false);
 
@@ -209,6 +212,8 @@ export default function HotelBookPage() {
   const currency = review?.option.pricing.currency || hotel?.currency || "INR";
   const walletCovers = wallet !== null && currency === "INR" && wallet >= total;
   useEffect(() => { if (!walletCovers && method === "WALLET") setMethod("CARD"); }, [walletCovers, method]);
+  const upiAvailable = Boolean(paymentOptions?.gateways.PHONEPE) && currency === "INR";
+  useEffect(() => { if (!upiAvailable && method === "UPI") setMethod("CARD"); }, [upiAvailable, method]);
 
   // Passport / ID scan → this guest's name (and passport number from a passport).
   const scanGuest = (room: number, i: number, t: ScannedTraveller) =>
@@ -464,6 +469,12 @@ export default function HotelBookPage() {
                     <input type="radio" name="method" checked={method === "CARD"} onChange={() => setMethod("CARD")} />
                     <span><b>Card</b><small>Secure payment page from our payment partner (Nomod).</small></span>
                   </label>
+                  {upiAvailable && (
+                    <label>
+                      <input type="radio" name="method" checked={method === "UPI"} onChange={() => setMethod("UPI")} />
+                      <span><b>UPI / netbanking</b><small>PhonePe secure payment page{paymentOptions?.phonepeEnvironment === "UAT" ? " (test mode)" : ""}.</small></span>
+                    </label>
+                  )}
                   <label className={walletCovers ? "" : "disabled"}>
                     <input type="radio" name="method" disabled={!walletCovers} checked={method === "WALLET"} onChange={() => setMethod("WALLET")} />
                     <span><b>Tripcod wallet</b><small>{!token ? "Sign in to use your wallet balance." : currency !== "INR" ? "The wallet pays INR bookings only." : wallet === null ? "Wallet balance unavailable." : walletCovers ? `Balance ${money(wallet, "INR")} — covers this booking.` : `Balance ${money(wallet, "INR")} doesn't cover this booking.`}</small></span>

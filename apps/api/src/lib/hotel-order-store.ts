@@ -14,6 +14,11 @@ import type { Env } from "../types.js";
 import type { HotelOrder, HotelOrderDeps, HotelOrderStore, OrderGuard } from "./hotel-orders.js";
 import { creditWallet, getOrCreateCustomerWallet } from "./customer-wallet.js";
 import { refundNomodCharge, resolveNomodApiKey } from "./payment-gateway.js";
+import {
+  createPhonePePayment, merchantOrderEnvironment, newMerchantOrderId, phonePeOrderStatus, refundPhonePe, resolvePhonePeConfig, toPaise,
+} from "./phonepe.js";
+import { logPaymentEvent } from "./payment-core.js";
+import { gatewayAvailability, tenantPaymentSettings } from "./checkout-gateways.js";
 import { logSupplierCall } from "./supplier-logger.js";
 import { hotelClient } from "./hotels.js";
 import { collectExchanges } from "./api-exchanges.js";
@@ -122,8 +127,29 @@ export async function refundHotelPayment(env: Env, db: Db, order: HotelOrder, am
     const apiKey = await resolveNomodApiKey(env, order.tenantId);
     if (!apiKey) return { ok: false, note: "Card refund needs the team: Nomod is not configured." };
     const outcome = await refundNomodCharge(apiKey, order.paymentRef, amount, reason.slice(0, 120));
+    await hotelLedger(db, order, outcome.ok ? "REFUND_COMPLETED" : "REFUND_FAILED", {
+      status: outcome.ok ? "DONE" : "MANUAL_REQUIRED", amount, gatewayRef: outcome.ok ? outcome.refundId : order.paymentRef, message: outcome.ok ? reason : outcome.error });
     if (outcome.ok) return { ok: true, note: `Card refund ${outcome.refundId} issued via Nomod.` };
     return { ok: false, note: `Card refund needs the team: ${outcome.error}` };
+  }
+  if (order.paymentGateway === "PHONEPE" && order.paymentOrderId) {
+    // Only with the credentials of the environment the order was created in.
+    const cfg = resolvePhonePeConfig(env);
+    if (!cfg || merchantOrderEnvironment(order.paymentOrderId) !== cfg.environment) {
+      await hotelLedger(db, order, "REFUND_FAILED", { status: "MANUAL_REQUIRED", amount, message: "PhonePe credentials for this order's environment are not active" });
+      return { ok: false, note: "UPI refund needs the team: PhonePe is not configured for this payment's environment." };
+    }
+    const merchantRefundId = `RF_${order.paymentOrderId}_0`.slice(0, 63);
+    try {
+      const r = await refundPhonePe(cfg, env.SESSIONS_KV, { merchantRefundId, merchantOrderId: order.paymentOrderId, amountPaise: toPaise(amount) });
+      if (r.state === "FAILED") throw new Error("PhonePe rejected the refund");
+      await hotelLedger(db, order, r.state === "COMPLETED" ? "REFUND_COMPLETED" : "REFUND_ACCEPTED", { status: r.state, amount, gatewayRef: merchantRefundId, message: reason });
+      return { ok: true, note: `UPI refund ${merchantRefundId} issued via PhonePe (usually 5–7 working days).` };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      await hotelLedger(db, order, "REFUND_FAILED", { status: "MANUAL_REQUIRED", amount, gatewayRef: merchantRefundId, message });
+      return { ok: false, note: `UPI refund needs the team: ${message}` };
+    }
   }
   return { ok: false, note: "Refund needs the team (no automatic refund route for this payment)." };
 }
@@ -161,8 +187,74 @@ export async function hotelOrderDeps(env: Env, db: Db, tenantId: string, opts: {
     refund:  (order, amount, reason) => refundHotelPayment(env, db, order, amount, reason),
     enqueue: async (id) => { await env.BOOKING_QUEUE.send({ type: "HOTEL_PAYMENT_CAPTURED", hotelBookingId: id, tenantId } satisfies HotelQueueMsg); },
     walletDebited: (ref) => walletTxExists(db, ref),
+    phonepeStatus: (merchantOrderId) => hotelPhonePeStatus(env, merchantOrderId),
+    ledger:  (order, event, fields) => hotelLedger(db, order, event, fields),
     pollMs:  opts.pollMs,
   };
+}
+
+// Admin → Transactions: hotel payment events next to flight ones (Neon ledger,
+// referenced by the D1 order id).
+export async function hotelLedger(db: Db, order: HotelOrder, event: string, f: { status?: string; amount?: number | string; gatewayRef?: string | null; message?: string } = {}) {
+  const gateway = (order.paymentGateway ?? "MANUAL") as "NOMOD" | "PHONEPE" | "WALLET" | "MANUAL";
+  await logPaymentEvent(db, {
+    tenantId: order.tenantId, product: "HOTEL", referenceId: order.id, gateway,
+    environment: gateway === "PHONEPE" && order.paymentOrderId ? merchantOrderEnvironment(order.paymentOrderId) : null,
+    event, status: f.status ?? null, amount: f.amount ?? null, currency: order.currency, gatewayRef: f.gatewayRef ?? order.paymentOrderId,
+    message: f.message ?? `TripJack ${order.supplierBookingId}`,
+  });
+}
+
+// ── UPI payment (PhonePe PG v2, INR only) ────────────────────────────────────
+
+async function hotelPhonePeStatus(env: Env, merchantOrderId: string) {
+  const cfg = resolvePhonePeConfig(env);
+  if (!cfg || merchantOrderEnvironment(merchantOrderId) !== cfg.environment) return null;
+  const st = await phonePeOrderStatus(cfg, env.SESSIONS_KV, merchantOrderId);
+  const paid = st.paymentDetails?.find((d) => d.state === "COMPLETED") ?? st.paymentDetails?.[0];
+  return { state: st.state, amountPaise: st.amount, transactionId: paid?.transactionId ?? null };
+}
+
+export async function upiPaymentAvailable(env: Env, tenantId: string): Promise<boolean> {
+  return gatewayAvailability(env, await tenantPaymentSettings(env, tenantId)).PHONEPE;
+}
+
+export async function createHotelPhonePeOrder(env: Env, tenantId: string, order: HotelOrder, returnUrl: string): Promise<{ id: string; url: string }> {
+  const cfg = resolvePhonePeConfig(env);
+  if (!cfg || !(await upiPaymentAvailable(env, tenantId))) throw Object.assign(new Error("UPI payment is not available right now."), { status: 503 });
+  if (order.currency !== "INR") throw Object.assign(new Error("UPI payment is available for INR bookings only."), { status: 400 });
+  const merchantOrderId = newMerchantOrderId("TCH", cfg.environment);
+  const hotel = order.hotel as { name?: string };
+  const created = await createPhonePePayment(cfg, env.SESSIONS_KV, {
+    merchantOrderId, amountPaise: toPaise(Number(order.amount)), redirectUrl: returnUrl, expireAfterSeconds: 1200,
+    message: `Hotel: ${(hotel.name ?? "stay").slice(0, 60)}`, udf: { udf1: "HOTEL", udf2: order.id },
+  }).catch((err) => { throw Object.assign(new Error(`UPI payment could not be started: ${err?.message ?? err}`), { status: 502 }); });
+  return { id: merchantOrderId, url: created.redirectUrl! };
+}
+
+// PhonePe webhook for a hotel order: re-check with the status API. Returns null
+// when no hotel order uses this merchant order id.
+export async function handleHotelPhonePeEvent(env: Env, db: Db, merchantOrderId: string) {
+  const order = await d1HotelOrderStore(env.HOTEL_DB).byPaymentOrder([merchantOrderId]);
+  if (!order || order.paymentGateway !== "PHONEPE") return null;
+  const { reconcilePhonePePayment } = await import("./hotel-orders.js");
+  const deps = await hotelOrderDeps(env, db, order.tenantId);
+  const after = await reconcilePhonePePayment(deps, order);
+  return { hotelOrder: order.id, paymentStatus: after.paymentStatus };
+}
+
+// PhonePe refund webhook for a hotel order (refund ids are RF_<merchant order id>_0).
+export async function handleHotelPhonePeRefund(env: Env, db: Db, merchantRefundId: string, state: string) {
+  const merchantOrderId = /^RF_(TCH[UP]_[A-Z0-9_]+?)_\d+$/.exec(merchantRefundId)?.[1];
+  if (!merchantOrderId) return null;
+  const order = await d1HotelOrderStore(env.HOTEL_DB).byPaymentOrder([merchantOrderId]);
+  if (!order) return null;
+  if (state === "COMPLETED") await hotelLedger(db, order, "REFUND_COMPLETED", { status: "DONE", amount: order.refundAmount ?? undefined, gatewayRef: merchantRefundId });
+  if (state === "FAILED") {
+    await hotelLedger(db, order, "REFUND_FAILED", { status: "MANUAL_REQUIRED", amount: order.refundAmount ?? undefined, gatewayRef: merchantRefundId, message: "PhonePe reported the refund failed" });
+    await d1HotelOrderStore(env.HOTEL_DB, order.tenantId).update(order.id, { paymentStatus: "REFUND_PENDING", refundNote: "UPI refund failed at PhonePe — the team will retry it." }, { paymentStatus: ["REFUNDED"] });
+  }
+  return { hotelOrder: order.id };
 }
 
 // ── Card payment (the tenant's existing Nomod setup — same settings as flights) ──
@@ -234,15 +326,25 @@ export async function processHotelPayment(env: Env, db: Db, msg: HotelQueueMsg) 
 }
 
 // Nomod charge events for hotel orders. Returns null when no hotel order uses these ids.
-export async function handleHotelNomodEvent(env: Env, db: Db, type: string, chargeId: string | undefined, candidates: string[]) {
+export async function handleHotelNomodEvent(env: Env, db: Db, type: string, chargeId: string | undefined, candidates: string[], paid: { amount?: number; currency?: string } = {}) {
   const order = await d1HotelOrderStore(env.HOTEL_DB).byPaymentOrder(candidates);
   if (!order || order.paymentGateway !== "NOMOD") return null;
   const { recordPaid } = await import("./hotel-orders.js");
   const store = d1HotelOrderStore(env.HOTEL_DB, order.tenantId);
   if (type === "charge.completed") {
     if (order.paymentStatus !== "PENDING") return { hotelOrder: order.id, duplicate: true };
+    // Never book on an under-payment or another currency (over-payment = tips/fees is fine).
+    const short = paid.amount !== undefined && Number.isFinite(paid.amount) && paid.amount < Number(order.amount) - 0.009;
+    const otherCurrency = paid.currency !== undefined && paid.currency.toUpperCase() !== order.currency;
+    if (short || otherCurrency) {
+      await hotelLedger(db, order, "AMOUNT_MISMATCH", { status: "MANUAL_REVIEW", amount: paid.amount, gatewayRef: chargeId,
+        message: `Expected ${order.currency} ${Number(order.amount).toFixed(2)}, Nomod reported ${paid.currency ?? order.currency} ${paid.amount ?? "?"} — not booked` });
+      await store.update(order.id, { lastError: "Nomod amount mismatch — check Admin → Transactions" }, { paymentStatus: ["PENDING"] });
+      return { hotelOrder: order.id, amountMismatch: true };
+    }
     await recordPaid({
       store,
+      ledger: (o, event, fields) => hotelLedger(db, o, event, fields),
       enqueue: async (id) => { await env.BOOKING_QUEUE.send({ type: "HOTEL_PAYMENT_CAPTURED", hotelBookingId: id, tenantId: order.tenantId } satisfies HotelQueueMsg); },
     }, order, chargeId ?? order.paymentOrderId ?? "");
     return { hotelOrder: order.id, paid: true };
