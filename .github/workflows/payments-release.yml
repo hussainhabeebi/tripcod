@@ -200,6 +200,9 @@ jobs:
           for f in packages/db/drizzle/migrations/*.sql; do psql "$TEST_DATABASE_URL" -q -f "$f" >/dev/null; done
           psql "$TEST_DATABASE_URL" -v ON_ERROR_STOP=1 -q -f packages/db/drizzle/migrations/0012_payment_gateways.sql
           npm install --silent --prefix "$RUNNER_TEMP/pg" pg@8.13.1
+          # Test-only driver (not a repo dependency): visible to drizzle-orm/node-postgres via pnpm's hoist dir.
+          ln -sfn "$RUNNER_TEMP/pg/node_modules/pg" node_modules/.pnpm/node_modules/pg
+          for d in "$RUNNER_TEMP"/pg/node_modules/*; do [ -e "node_modules/.pnpm/node_modules/$(basename "$d")" ] || ln -s "$d" node_modules/.pnpm/node_modules/; done
           export TEST_PG_MODULE="$RUNNER_TEMP/pg/node_modules/pg/lib/index.js"
           TSX=./node_modules/.pnpm/tsx@4.23.12/node_modules/tsx/dist/loader.mjs
           cd apps/api
@@ -305,4 +308,5 @@ jobs:
         if: failure() && env.MODE == 'release'
         run: |
           python "$RUNNER_TEMP/cf.py" rollback
-          echo "Workers restored. Neon 0012 / D1 0001 stay applied: both are additive and compatible with the restored versions."
+          echo "Any activated Worker was restored to its recorded version (none listed above = nothing had been activated)."
+          echo "If the Neon 0012 / D1 steps above ran, those additive changes stay; the restored versions work with them."
