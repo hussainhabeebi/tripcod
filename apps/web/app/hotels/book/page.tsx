@@ -378,7 +378,9 @@ export default function HotelBookPage() {
                     const lead = ri === 0 && i === 0;
                     const adultNo = room.slice(0, i + 1).filter((x) => x.type === "ADULT").length;
                     const childNo = room.slice(0, i + 1).filter((x) => x.type === "CHILD").length;
-                    const showPan = g.type === "ADULT" && indianGuests && (lead || Boolean(compliance?.panRequired));
+                    // Every Indian guest can give a PAN (TripJack takes one per traveller; the same
+                    // PAN may be reused across rooms / guests). Only the lead's is ever required.
+                    const showPan = indianGuests;
                     const showPassport = Boolean(compliance?.passportRequired) || (lead && overseas);
                     return (
                       <div className="pax" key={i}>
