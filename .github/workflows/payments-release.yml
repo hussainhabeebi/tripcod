@@ -9,15 +9,12 @@ name: Payments isolated release (b6c033c)
 # Database changes are additive and work with the previous Worker versions.
 # No payment, booking, supplier request or secret change is made.
 
+# Runs from the release branch whenever .github/release/payments-mode.txt changes
+# (repo convention for guarded releases); that file holds "preflight" or "release".
 on:
-  workflow_dispatch:
-    inputs:
-      mode:
-        description: "preflight (read-only) or release"
-        required: true
-        default: preflight
-        type: choice
-        options: [preflight, release]
+  push:
+    branches: [release/payments-b6c033c]
+    paths: [.github/release/payments-mode.txt]
 
 permissions:
   contents: read
@@ -47,6 +44,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with: { fetch-depth: 0 }
+
+      - name: Read release mode
+        run: |
+          mode=$(tr -d '[:space:]' < .github/release/payments-mode.txt)
+          case "$mode" in preflight|release) ;; *) echo "Unknown mode '$mode'"; exit 1;; esac
+          echo "MODE=$mode" >> "$GITHUB_ENV"; echo "Mode: $mode"
 
       - name: Pin application code to the merged payment commit
         run: |
@@ -189,7 +192,7 @@ jobs:
 
       # ── Release ──────────────────────────────────────────────────────────
       - name: Tests (PhonePe, hotel orders on memory + D1, wallet, Neon integration on a fresh Postgres)
-        if: inputs.mode == 'release'
+        if: env.MODE == 'release'
         env:
           TEST_DATABASE_URL: postgresql://postgres:test@localhost:5432/postgres
         run: |
@@ -204,14 +207,14 @@ jobs:
           node --experimental-test-module-mocks --import ../../$TSX --test test/hotel-wallet.test.ts
 
       - name: Build Web and Admin (production API URL)
-        if: inputs.mode == 'release'
+        if: env.MODE == 'release'
         env: { NEXT_PUBLIC_API_URL: https://api.tripcod.com }
         run: |
           (cd apps/web && pnpm exec opennextjs-cloudflare build --dangerouslyUseUnsupportedNextVersion)
           (cd apps/admin && pnpm exec opennextjs-cloudflare build --dangerouslyUseUnsupportedNextVersion)
 
       - name: Neon — apply 0012 only (recovery point first; lock timeout; transactional)
-        if: inputs.mode == 'release'
+        if: env.MODE == 'release'
         run: |
           export PGOPTIONS="-c lock_timeout=5s -c statement_timeout=120s"
           echo "Neon recovery point (point-in-time restore before 0012): $(psql "$DATABASE_URL" -At -c "SELECT now()::text || ' lsn ' || COALESCE(pg_current_wal_lsn()::text, '?')" 2>/dev/null || psql "$DATABASE_URL" -At -c 'SELECT now()')"
@@ -224,7 +227,7 @@ jobs:
           test "$(psql "$DATABASE_URL" -At -c "SELECT to_regclass('payment_events') IS NOT NULL")" = t
 
       - name: D1 — Time Travel bookmark, then apply pending migrations only
-        if: inputs.mode == 'release'
+        if: env.MODE == 'release'
         working-directory: apps/api
         run: |
           pending=$(cat "$RUNNER_TEMP/d1-pending")
@@ -234,7 +237,7 @@ jobs:
           pnpm exec wrangler d1 migrations list tripcod-hotels --remote
 
       - name: Upload API as a non-serving version (same CPU limit)
-        if: inputs.mode == 'release'
+        if: env.MODE == 'release'
         working-directory: apps/api
         run: |
           set -o pipefail
@@ -244,11 +247,11 @@ jobs:
 
       - name: Activate API (bindings, secrets, DO migration tag and CPU limit verified)
         id: activate_api
-        if: inputs.mode == 'release'
+        if: env.MODE == 'release'
         run: python "$RUNNER_TEMP/cf.py" activate tripcod-api "$RUNNER_TEMP/api-upload.log"
 
       - name: API smoke checks (read-only; PhonePe must be off)
-        if: inputs.mode == 'release'
+        if: env.MODE == 'release'
         run: |
           curl -fsS https://api.tripcod.com/health
           opts=$(curl -fsS -H "x-tenant-slug: tripcod" https://api.tripcod.com/api/checkout/payment-options); echo "$opts"
@@ -259,7 +262,7 @@ jobs:
 
       - name: Upload and activate Web
         id: activate_web
-        if: inputs.mode == 'release'
+        if: env.MODE == 'release'
         working-directory: apps/web
         run: |
           set -o pipefail
@@ -268,7 +271,7 @@ jobs:
 
       - name: Upload and activate Admin
         id: activate_admin
-        if: inputs.mode == 'release'
+        if: env.MODE == 'release'
         working-directory: apps/admin
         run: |
           set -o pipefail
@@ -276,7 +279,7 @@ jobs:
           python "$RUNNER_TEMP/cf.py" activate tripcod-admin "$RUNNER_TEMP/admin-upload.log"
 
       - name: Site smoke checks and data preservation (read-only)
-        if: inputs.mode == 'release'
+        if: env.MODE == 'release'
         run: |
           for u in https://tripcod.com/ https://tripcod.com/hotels https://tripcod.com/checkout/payment-result https://admin.tripcod.com/login; do
             code=$(curl -s -o /dev/null -w "%{http_code}" "$u"); echo "$u -> $code"; test "$code" = 200
@@ -299,7 +302,7 @@ jobs:
           python "$RUNNER_TEMP/cf.py" after
 
       - name: Restore recorded Worker versions on any failure
-        if: failure() && inputs.mode == 'release'
+        if: failure() && env.MODE == 'release'
         run: |
           python "$RUNNER_TEMP/cf.py" rollback
           echo "Workers restored. Neon 0012 / D1 0001 stay applied: both are additive and compatible with the restored versions."
