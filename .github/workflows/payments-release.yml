@@ -218,9 +218,16 @@ jobs:
           (cd apps/web && pnpm exec opennextjs-cloudflare build --dangerouslyUseUnsupportedNextVersion)
           (cd apps/admin && pnpm exec opennextjs-cloudflare build --dangerouslyUseUnsupportedNextVersion)
 
-      - name: Neon — apply 0012 only (recovery point first; lock timeout; transactional)
+      - name: Neon — verify 0012 (apply only if missing; recovery point first; lock timeout; transactional)
         if: env.MODE == 'release'
         run: |
+          applied=$(psql "$DATABASE_URL" -At -v ON_ERROR_STOP=1 -c "SELECT
+              EXISTS (SELECT 1 FROM pg_enum e JOIN pg_type t ON t.oid=e.enumtypid WHERE t.typname='payment_gateway' AND e.enumlabel='PHONEPE')
+              AND EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='payments' AND column_name='environment')
+              AND to_regclass('payment_events') IS NOT NULL
+              AND (SELECT count(*) FROM pg_indexes WHERE indexname IN ('payments_gateway_order_idx','payments_one_capture_per_booking_idx','payment_events_created_idx','payment_events_payment_idx')) = 4")
+          if [ "$applied" = t ]; then echo "Neon 0012 already fully applied — verified, not re-run."; exit 0; fi
+          echo "Neon 0012 not (fully) applied — applying."
           export PGOPTIONS="-c lock_timeout=5s -c statement_timeout=120s"
           echo "Neon recovery point (point-in-time restore before 0012): $(psql "$DATABASE_URL" -At -c "SELECT now()::text || ' lsn ' || COALESCE(pg_current_wal_lsn()::text, '?')" 2>/dev/null || psql "$DATABASE_URL" -At -c 'SELECT now()')"
           M=packages/db/drizzle/migrations/0012_payment_gateways.sql
