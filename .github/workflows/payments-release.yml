@@ -1,0 +1,305 @@
+name: Payments isolated release (b6c033c)
+
+# Manual only. mode=preflight is read-only (Cloudflare GETs, D1 SELECT /
+# migrations list, Neon SELECTs). mode=release re-runs every preflight gate, then:
+#   Neon 0012 only (lock-timeout, single transaction) → pending D1 migrations only
+#   (Time Travel bookmark first) → API / Web / Admin uploaded as non-serving
+#   versions, bindings checked, activated one by one → read-only smoke checks.
+# Any failure after an activation restores every Worker to its recorded version.
+# Database changes are additive and work with the previous Worker versions.
+# No payment, booking, supplier request or secret change is made.
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "preflight (read-only) or release"
+        required: true
+        default: preflight
+        type: choice
+        options: [preflight, release]
+
+permissions:
+  contents: read
+concurrency:
+  group: tripcod-production-release
+  cancel-in-progress: false
+
+env:
+  RELEASE_COMMIT: b6c033c7ebc363f52f84b6d3e101cb59f27c9934
+  CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+  CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+  DATABASE_URL: ${{ secrets.DATABASE_URL }}
+  WRANGLER_SEND_METRICS: "false"
+  NEXT_TELEMETRY_DISABLED: "1"
+  CI: "true"
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    services:
+      postgres:
+        image: postgres:16
+        env: { POSTGRES_PASSWORD: test }
+        ports: ["5432:5432"]
+        options: --health-cmd "pg_isready -U postgres" --health-interval 5s --health-retries 20
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+
+      - name: Pin application code to the merged payment commit
+        run: |
+          git cat-file -e "${RELEASE_COMMIT}^{commit}"
+          git diff --exit-code "$RELEASE_COMMIT" HEAD -- apps packages pnpm-lock.yaml
+          echo "Application code identical to $RELEASE_COMMIT"
+
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - name: Install psql
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client >/dev/null
+
+      - name: Write Cloudflare release helper
+        shell: python
+        run: |
+          import os, pathlib, textwrap
+          pathlib.Path(os.environ["RUNNER_TEMP"], "cf.py").write_text(textwrap.dedent(r'''
+          import json, os, pathlib, re, sys, urllib.request, urllib.error
+          root = pathlib.Path(os.environ["RUNNER_TEMP"])
+          base = "https://api.cloudflare.com/client/v4/accounts/" + os.environ["CLOUDFLARE_ACCOUNT_ID"]
+          token = os.environ["CLOUDFLARE_API_TOKEN"]
+          WORKERS = ["tripcod-api", "tripcod-web", "tripcod-admin"]
+          # The only binding a new version may add (hotel orders in D1, merged before this release).
+          ALLOWED_NEW = {"tripcod-api": {("HOTEL_DB", "d1")}, "tripcod-web": set(), "tripcod-admin": set()}
+          def req(path, payload=None):
+              h = {"Authorization": "Bearer " + token}
+              if payload is not None: h["Content-Type"] = "application/json"
+              r = urllib.request.Request(base + path, data=None if payload is None else json.dumps(payload).encode(), headers=h, method="GET" if payload is None else "POST")
+              try:
+                  with urllib.request.urlopen(r, timeout=60) as resp: v = json.loads(resp.read())
+              except urllib.error.HTTPError as e:
+                  raise SystemExit("Cloudflare HTTP %s for %s" % (e.code, path.split("?")[0]))
+              if not v.get("success"): raise SystemExit("Cloudflare call failed: " + path)
+              return v["result"]
+          def serving(w):
+              d = req("/workers/scripts/%s/deployments" % w)["deployments"]
+              if not d: raise SystemExit(w + ": no recorded deployment — rollback point unavailable")
+              return d[0]["versions"]
+          def version(w, vid): return req("/workers/scripts/%s/versions/%s" % (w, vid))
+          def bind(v): return {(b.get("name"), b.get("type")) for b in v["resources"].get("bindings", [])}
+          mode = sys.argv[1]
+          if mode == "record":
+              out = {}
+              for w in WORKERS:
+                  vs = serving(w)
+                  if len(vs) != 1 or vs[0]["percentage"] != 100: raise SystemExit(w + ": a split / gradual deployment is in progress — stop")
+                  vid = vs[0]["version_id"]; v = version(w, vid)
+                  (root / (w + "-before.json")).write_text(json.dumps(v))
+                  out[w] = vid
+                  names = sorted(n for n, _ in bind(v))
+                  print(json.dumps({"worker": w, "rollbackVersion": vid, "bindings": names, "runtime": v["resources"].get("script_runtime", {})}))
+              (root / "rollback.json").write_text(json.dumps(out))
+              api = bind(json.loads((root / "tripcod-api-before.json").read_text()))
+              names = {n for n, _ in api}
+              print(json.dumps({"phonepeSecretsPresent": sorted(n for n in names if n.startswith("PHONEPE_")),
+                                "nomodWebhookSecretPresent": "NOMOD_WEBHOOK_SECRET" in names,
+                                "hotelDbBoundToLiveApi": ("HOTEL_DB", "d1") in api}))
+              if any(n.startswith("PHONEPE_") for n in names):
+                  raise SystemExit("PhonePe secrets already exist on tripcod-api — PhonePe could be live. Stop and review before release.")
+          elif mode == "limits":   # print TOML [limits] of the serving API version so the upload keeps it
+              lim = json.loads((root / "tripcod-api-before.json").read_text())["resources"].get("script_runtime", {}).get("limits") or {}
+              if lim.get("cpu_ms"): print("\n[limits]\ncpu_ms = %d" % int(lim["cpu_ms"]))
+          elif mode == "activate":
+              w, log = sys.argv[2], sys.argv[3]
+              m = re.search(r"Worker Version ID:\s*([0-9a-f-]{36})", pathlib.Path(log).read_text())
+              if not m: raise SystemExit(w + ": uploaded version id missing — not activated")
+              new_id = m[1]
+              old = json.loads((root / (w + "-before.json")).read_text()); new = version(w, new_id)
+              added, removed = bind(new) - bind(old), bind(old) - bind(new)
+              if removed: raise SystemExit("%s: bindings would be removed %s — not activated" % (w, sorted(removed)))
+              if added - ALLOWED_NEW[w]: raise SystemExit("%s: unexpected new bindings %s — not activated" % (w, sorted(added - ALLOWED_NEW[w])))
+              if w == "tripcod-api" and any(n.startswith("PHONEPE_") for n, _ in bind(new)): raise SystemExit("PhonePe secrets present — not activated")
+              o, n = old["resources"].get("script_runtime", {}), new["resources"].get("script_runtime", {})
+              if o.get("migration_tag") != n.get("migration_tag"): raise SystemExit(w + ": Durable Object migration tag changed — not activated")
+              if (o.get("limits") or {}).get("cpu_ms") != (n.get("limits") or {}).get("cpu_ms"): raise SystemExit(w + ": CPU limit changed — not activated")
+              # Mark before the call: if the request reaches Cloudflare but the response is lost, rollback still restores this Worker.
+              (root / ("activated-" + w)).write_text(new_id)
+              req("/workers/scripts/%s/deployments" % w, {"strategy": "percentage", "versions": [{"version_id": new_id, "percentage": 100}],
+                  "annotations": {"workers/message": "Payments release %s" % os.environ["RELEASE_COMMIT"]}})
+              print(json.dumps({"activated": w, "version": new_id, "addedBindings": sorted(added)}))
+          elif mode == "after":
+              for w in WORKERS: print(json.dumps({"serving": w, "versions": serving(w)}))
+          elif mode == "rollback":
+              rb = json.loads((root / "rollback.json").read_text())
+              for w in WORKERS:
+                  if not (root / ("activated-" + w)).exists(): continue
+                  req("/workers/scripts/%s/deployments" % w, {"strategy": "percentage", "versions": [{"version_id": rb[w], "percentage": 100}],
+                      "annotations": {"workers/message": "Rollback of payments release"}})
+                  print(json.dumps({"rolledBack": w, "version": rb[w]}))
+          '''))
+
+      # ── Preflight (read-only) ────────────────────────────────────────────
+      - name: Cloudflare — record serving versions (rollback points), bindings, PhonePe off
+        run: python "$RUNNER_TEMP/cf.py" record
+
+      - name: D1 — verify database, existing tables and migration state (read-only)
+        working-directory: apps/api
+        run: |
+          set -o pipefail
+          pnpm exec wrangler d1 info tripcod-hotels
+          pnpm exec wrangler d1 execute tripcod-hotels --remote --json \
+            --command "SELECT type, name FROM sqlite_master WHERE name NOT LIKE 'sqlite_%' AND name NOT LIKE '_cf_%' ORDER BY type, name" | tee "$RUNNER_TEMP/d1-objects.json"
+          pnpm exec wrangler d1 migrations list tripcod-hotels --remote 2>&1 | tee "$RUNNER_TEMP/d1-migrations.txt"
+          # Only the merged hotel orders migration may be pending.
+          python3 - <<'PY'
+          import os, re, pathlib
+          txt = pathlib.Path(os.environ["RUNNER_TEMP"], "d1-migrations.txt").read_text()
+          pending = sorted(set(re.findall(r"\b(\d{4}_[\w-]+\.sql)\b", txt)))
+          print("D1 pending migrations:", pending or "none")
+          if any(p != "0001_hotel_bookings.sql" for p in pending):
+              raise SystemExit("Unexpected pending D1 migration(s): %s — stop" % pending)
+          pathlib.Path(os.environ["RUNNER_TEMP"], "d1-pending").write_text(" ".join(pending))
+          PY
+          if grep -q '"hotel_bookings"' "$RUNNER_TEMP/d1-objects.json"; then
+            pnpm exec wrangler d1 execute tripcod-hotels --remote --json --command "SELECT COUNT(*) AS orders, SUM(payment_status='PAID') AS paid FROM hotel_bookings"
+          fi
+
+      - name: Neon — verify schema state, data that would block 0012, and baseline counts (read-only)
+        run: |
+          test -n "$DATABASE_URL" || { echo "DATABASE_URL secret missing"; exit 1; }
+          export PGOPTIONS="-c default_transaction_read_only=on -c statement_timeout=30s"
+          q() { psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -At -c "$1"; }
+          echo "0011 applied (email_logs): $(q "SELECT to_regclass('email_logs') IS NOT NULL")"
+          test "$(q "SELECT to_regclass('email_logs') IS NOT NULL")" = t || { echo "Earlier migrations not applied — stop"; exit 1; }
+          echo "PHONEPE enum value present: $(q "SELECT EXISTS (SELECT 1 FROM pg_enum e JOIN pg_type t ON t.oid=e.enumtypid WHERE t.typname='payment_gateway' AND e.enumlabel='PHONEPE')")"
+          echo "payments.environment present: $(q "SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='payments' AND column_name='environment')")"
+          echo "payment_events present: $(q "SELECT to_regclass('payment_events') IS NOT NULL")"
+          dup_orders=$(q "SELECT count(*) FROM (SELECT gateway, gateway_order_id FROM payments WHERE gateway_order_id IS NOT NULL GROUP BY 1,2 HAVING count(*) > 1) d")
+          dup_capture=$(q "SELECT count(*) FROM (SELECT booking_id FROM payments WHERE status='SUCCESS' AND gateway::text IN ('NOMOD','PHONEPE','RAZORPAY') GROUP BY 1 HAVING count(*) > 1) d")
+          echo "Duplicate gateway order ids: $dup_orders · bookings with >1 captured card payment: $dup_capture"
+          if [ "$dup_orders" != 0 ] || [ "$dup_capture" != 0 ]; then
+            echo "Existing data conflicts with the 0012 unique indexes. Nothing changed; resolve these rows (possible double charges) first."; exit 1
+          fi
+          q "SELECT json_build_object('payments', (SELECT count(*) FROM payments), 'paymentsSuccess', (SELECT count(*) FROM payments WHERE status='SUCCESS'),
+               'paymentsAmount', (SELECT COALESCE(sum(amount),0) FROM payments), 'bookings', (SELECT count(*) FROM bookings),
+               'walletAccounts', (SELECT count(*) FROM wallet_accounts), 'walletBalance', (SELECT COALESCE(sum(balance),0) FROM wallet_accounts),
+               'walletTransactions', (SELECT count(*) FROM wallet_transactions))" | tee "$RUNNER_TEMP/neon-before.json"
+
+      # ── Release ──────────────────────────────────────────────────────────
+      - name: Tests (PhonePe, hotel orders on memory + D1, wallet, Neon integration on a fresh Postgres)
+        if: inputs.mode == 'release'
+        env:
+          TEST_DATABASE_URL: postgresql://postgres:test@localhost:5432/postgres
+        run: |
+          pnpm --filter @tripcod/api typecheck
+          for f in packages/db/drizzle/migrations/*.sql; do psql "$TEST_DATABASE_URL" -q -f "$f" >/dev/null; done
+          psql "$TEST_DATABASE_URL" -v ON_ERROR_STOP=1 -q -f packages/db/drizzle/migrations/0012_payment_gateways.sql
+          npm install --silent --prefix "$RUNNER_TEMP/pg" pg@8.13.1
+          export TEST_PG_MODULE="$RUNNER_TEMP/pg/node_modules/pg/lib/index.js"
+          TSX=./node_modules/.pnpm/tsx@4.23.12/node_modules/tsx/dist/loader.mjs
+          cd apps/api
+          node --import ../../$TSX --test test/phonepe.test.ts test/hotel-orders.test.ts test/hotel-orders-d1.test.ts test/payments-integration.test.ts
+          node --experimental-test-module-mocks --import ../../$TSX --test test/hotel-wallet.test.ts
+
+      - name: Build Web and Admin (production API URL)
+        if: inputs.mode == 'release'
+        env: { NEXT_PUBLIC_API_URL: https://api.tripcod.com }
+        run: |
+          (cd apps/web && pnpm exec opennextjs-cloudflare build --dangerouslyUseUnsupportedNextVersion)
+          (cd apps/admin && pnpm exec opennextjs-cloudflare build --dangerouslyUseUnsupportedNextVersion)
+
+      - name: Neon — apply 0012 only (recovery point first; lock timeout; transactional)
+        if: inputs.mode == 'release'
+        run: |
+          export PGOPTIONS="-c lock_timeout=5s -c statement_timeout=120s"
+          echo "Neon recovery point (point-in-time restore before 0012): $(psql "$DATABASE_URL" -At -c "SELECT now()::text || ' lsn ' || COALESCE(pg_current_wal_lsn()::text, '?')" 2>/dev/null || psql "$DATABASE_URL" -At -c 'SELECT now()')"
+          M=packages/db/drizzle/migrations/0012_payment_gateways.sql
+          # A new enum value must be committed before an index can use it.
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c "ALTER TYPE payment_gateway ADD VALUE IF NOT EXISTS 'PHONEPE'"
+          grep -v "^ALTER TYPE payment_gateway ADD VALUE" "$M" > "$RUNNER_TEMP/0012-rest.sql"
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 --single-transaction -q -f "$RUNNER_TEMP/0012-rest.sql"
+          psql "$DATABASE_URL" -At -v ON_ERROR_STOP=1 -c "SELECT string_agg(indexname, ', ') FROM pg_indexes WHERE indexname IN ('payments_gateway_order_idx','payments_one_capture_per_booking_idx')"
+          test "$(psql "$DATABASE_URL" -At -c "SELECT to_regclass('payment_events') IS NOT NULL")" = t
+
+      - name: D1 — Time Travel bookmark, then apply pending migrations only
+        if: inputs.mode == 'release'
+        working-directory: apps/api
+        run: |
+          pending=$(cat "$RUNNER_TEMP/d1-pending")
+          if [ -z "$pending" ]; then echo "No pending D1 migrations; nothing applied."; exit 0; fi
+          echo "D1 restore point:"; pnpm exec wrangler d1 time-travel info tripcod-hotels
+          pnpm exec wrangler d1 migrations apply tripcod-hotels --remote
+          pnpm exec wrangler d1 migrations list tripcod-hotels --remote
+
+      - name: Upload API as a non-serving version (same CPU limit)
+        if: inputs.mode == 'release'
+        working-directory: apps/api
+        run: |
+          set -o pipefail
+          cp wrangler.toml wrangler.release.toml
+          python "$RUNNER_TEMP/cf.py" limits >> wrangler.release.toml
+          pnpm exec wrangler versions upload --config wrangler.release.toml --message "Payments release $RELEASE_COMMIT" 2>&1 | tee "$RUNNER_TEMP/api-upload.log"
+
+      - name: Activate API (bindings, secrets, DO migration tag and CPU limit verified)
+        id: activate_api
+        if: inputs.mode == 'release'
+        run: python "$RUNNER_TEMP/cf.py" activate tripcod-api "$RUNNER_TEMP/api-upload.log"
+
+      - name: API smoke checks (read-only; PhonePe must be off)
+        if: inputs.mode == 'release'
+        run: |
+          curl -fsS https://api.tripcod.com/health
+          opts=$(curl -fsS -H "x-tenant-slug: tripcod" https://api.tripcod.com/api/checkout/payment-options); echo "$opts"
+          echo "$opts" | python3 -c 'import json,sys; g=json.load(sys.stdin)["gateways"]; assert g["PHONEPE"] is False, "PhonePe is offered"; print("PhonePe off; Nomod", g["NOMOD"])'
+          # D1 reachable from the new API: an unknown order is a clean 404, not a 500.
+          code=$(curl -s -o /dev/null -w "%{http_code}" -H "x-tenant-slug: tripcod" https://api.tripcod.com/api/hotels/orders/release-probe-00000000)
+          echo "hotel order probe: $code"; test "$code" = 404
+
+      - name: Upload and activate Web
+        id: activate_web
+        if: inputs.mode == 'release'
+        working-directory: apps/web
+        run: |
+          set -o pipefail
+          pnpm exec wrangler versions upload --message "Payments release $RELEASE_COMMIT" 2>&1 | tee "$RUNNER_TEMP/web-upload.log"
+          python "$RUNNER_TEMP/cf.py" activate tripcod-web "$RUNNER_TEMP/web-upload.log"
+
+      - name: Upload and activate Admin
+        id: activate_admin
+        if: inputs.mode == 'release'
+        working-directory: apps/admin
+        run: |
+          set -o pipefail
+          pnpm exec wrangler versions upload --message "Payments release $RELEASE_COMMIT" 2>&1 | tee "$RUNNER_TEMP/admin-upload.log"
+          python "$RUNNER_TEMP/cf.py" activate tripcod-admin "$RUNNER_TEMP/admin-upload.log"
+
+      - name: Site smoke checks and data preservation (read-only)
+        if: inputs.mode == 'release'
+        run: |
+          for u in https://tripcod.com/ https://tripcod.com/hotels https://tripcod.com/checkout/payment-result https://admin.tripcod.com/login; do
+            code=$(curl -s -o /dev/null -w "%{http_code}" "$u"); echo "$u -> $code"; test "$code" = 200
+          done
+          export PGOPTIONS="-c default_transaction_read_only=on"
+          psql "$DATABASE_URL" -At -c "SELECT json_build_object('payments', (SELECT count(*) FROM payments), 'paymentsSuccess', (SELECT count(*) FROM payments WHERE status='SUCCESS'),
+               'paymentsAmount', (SELECT COALESCE(sum(amount),0) FROM payments), 'bookings', (SELECT count(*) FROM bookings),
+               'walletAccounts', (SELECT count(*) FROM wallet_accounts), 'walletBalance', (SELECT COALESCE(sum(balance),0) FROM wallet_accounts),
+               'walletTransactions', (SELECT count(*) FROM wallet_transactions))" > "$RUNNER_TEMP/neon-after.json"
+          python3 - <<'PY'
+          import json, os
+          b = json.load(open(os.path.join(os.environ["RUNNER_TEMP"], "neon-before.json")))
+          a = json.load(open(os.path.join(os.environ["RUNNER_TEMP"], "neon-after.json")))
+          print(json.dumps({"before": b, "after": a}))
+          # Live traffic may add rows, never remove them.
+          for k in ("payments", "paymentsSuccess", "bookings", "walletAccounts", "walletTransactions"):
+              assert a[k] >= b[k], "row count dropped: " + k
+          print("No payment, booking or wallet rows lost.")
+          PY
+          python "$RUNNER_TEMP/cf.py" after
+
+      - name: Restore recorded Worker versions on any failure
+        if: failure() && inputs.mode == 'release'
+        run: |
+          python "$RUNNER_TEMP/cf.py" rollback
+          echo "Workers restored. Neon 0012 / D1 0001 stay applied: both are additive and compatible with the restored versions."
