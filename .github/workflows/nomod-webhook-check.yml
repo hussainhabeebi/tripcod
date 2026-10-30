@@ -1,0 +1,91 @@
+name: Nomod webhook configuration check (read-only)
+
+# Read-only. Prints names, booleans, URLs, event types and counts — never a
+# key or secret value. No deploy, no secret change, no webhook created, no
+# payment request. The only request to the live API is an unsigned POST to
+# /webhooks/nomod, which the handler rejects before touching any data.
+
+on:
+  push:
+    branches: [verify/nomod-webhook]
+    paths: [.github/workflows/nomod-webhook-check.yml]
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      TENANT_KV: 80e6bb7866794b1ea4eef2e1a4065040
+    steps:
+      - name: Cloudflare — tripcod-api secret names, Admin payment settings (booleans), Nomod webhook endpoints
+        shell: python
+        run: |
+          import json, os, urllib.request, urllib.error, urllib.parse
+          base = "https://api.cloudflare.com/client/v4/accounts/" + os.environ["CLOUDFLARE_ACCOUNT_ID"]
+          H = {"Authorization": "Bearer " + os.environ["CLOUDFLARE_API_TOKEN"]}
+          def get(url, headers=H, raw=False):
+              try:
+                  with urllib.request.urlopen(urllib.request.Request(url, headers=headers), timeout=30) as r:
+                      body = r.read(); return r.status, (body if raw else json.loads(body))
+              except urllib.error.HTTPError as e:
+                  return e.code, None
+
+          # 1. Secrets bound to the serving API (names + types only).
+          _, sec = get(base + "/workers/scripts/tripcod-api/secrets")
+          names = sorted(s["name"] for s in (sec or {}).get("result", []))
+          print(json.dumps({"tripcodApiSecretNames": names}))
+          print(json.dumps({"NOMOD_WEBHOOK_SECRET_set": "NOMOD_WEBHOOK_SECRET" in names,
+                            "NOMOD_API_KEY_set": "NOMOD_API_KEY" in names,
+                            "phonepeSecrets": [n for n in names if n.startswith("PHONEPE_")]}))
+
+          # 2. Admin → Settings → Payments (KV), reported as booleans / formats only.
+          _, keys = get(base + "/storage/kv/namespaces/%s/keys?prefix=%s" % (os.environ["TENANT_KV"], urllib.parse.quote("admin_settings:")))
+          nomod_key = None
+          for k in (keys or {}).get("result", []):
+              if not k["name"].endswith(":payments"): continue
+              st, raw = get(base + "/storage/kv/namespaces/%s/values/%s" % (os.environ["TENANT_KV"], urllib.parse.quote(k["name"], safe="")), raw=True)
+              if st != 200: print(json.dumps({"key": k["name"], "readStatus": st})); continue
+              s = json.loads(raw); n = s.get("nomod") or {}; ws = str(n.get("webhookSecret") or "")
+              print(json.dumps({"adminSettingsKey": k["name"], "nomodEnabled": bool(n.get("enabled")), "nomodApiKeySet": bool(n.get("apiKey")),
+                                "adminWebhookSecretSet": bool(ws), "adminWebhookSecretLooksLikeSvix": ws.startswith("whsec_"),
+                                "nomodEnvironment": n.get("environment"), "phonepeEnabled": bool((s.get("phonepe") or {}).get("enabled"))}))
+              nomod_key = nomod_key or n.get("apiKey")
+
+          # 3. Best effort: webhook endpoints as Nomod reports them (URL, events, disabled). GET only.
+          if nomod_key:
+              for path in ("/v1/webhooks", "/v1/webhook-endpoints", "/v1/webhooks/endpoints"):
+                  st, body = get("https://api.nomod.com" + path, headers={"X-API-KEY": nomod_key})
+                  print(json.dumps({"nomodApi": path, "httpStatus": st}))
+                  if st == 200 and body is not None:
+                      items = body if isinstance(body, list) else body.get("results") or body.get("data") or body.get("items") or []
+                      for e in items:
+                          print(json.dumps({"url": e.get("url"), "events": e.get("filter_types") or e.get("events") or e.get("event_types"),
+                                            "disabled": e.get("disabled"), "description": e.get("description")}))
+                      break
+          else:
+              print("Nomod API key not found in Admin settings; endpoint list not read.")
+
+      - name: Live probe — unsigned POST to /webhooks/nomod (rejected before any data access)
+        run: |
+          code=$(curl -s -o body.txt -w "%{http_code}" -X POST https://api.tripcod.com/webhooks/nomod -H "content-type: application/json" -d '{}')
+          echo "HTTP $code: $(head -c 200 body.txt)"
+          case "$code" in
+            500) echo "=> NOMOD_WEBHOOK_SECRET is NOT available to the live Worker: every Nomod webhook is rejected." ;;
+            400) echo "=> Secret is configured: unsigned requests are rejected as invalid signatures (expected)." ;;
+          esac
+
+      - name: Neon / D1 — payment confirmation evidence (read-only counts)
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client >/dev/null
+          export PGOPTIONS="-c default_transaction_read_only=on"
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c "SELECT gateway, status, count(*), max(created_at) AS latest_created, max(updated_at) AS latest_updated FROM payments GROUP BY 1,2 ORDER BY 1,2"
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -At -c "SELECT 'NOMOD pending > 1h (possible missed confirmations): ' || count(*) FROM payments WHERE gateway='NOMOD' AND status='PENDING' AND created_at < now() - interval '1 hour'"
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c "SELECT event, gateway, count(*) FROM payment_events GROUP BY 1,2 ORDER BY 1,2"
+          npx --yes wrangler@4.125.0 d1 execute tripcod-hotels --remote --json --command \
+            "SELECT payment_gateway, payment_status, COUNT(*) AS orders FROM hotel_bookings GROUP BY 1,2" | python3 -c 'import json,sys; [print(json.dumps(r)) for r in json.load(sys.stdin)[0]["results"]]'
