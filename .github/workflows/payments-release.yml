@@ -243,7 +243,7 @@ jobs:
           set -o pipefail
           cp wrangler.toml wrangler.release.toml
           python "$RUNNER_TEMP/cf.py" limits >> wrangler.release.toml
-          pnpm exec wrangler versions upload --config wrangler.release.toml --message "Payments release $RELEASE_COMMIT" 2>&1 | tee "$RUNNER_TEMP/api-upload.log"
+          pnpm exec wrangler versions upload --config wrangler.release.toml --keep-vars --message "Payments release $RELEASE_COMMIT" 2>&1 | tee "$RUNNER_TEMP/api-upload.log"
 
       - name: Activate API (bindings, secrets, DO migration tag and CPU limit verified)
         id: activate_api
@@ -266,7 +266,7 @@ jobs:
         working-directory: apps/web
         run: |
           set -o pipefail
-          pnpm exec wrangler versions upload --message "Payments release $RELEASE_COMMIT" 2>&1 | tee "$RUNNER_TEMP/web-upload.log"
+          pnpm exec wrangler versions upload --keep-vars --message "Payments release $RELEASE_COMMIT" 2>&1 | tee "$RUNNER_TEMP/web-upload.log"
           python "$RUNNER_TEMP/cf.py" activate tripcod-web "$RUNNER_TEMP/web-upload.log"
 
       - name: Upload and activate Admin
@@ -275,7 +275,7 @@ jobs:
         working-directory: apps/admin
         run: |
           set -o pipefail
-          pnpm exec wrangler versions upload --message "Payments release $RELEASE_COMMIT" 2>&1 | tee "$RUNNER_TEMP/admin-upload.log"
+          pnpm exec wrangler versions upload --keep-vars --message "Payments release $RELEASE_COMMIT" 2>&1 | tee "$RUNNER_TEMP/admin-upload.log"
           python "$RUNNER_TEMP/cf.py" activate tripcod-admin "$RUNNER_TEMP/admin-upload.log"
 
       - name: Site smoke checks and data preservation (read-only)
