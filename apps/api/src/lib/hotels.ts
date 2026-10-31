@@ -12,8 +12,18 @@ import { collectExchanges, persistInBackground } from "./api-exchanges.js";
 import { persistHotelExchanges } from "./hotel-cert-logs.js";
 
 // ── Credentials / environment ───────────────────────────────────────────────
+//
+// TripJack issues separate UAT and Production accounts (portal + key), and the
+// hotel account is configured on its own: flights can run on Production while
+// hotels stay on UAT. The flight key is only reused for hotels when both sides
+// are on the same environment (the setup before hotels had their own key).
 
-interface TripjackSaved { apiKey?: string; environment?: "UAT" | "PRODUCTION" }
+type TripjackEnv = "UAT" | "PRODUCTION";
+
+export interface TripjackSaved {
+  apiKey?: string; environment?: TripjackEnv;
+  hotelApiKey?: string; hotelEnvironment?: TripjackEnv;
+}
 
 async function savedTripjack(env: Env, tenantId: string): Promise<TripjackSaved | null> {
   try {
@@ -23,12 +33,32 @@ async function savedTripjack(env: Env, tenantId: string): Promise<TripjackSaved 
   }
 }
 
+export interface HotelCredentials {
+  environment: TripjackEnv;
+  apiKey:      string;
+  source:      "admin-hotel-key" | "worker-hotel-secret" | "flight-key" | "none";
+}
+
+export function resolveHotelCredentials(saved: TripjackSaved | null, env: Pick<Env, "TRIPJACK_API_KEY" | "TRIPJACK_HOTEL_API_KEY">): HotelCredentials {
+  const flightEnvironment: TripjackEnv = saved?.environment === "PRODUCTION" ? "PRODUCTION" : "UAT";
+  // Hotels are UAT until a hotel environment is chosen explicitly.
+  const environment: TripjackEnv = saved?.hotelEnvironment === "PRODUCTION" ? "PRODUCTION" : "UAT";
+  if (saved?.hotelApiKey) return { environment, apiKey: saved.hotelApiKey, source: "admin-hotel-key" };
+  if (env.TRIPJACK_HOTEL_API_KEY) return { environment, apiKey: env.TRIPJACK_HOTEL_API_KEY, source: "worker-hotel-secret" };
+  const flightKey = saved?.apiKey || env.TRIPJACK_API_KEY || "";
+  if (flightKey && environment === flightEnvironment) return { environment, apiKey: flightKey, source: "flight-key" };
+  return { environment, apiKey: "", source: "none" };
+}
+
 export async function hotelClient(env: Env, tenantId: string, recorder?: ExchangeRecorder) {
-  const saved = await savedTripjack(env, tenantId);
+  const creds = resolveHotelCredentials(await savedTripjack(env, tenantId), env);
   return new TripjackHotelV3Client({
-    apiKey:   saved?.apiKey || env.TRIPJACK_API_KEY,
-    baseUrl:  env.TRIPJACK_API_BASE_URL,   // the Tripcod TripJack gateway
-    proxyKey: env.TRIPJACK_PROXY_KEY,
+    apiKey:      creds.apiKey,
+    baseUrl:     env.TRIPJACK_API_BASE_URL,   // the Tripcod TripJack gateway
+    proxyKey:    env.TRIPJACK_PROXY_KEY,
+    environment: creds.environment,
+    missingKeyMessage: `TripJack hotel ${creds.environment} API key is not set. Add it in Admin → Integrations → TripJack → Hotels `
+      + `(the flight key is for a different TripJack environment and is not used for hotels).`,
     ...(recorder ? { recorder } : {}),
   });
 }
@@ -56,8 +86,14 @@ export const hotelExchanges = async (c: any, next: () => Promise<void>) => {
 
 export const hotelRecorder = (c: any): ExchangeRecorder | undefined => c.get("hotelExchanges")?.recorder;
 
+// Flight environment (flight certification packs).
 export async function tripjackEnvironment(env: Env, tenantId: string): Promise<"UAT" | "PRODUCTION"> {
   return (await savedTripjack(env, tenantId))?.environment === "PRODUCTION" ? "PRODUCTION" : "UAT";
+}
+
+// Hotel environment (hotel certification packs and hosts).
+export async function hotelEnvironment(env: Env, tenantId: string): Promise<"UAT" | "PRODUCTION"> {
+  return resolveHotelCredentials(await savedTripjack(env, tenantId), env).environment;
 }
 
 // ── Nationality (ISO2 → TripJack countryId) ─────────────────────────────────

@@ -4,7 +4,7 @@ import { eq, and, desc, gte, inArray, like, lte, or, asc } from "drizzle-orm";
 import { HTTPException } from "hono/http-exception";
 import { buildZip } from "../../lib/zip.js";
 import { certificationRequest, tripjackHost } from "../../lib/certification.js";
-import { tripjackEnvironment } from "../../lib/hotels.js";
+import { hotelEnvironment, tripjackEnvironment } from "../../lib/hotels.js";
 import {
   hotelBookingFolders, hotelFolderSummary, hotelScenario, hotelStep, storedHotelCalls, type HotelStep, type R2Like, type StoredCall,
 } from "../../lib/hotel-cert-logs.js";
@@ -113,6 +113,9 @@ const scopeFilter = (scope?: string) => scope === "hotel" ? HOTEL_SCOPE()
   : undefined;
 
 // TripJack host each call actually went to (the gateway forwards by path).
+const isHotelEndpoint = (endpoint: string) =>
+  endpoint.startsWith("/hms/") || endpoint.startsWith("/tj-main/hms/") || endpoint.startsWith("/oms/v3/hotel/") || endpoint.startsWith("/oms/v1/hotel/");
+
 function hostFor(endpoint: string, env: "UAT" | "PRODUCTION") {
   if (endpoint.startsWith("/hms/")) return env === "PRODUCTION" ? "https://hms-search.tripjack.com" : "https://apitest-hms.tripjack.com";
   if (endpoint.startsWith("/oms/v3/hotel/") || endpoint.startsWith("/oms/v1/hotel/")) return env === "PRODUCTION" ? "https://hms-booker.tripjack.com" : "https://apitest-hotel-booker.tripjack.com";
@@ -155,7 +158,8 @@ async function exchangeFile(c: any, id: string, part: "request" | "response", ba
   if (part === "request") {
     let stored: Record<string, any> = {};
     try { stored = JSON.parse(await obj.text()); } catch { /* keep empty */ }
-    const env = await tripjackEnvironment(c.env, c.get("tenantId"));
+    // Hotels and flights can be on different TripJack environments.
+    const env = isHotelEndpoint(x.endpoint) ? await hotelEnvironment(c.env, c.get("tenantId")) : await tripjackEnvironment(c.env, c.get("tenantId"));
     const req = certificationRequest(stored, hostFor(x.endpoint, env));
     // Keep any query string (e.g. city sync cursor); a GET has no body.
     const query = (() => { try { return new URL(String(stored.url)).search; } catch { return ""; } })();
@@ -311,7 +315,7 @@ supplierLogsAdminRoutes.get("/hotel-certification/:bookingId/zip", async (c) => 
   if (!HOTEL_BOOKING_ID.test(bookingId)) throw new HTTPException(400, { message: "Invalid TripJack booking ID" });
   const { calls, steps, correlationIds } = await collectHotelPack(c, bookingId);
   if (!calls.length) throw new HTTPException(404, { message: `No hotel API logs for TripJack booking ${bookingId}` });
-  const env = await tripjackEnvironment(c.env, c.get("tenantId"));
+  const env = await hotelEnvironment(c.env, c.get("tenantId"));
   const files: { name: string; data: Uint8Array; date: Date }[] = [];
   const used = new Map<string, number>();
   const listed: Record<string, unknown>[] = [];

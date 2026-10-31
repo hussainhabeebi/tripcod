@@ -19,6 +19,14 @@ TripJack serves hotels from separate hosts. The gateway forwards `/hms/*`
 
 TripJack must whitelist the gateway IP for the hotel hosts too.
 
+Hotels can use a different TripJack account (UAT / Production) than flights.
+The Worker sends `X-Tripcod-Hotel-Environment: UAT|PRODUCTION` on hotel calls;
+when present, hotel routes use that environment's TripJack hotel hosts
+(overridable with `TRIPJACK_HMS_UPSTREAM_UAT`, `TRIPJACK_HOTEL_BOOKER_UPSTREAM_UAT`,
+`TRIPJACK_HMS_UPSTREAM_PRODUCTION`, `TRIPJACK_HOTEL_BOOKER_UPSTREAM_PRODUCTION`).
+Without the header, and for every flight, TripSafe and user route, routing is
+unchanged. A gateway without this support ignores the header.
+
 The Cloudflare Worker owns `TRIPJACK_API_KEY` and sends it to the gateway on
 each authenticated request. It does not need to be stored in Coolify.
 `TRIPJACK_API_KEY` remains supported in Coolify only as an optional fallback
