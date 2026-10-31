@@ -100,6 +100,7 @@ export function d1HotelOrderStore(d1: D1Database, tenantId?: string): HotelOrder
       if (guard?.paymentStatus) { where.push(`payment_status IN (${inList(guard.paymentStatus)})`); args.push(...guard.paymentStatus); }
       if (guard?.supplierSubmittedAtNull) where.push("supplier_submitted_at IS NULL");
       if (guard?.confirmSubmittedAtNull) where.push("confirm_submitted_at IS NULL");
+      if (guard && "lastCheckedAt" in guard) { where.push("last_checked_at IS ?"); args.push(toColumn("lastCheckedAt", guard.lastCheckedAt)); }
       return one(`UPDATE hotel_bookings SET ${sets.join(", ")} WHERE ${where.join(" AND ")} RETURNING *`, ...args);
     },
   };
@@ -177,7 +178,9 @@ export function supplierCall(db: Db, tenantId: string, waitUntil?: (p: Promise<u
   };
 }
 
-export interface HotelQueueMsg { type: "HOTEL_PAYMENT_CAPTURED"; hotelBookingId: string; tenantId: string }
+export type HotelQueueMsg =
+  | { type: "HOTEL_PAYMENT_CAPTURED"; hotelBookingId: string; tenantId: string }
+  | { type: "HOTEL_HOLD_EXPIRY_CHECK"; hotelBookingId: string; tenantId: string };
 
 export async function hotelOrderDeps(env: Env, db: Db, tenantId: string, opts: { recorder?: ExchangeRecorder; waitUntil?: (p: Promise<unknown>) => void; pollMs?: number } = {}): Promise<HotelOrderDeps> {
   return {
@@ -309,7 +312,7 @@ export async function createHotelNomodLink(env: Env, tenantId: string, order: Ho
 
 // ── Queue + Nomod webhook entry points ───────────────────────────────────────
 
-export async function processHotelPayment(env: Env, db: Db, msg: HotelQueueMsg) {
+export async function processHotelPayment(env: Env, db: Db, msg: Extract<HotelQueueMsg, { type: "HOTEL_PAYMENT_CAPTURED" }>) {
   const { processPaidOrder } = await import("./hotel-orders.js");
   // Book / confirm-book after payment run here, outside any request: record them
   // too, so instant and confirm-hold UAT logs exist (linked to the TripJack booking).
@@ -323,6 +326,47 @@ export async function processHotelPayment(env: Env, db: Db, msg: HotelQueueMsg) 
       .catch((err) => console.error("[hotel-order] exchange logs not stored", err));
   }
   console.info(`[hotel-order] ${msg.hotelBookingId} after payment: ${order?.status ?? "missing"} / ${order?.supplierStatus ?? "-"}`);
+}
+
+// ── Hold expiry: scheduled sweep → queue → one claimed Booking Details check ──
+
+// Holds that may be due (all tenants). Small set: only unpaid holds still ON_HOLD.
+export async function holdExpiryCandidates(d1: D1Database, limit = 200): Promise<HotelOrder[]> {
+  const { results } = await d1.prepare(`SELECT * FROM hotel_bookings WHERE mode = 'HOLD' AND status = 'ON_HOLD'
+      AND hold_deadline IS NOT NULL AND supplier_submitted_at IS NOT NULL AND payment_status IN ('UNPAID', 'PENDING', 'REFUNDED')
+      ORDER BY hold_deadline LIMIT ?`).bind(limit).all<Record<string, unknown>>();
+  return results.map(rowToOrder);
+}
+
+// Cron: queue one check per hold whose deadline has passed. The consumer claims
+// each order before calling TripJack, so overlapping sweeps can't double-process.
+export async function sweepExpiredHolds(env: Pick<Env, "HOTEL_DB" | "BOOKING_QUEUE">, now = Date.now()) {
+  const { holdCheckDue } = await import("./hotel-orders.js");
+  const due = (await holdExpiryCandidates(env.HOTEL_DB)).filter((o) => holdCheckDue(o, now));
+  for (let i = 0; i < due.length; i += 100) {
+    await env.BOOKING_QUEUE.sendBatch(due.slice(i, i + 100).map((o) => ({
+      body: { type: "HOTEL_HOLD_EXPIRY_CHECK", hotelBookingId: o.id, tenantId: o.tenantId } satisfies HotelQueueMsg,
+    })));
+  }
+  return { queued: due.length };
+}
+
+// Queue: one hold's expiry check. The Booking Details request / response is
+// stored with the booking's UAT logs (Admin → Hotel UAT logs → ZIP).
+export async function processHoldExpiry(env: Env, db: Db, msg: Extract<HotelQueueMsg, { type: "HOTEL_HOLD_EXPIRY_CHECK" }>) {
+  const { checkExpiredHold } = await import("./hotel-orders.js");
+  const collector = collectExchanges();
+  const deps = await hotelOrderDeps(env, db, msg.tenantId, { recorder: collector.recorder });
+  let result: Awaited<ReturnType<typeof checkExpiredHold>> = { order: null, checked: false };
+  try {
+    result = await checkExpiredHold(deps, msg.hotelBookingId);
+  } finally {
+    await persistHotelExchanges(env, db, msg.tenantId, collector.exchanges, {
+      bookingId: result.order?.supplierBookingId ?? null, requestId: `hotel-hold-expiry-${msg.hotelBookingId}`,
+    }).catch((err) => console.error("[hotel-hold-expiry] exchange logs not stored", err));
+  }
+  console.info(`[hotel-hold-expiry] ${msg.hotelBookingId}: ${result.checked ? "checked" : "skipped"} → ${result.order?.status ?? "missing"} / ${result.order?.supplierStatus ?? "-"}`);
+  return result;
 }
 
 // Nomod charge events for hotel orders. Returns null when no hotel order uses these ids.
