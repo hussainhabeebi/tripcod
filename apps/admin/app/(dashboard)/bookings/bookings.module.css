@@ -1,0 +1,12 @@
+.table th { white-space:nowrap; }
+.table td { min-width:90px; }
+.table td a { display:inline-flex; align-items:center; min-height:44px; }
+@media(max-width:767px) {
+ .table { display:block; min-width:0 !important; background:transparent !important; }
+ .table thead { display:none; }
+ .table tbody { display:grid; gap:14px; }
+ .table tr { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); background:#1e293b; border:1px solid #334155; border-radius:12px; padding:10px; }
+ .table td { display:block; min-width:0; max-width:none !important; padding:8px !important; border-bottom:0 !important; }
+ .table td::before { content:attr(data-label); display:block; font-size:11px; color:#94a3b8; margin-bottom:4px; }
+ .table td:nth-child(2), .table td:last-child { grid-column:1 / -1; }
+}

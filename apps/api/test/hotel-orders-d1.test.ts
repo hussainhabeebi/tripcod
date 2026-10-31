@@ -116,3 +116,34 @@ test("My Trips lists hold, confirmed and cancelled hotels only for the authentic
     assert.equal((await d1.prepare("SELECT COUNT(*) AS count FROM hotel_bookings").first()).count, 6);
   } finally { globalThis.fetch = originalFetch; }
 });
+
+test("Admin hotel listing and details read D1, retain every status and enforce tenant boundaries", async () => {
+  const { Hono } = await import("hono");
+  const { hotelBookingsAdminRoutes } = await import("../src/routes/admin/hotel-bookings.js");
+  await d1.exec("DELETE FROM hotel_bookings");
+  const store = d1HotelOrderStore(d1);
+  const ids: string[] = [];
+  for (const status of ["ON_HOLD", "CONFIRMED", "CANCELLED"]) ids.push((await store.insert(row({ supplierBookingId: `ADMIN-${status}`, status, mode: "HOLD", holdDeadline: "2026-11-20T18:00", cancellation: status === "CANCELLED" ? { charge: 100 } : null })))!.id);
+  const other = (await store.insert(row({ supplierBookingId: "OTHER-TENANT", tenantId: "t2" })))!;
+  const app = new Hono<any>();
+  app.use("*", async (c, next) => { c.set("tenantId", "t1"); c.set("userRole", c.req.header("Test-Role") || "TENANT_ADMIN"); await next(); });
+  app.route("/hotels", hotelBookingsAdminRoutes);
+  const original = globalThis.fetch;
+  let external = 0;
+  globalThis.fetch = (async () => { external++; throw new Error("No external operations allowed"); }) as any;
+  try {
+    const get = (path: string, role?: string) => app.request(path, { headers: role ? { "Test-Role": role } : {} }, { HOTEL_DB: d1 });
+    const result = await (await get("/hotels?tenantId=t2")).json() as any;
+    assert.deepEqual(result.bookings.map((b:any)=>b.status).sort(), ["CANCELLED","CONFIRMED","ON_HOLD"]);
+    assert.ok(result.bookings.every((b:any)=>b.tenantId === "t1" && !('accessKeyHash' in b)));
+    const detail = await (await get(`/hotels/${ids[0]}`)).json() as any;
+    assert.equal(detail.booking.holdDeadline,"2026-11-20T18:00");
+    assert.equal(detail.booking.payment.status,"UNPAID");
+    assert.equal((await get(`/hotels/${other.id}?tenantId=t2`)).status,404);
+    assert.equal((await get(`/hotels/${other.id}`,"SUPER_ADMIN")).status,200);
+    assert.equal((await (await get("/hotels?status=ON_HOLD&pnr=ADMIN-ON_HOLD")).json() as any).bookings.length,1);
+    assert.equal((await (await get("/hotels?tenantId=t2","SUPER_ADMIN")).json() as any).bookings.length,1);
+    assert.equal(external,0);
+    assert.equal((await d1.prepare("SELECT COUNT(*) AS n FROM hotel_bookings").first()).n,4);
+  } finally { globalThis.fetch=original; }
+});

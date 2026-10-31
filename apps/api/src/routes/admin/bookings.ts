@@ -16,7 +16,14 @@ import {
 } from "../../lib/booking-recovery.js";
 import { processPaidBooking } from "../../queue-consumer.js";
 
+import { hotelBookingsAdminRoutes } from "./hotel-bookings.js";
+import { hotelCertificationList, hotelCertificationZip } from "./supplier-logs.js";
+
 export const bookingsAdminRoutes = new Hono<{ Bindings: Env; Variables: Variables }>();
+
+bookingsAdminRoutes.route("/hotels", hotelBookingsAdminRoutes);
+bookingsAdminRoutes.get("/hotel-certification", hotelCertificationList);
+bookingsAdminRoutes.get("/hotel-certification/:bookingId/zip", hotelCertificationZip);
 
 // TENANT_ADMIN sees only their tenant's bookings
 // SUPER_ADMIN sees all bookings; optionally filtered by ?tenantId=

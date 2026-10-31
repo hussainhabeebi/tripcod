@@ -225,3 +225,36 @@ test("a hold logged before this fix (index rejected, Review in the search folder
   }
   assert.equal(JSON.parse(files["HotelHoldBookRequest.json"]).body.bookingId, TJ);
 });
+
+test("Bookings hotel JSON viewer and ZIP reuse original linked logs without mutations or supplier requests", async () => {
+  const { hotelBookingsAdminRoutes } = await import("../src/routes/admin/hotel-bookings.js");
+  const r2=fakeR2(), db=fakeDb();
+  const env:any={DOCUMENTS_R2:r2,TENANT_CACHE_KV:{get:async()=>({hotelEnvironment:"UAT"})}};
+  await persistHotelExchanges(env,db,"t1",await recordedScenario(),{requestId:"admin-booking-test"});
+  const raw:any={id:"order1",tenant_id:"t1",supplier_booking_id:TJ,mode:"HOLD",status:"ON_HOLD",payment_status:"UNPAID",amount:"100",currency:"INR",hotel:JSON.stringify({name:"Test Hotel"}),occupancy:"[]",guests:"[]",option:JSON.stringify({cancellation:{isRefundable:true,penalties:[]}}),created_at:new Date().toISOString(),updated_at:new Date().toISOString()};
+  env.HOTEL_DB={prepare:()=>({bind:(id:string,t?:string)=>({first:async()=>id==="order1"&&(!t||t==="t1")?raw:null})})};
+  const app=new Hono<any>();
+  app.use("*",async(c,next)=>{c.set("tenantId",c.req.header("Test-Tenant") || "t1");c.set("userRole","TENANT_ADMIN");c.set("db",db);await next();});
+  app.route("/hotels",hotelBookingsAdminRoutes);
+  const read=(p:string,tenant="t1")=>app.fetch(new Request(`https://test/hotels/order1${p}`,{headers:{"Test-Tenant":tenant}}),env,{waitUntil(){}} as any);
+  const stored=new Map(r2.files);
+  const original=globalThis.fetch;
+  globalThis.fetch=(async()=>{throw new Error("No supplier or payment call allowed");}) as any;
+  try {
+    const list=await (await read("/exchanges")).json() as any;
+    assert.equal(list.exchanges.length,8);
+    const hold=list.exchanges.find((x:any)=>x.endpoint==="/oms/v3/hotel/book");
+    const request=await (await read(`/exchanges/${hold.id}/request`)).json() as any;
+    assert.equal(request.body.bookingId,TJ);
+    assert.doesNotMatch(JSON.stringify(request),/gw-secret|x-tripcod-gateway-key/i);
+    const response=await (await read(`/exchanges/${hold.id}/response`)).text();
+    assert.equal(response,JSON.stringify(RESPONSES["/oms/v3/hotel/book"]));
+    const zip=await read("/certification.zip");assert.equal(zip.status,200);
+    const files=unzip(new Uint8Array(await zip.arrayBuffer()));
+    assert.equal(files["HotelHoldBookResponse.json"],response);
+    assert.equal(JSON.parse(files["HotelBookingSummary.json"]).tripjackBookingId,TJ);
+    for(const path of ["","/exchanges","/exchanges/0/request","/certification.zip"])assert.equal((await read(path,"t2")).status,404);
+    assert.equal((await read("/exchanges/999/request")).status,404);
+    assert.deepEqual(r2.files,stored,"original TripJack logs are untouched");
+  } finally {globalThis.fetch=original;}
+});

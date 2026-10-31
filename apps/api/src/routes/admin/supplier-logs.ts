@@ -117,7 +117,7 @@ const scopeFilter = (scope?: string) => scope === "hotel" ? HOTEL_SCOPE()
 const isHotelEndpoint = (endpoint: string) =>
   endpoint.startsWith("/hms/") || endpoint.startsWith("/tj-main/hms/") || endpoint.startsWith("/oms/v3/hotel/") || endpoint.startsWith("/oms/v1/hotel/");
 
-function hostFor(endpoint: string, env: "UAT" | "PRODUCTION") {
+export function hostFor(endpoint: string, env: "UAT" | "PRODUCTION") {
   if (endpoint.startsWith("/hms/")) return env === "PRODUCTION" ? "https://hms-search.tripjack.com" : "https://apitest-hms.tripjack.com";
   if (endpoint.startsWith("/oms/v3/hotel/") || endpoint.startsWith("/oms/v1/hotel/")) return env === "PRODUCTION" ? "https://hms-booker.tripjack.com" : "https://apitest-hotel-booker.tripjack.com";
   return tripjackHost(env);
@@ -228,7 +228,7 @@ async function textOf(c: any, key: string | null) {
 // the Review that produced the booking ID. Bookings logged before reviews were
 // filed under the booking keep their Review in the search folder; it is found by
 // its response naming this booking.
-async function collectHotelPack(c: any, bookingId: string) {
+export async function collectHotelPack(c: any, bookingId: string) {
   const r2 = c.env.DOCUMENTS_R2 as R2Like;
   const tenantId = c.get("tenantId");
   const own = await storedHotelCalls(r2, tenantId, `booking-${bookingId}`);
@@ -283,7 +283,7 @@ async function collectHotelPack(c: any, bookingId: string) {
 
 // Fast list: one R2 listing per booking (file names) + its Book request. Search /
 // Review of bookings logged before PR #15 live in the search logs; the ZIP adds them.
-supplierLogsAdminRoutes.get("/hotel-certification", async (c) => {
+export async function hotelCertificationList(c: any) {
   const limit = Math.min(parseInt(c.req.query("limit") ?? "50") || 50, 100);
   const tenantId = c.get("tenantId");
   const r2 = c.env.DOCUMENTS_R2 as R2Like;
@@ -309,7 +309,8 @@ supplierLogsAdminRoutes.get("/hotel-certification", async (c) => {
     if (order) p.order = { id: order.id, mode: order.mode, status: order.status, supplierStatus: order.supplierStatus, hotel: (order.hotel as any)?.name ?? null };
   }
   return c.json({ packs: page });
-});
+}
+supplierLogsAdminRoutes.get("/hotel-certification", hotelCertificationList);
 
 // TripJack status in a stored Booking Details response (null when unreadable).
 function bookingDetailsStatus(bytes: Uint8Array): string | null {
@@ -331,7 +332,7 @@ export function holdLifecycle(calls: { step: string; files: string[]; at: string
   };
 }
 
-supplierLogsAdminRoutes.get("/hotel-certification/:bookingId/zip", async (c) => {
+export async function hotelCertificationZip(c: any) {
   const bookingId = c.req.param("bookingId");
   if (!HOTEL_BOOKING_ID.test(bookingId)) throw new HTTPException(400, { message: "Invalid TripJack booking ID" });
   const { calls, steps, correlationIds } = await collectHotelPack(c, bookingId);
@@ -391,4 +392,5 @@ supplierLogsAdminRoutes.get("/hotel-certification/:bookingId/zip", async (c) => 
     "Content-Disposition": `attachment; filename="tripjack-hotel-${bookingId}.zip"`,
     "Cache-Control": "private, no-store",
   } });
-});
+}
+supplierLogsAdminRoutes.get("/hotel-certification/:bookingId/zip", hotelCertificationZip);
