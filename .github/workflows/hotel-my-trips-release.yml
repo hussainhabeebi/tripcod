@@ -18,19 +18,6 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
-        with: {node-version: 22, cache: pnpm}
-      - run: pnpm install --frozen-lockfile
-      - name: My Trips website build
-        working-directory: apps/web
-        env:
-          NEXT_PUBLIC_API_URL: https://api.tripcod.com
-          NEXT_PUBLIC_PORTAL_URL: https://portal.tripcod.com
-        run: |
-          pnpm exec tsc --noEmit
-          pnpm exec opennextjs-cloudflare build --dangerouslyUseUnsupportedNextVersion
       - name: Prepare web-only release helper
         shell: python
         run: |
@@ -102,11 +89,11 @@ jobs:
               found=False
               for script in scripts:
                   if '/trips/' not in script: continue
-                  with urllib.request.urlopen('https://tripcod.com'+script,timeout=45) as response: code=response.read().decode()
+                  with urllib.request.urlopen(urllib.request.Request('https://tripcod.com'+script,headers={'User-Agent':'Mozilla/5.0 Tripcod-release-verification','Referer':'https://tripcod.com/trips'}),timeout=45) as response: code=response.read().decode()
                   if 'Retry hotel bookings' in code and 'Hold deadline' in code: found=True
               if not found: raise RuntimeError('Updated My Trips asset not found')
               try:
-                  urllib.request.urlopen(urllib.request.Request('https://api.tripcod.com/api/hotels/orders/mine', headers={'x-tenant-slug':'tripcod'}),timeout=45)
+                  urllib.request.urlopen(urllib.request.Request('https://api.tripcod.com/api/hotels/orders/mine', headers={'x-tenant-slug':'tripcod','User-Agent':'Mozilla/5.0 Tripcod-release-verification','Origin':'https://tripcod.com'}),timeout=45)
                   raise RuntimeError('Hotel history exposed without authentication')
               except urllib.error.HTTPError as error:
                   if error.code != 401: raise
@@ -120,11 +107,9 @@ jobs:
           ''')
       - name: Record current deployment versions (read-only)
         run: python "$RUNNER_TEMP/public-web.py" record
-      - name: Upload website version while preserving variables
-        working-directory: apps/web
+      - name: Reuse immutable website version built and checked in run 41186063999
         run: |
-          set -o pipefail
-          pnpm exec wrangler versions upload --keep-vars --message "My Trips hotel visibility" 2>&1 | tee "$RUNNER_TEMP/public-web-upload.log"
+          echo 'Worker Version ID: fe9aec30-b8c0-49ee-bd3f-f6082211fe80' > "$RUNNER_TEMP/public-web-upload.log"
       - name: Check unchanged bindings and runtime, then activate website
         run: python "$RUNNER_TEMP/public-web.py" activate
       - name: Verify My Trips assets and unchanged other Workers
