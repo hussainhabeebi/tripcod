@@ -1,0 +1,134 @@
+name: Hotel My Trips isolated website release
+on:
+  push:
+    branches: [release/hotel-my-trips]
+    paths: [.github/workflows/hotel-my-trips-release.yml]
+permissions:
+  contents: read
+concurrency:
+  group: tripcod-production-release
+  cancel-in-progress: false
+env:
+  CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+  CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+  WRANGLER_SEND_METRICS: 'false'
+  NEXT_TELEMETRY_DISABLED: '1'
+jobs:
+  web-only:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: 22, cache: pnpm}
+      - run: pnpm install --frozen-lockfile
+      - name: My Trips website build
+        working-directory: apps/web
+        env:
+          NEXT_PUBLIC_API_URL: https://api.tripcod.com
+          NEXT_PUBLIC_PORTAL_URL: https://portal.tripcod.com
+        run: |
+          pnpm exec tsc --noEmit
+          pnpm exec opennextjs-cloudflare build --dangerouslyUseUnsupportedNextVersion
+      - name: Prepare web-only release helper
+        shell: python
+        run: |
+          import os, pathlib
+          pathlib.Path(os.environ['RUNNER_TEMP'], 'public-web.py').write_text(r'''
+          import json, os, pathlib, re, sys, time, urllib.request, urllib.error
+          root = pathlib.Path(os.environ['RUNNER_TEMP'])
+          base = 'https://api.cloudflare.com/client/v4/accounts/' + os.environ['CLOUDFLARE_ACCOUNT_ID']
+          def call(path, payload=None):
+              request = urllib.request.Request(base + path, data=None if payload is None else json.dumps(payload).encode(), method='GET' if payload is None else 'POST', headers={'Authorization': 'Bearer ' + os.environ['CLOUDFLARE_API_TOKEN'], 'Content-Type': 'application/json'})
+              with urllib.request.urlopen(request, timeout=60) as response: result = json.load(response)
+              if not result.get('success'): raise RuntimeError('Cloudflare operation failed')
+              return result['result']
+          def serving(worker):
+              versions = call('/workers/scripts/' + worker + '/deployments')['deployments'][0]['versions']
+              if len(versions) != 1 or versions[0]['percentage'] != 100: raise RuntimeError('Split deployment in progress: ' + worker)
+              return versions[0]['version_id']
+          def resources(version):
+              return call('/workers/scripts/tripcod-web/versions/' + version)['resources']
+          def activate(version, note):
+              # The only mutation performed by this helper is activation of tripcod-web.
+              call('/workers/scripts/tripcod-web/deployments', {'strategy':'percentage', 'versions':[{'version_id':version,'percentage':100}], 'annotations':{'workers/message':note}})
+          def bindings(resource):
+              return sorted(json.dumps(item, sort_keys=True) for item in resource.get('bindings', []))
+          mode = sys.argv[1]
+          statepath = root / 'public-web-state.json'
+          if mode == 'record':
+              state = {worker: serving(worker) for worker in ['tripcod-web','tripcod-api','tripcod-admin','tripcod-portal']}
+              state['resources'] = resources(state['tripcod-web'])
+              statepath.write_text(json.dumps(state))
+              print('Recorded web rollback version ' + state['tripcod-web'] + '; API, Admin and Portal are read-only checkpoints.')
+          elif mode == 'activate':
+              state = json.loads(statepath.read_text())
+              if serving('tripcod-web') != state['tripcod-web']: raise RuntimeError('Web changed during release')
+              match = re.search(r'Worker Version ID:\s*([0-9a-f-]{36})', (root / 'public-web-upload.log').read_text())
+              if not match: raise RuntimeError('Uploaded version ID missing; no activation')
+              new = match[1]
+              resource = resources(new)
+              if bindings(resource) != bindings(state['resources']): raise RuntimeError('Bindings or variables changed; no activation')
+              oldruntime = state['resources'].get('script_runtime', {})
+              newruntime = resource.get('script_runtime', {})
+              for key in ['compatibility_date','compatibility_flags','migration_tag','limits']:
+                  if oldruntime.get(key) != newruntime.get(key): raise RuntimeError('Runtime setting changed: ' + key)
+              state['new'] = new
+              statepath.write_text(json.dumps(state))
+              activate(new, 'My Trips hotel visibility fix; API, bookings and payments unchanged')
+              print('Activated tripcod-web version ' + new)
+          elif mode == 'verify':
+              state = json.loads(statepath.read_text())
+              for worker in ['tripcod-api','tripcod-admin','tripcod-portal']:
+                  if serving(worker) != state[worker]: raise RuntimeError('Unexpected deployment movement: ' + worker)
+              if serving('tripcod-web') != state['new']: raise RuntimeError('New web version is not serving')
+              checks = {'/trips':'My Trips', '/hotels':'hotel', '/login':'Sign in'}
+              for path, marker in checks.items():
+                  for attempt in range(8):
+                      try:
+                          request=urllib.request.Request('https://tripcod.com'+path,headers={'User-Agent':'Mozilla/5.0 Tripcod-public-release'})
+                          with urllib.request.urlopen(request,timeout=45) as response:
+                              html=response.read().decode()
+                              if response.status != 200 or marker not in html: raise RuntimeError('New content not yet visible')
+                          print('LIVE_OK '+path)
+                          break
+                      except Exception:
+                          if attempt==7: raise
+                          time.sleep(5)
+              request=urllib.request.Request('https://tripcod.com/trips',headers={'User-Agent':'Mozilla/5.0 Tripcod-release-verification'})
+              with urllib.request.urlopen(request,timeout=45) as response: html=response.read().decode()
+              scripts=re.findall(r'<script[^>]+src="([^"]+)"',html)
+              found=False
+              for script in scripts:
+                  if '/trips/' not in script: continue
+                  with urllib.request.urlopen('https://tripcod.com'+script,timeout=45) as response: code=response.read().decode()
+                  if 'Retry hotel bookings' in code and 'Hold deadline' in code: found=True
+              if not found: raise RuntimeError('Updated My Trips asset not found')
+              try:
+                  urllib.request.urlopen(urllib.request.Request('https://api.tripcod.com/api/hotels/orders/mine', headers={'x-tenant-slug':'tripcod'}),timeout=45)
+                  raise RuntimeError('Hotel history exposed without authentication')
+              except urllib.error.HTTPError as error:
+                  if error.code != 401: raise
+              print('MY_TRIPS_ASSET_VERIFIED; HOTEL_HISTORY_REQUIRES_AUTH; API_ADMIN_PORTAL_UNCHANGED; NO_PAYMENT_OR_SUPPLIER_REQUESTS')
+          elif mode == 'rollback':
+              if statepath.exists():
+                  state=json.loads(statepath.read_text())
+                  if state.get('new') and serving('tripcod-web') == state['new']:
+                      activate(state['tripcod-web'], 'Restore previous web version after public UI verification failure')
+                      print('Restored previous web version')
+          ''')
+      - name: Record current deployment versions (read-only)
+        run: python "$RUNNER_TEMP/public-web.py" record
+      - name: Upload website version while preserving variables
+        working-directory: apps/web
+        run: |
+          set -o pipefail
+          pnpm exec wrangler versions upload --keep-vars --message "My Trips hotel visibility" 2>&1 | tee "$RUNNER_TEMP/public-web-upload.log"
+      - name: Check unchanged bindings and runtime, then activate website
+        run: python "$RUNNER_TEMP/public-web.py" activate
+      - name: Verify My Trips assets and unchanged other Workers
+        run: python "$RUNNER_TEMP/public-web.py" verify
+      - name: Restore previous website version if verification fails
+        if: failure()
+        run: python "$RUNNER_TEMP/public-web.py" rollback
