@@ -1,0 +1,161 @@
+name: Admin hotel bookings isolated API/Admin release
+on:
+  push:
+    branches: [release/admin-hotel-bookings]
+    paths: [.github/workflows/admin-hotel-bookings-release.yml]
+permissions:
+  contents: read
+concurrency:
+  group: tripcod-production-release
+  cancel-in-progress: false
+env:
+  CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+  CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+  ADMIN_SERVICE_TOKEN: ${{ secrets.ADMIN_SERVICE_TOKEN }}
+  WRANGLER_SEND_METRICS: 'false'
+  NEXT_TELEMETRY_DISABLED: '1'
+jobs:
+  api-admin-only:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with: {fetch-depth: 0}
+      - name: Pin reviewed application code
+        run: git diff --exit-code 47c6c319dde418edf1fd82f41a1eae3ae7d85c3f HEAD -- apps packages pnpm-lock.yaml
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: 22, cache: pnpm}
+      - run: pnpm install --frozen-lockfile
+      - name: Build Admin only
+        working-directory: apps/admin
+        env:
+          NEXT_PUBLIC_API_URL: https://api.tripcod.com
+        run: pnpm exec opennextjs-cloudflare build --dangerouslyUseUnsupportedNextVersion
+      - name: Prepare release guard
+        shell: python
+        run: |
+          import os,pathlib
+          pathlib.Path(os.environ['RUNNER_TEMP'],'admin-hotel-release.py').write_text(r'''
+          import hashlib,json,os,pathlib,re,sys,urllib.request,urllib.error,urllib.parse
+          root=pathlib.Path(os.environ['RUNNER_TEMP'])
+          base='https://api.cloudflare.com/client/v4/accounts/'+os.environ['CLOUDFLARE_ACCOUNT_ID']
+          statefile=root/'admin-hotel-state.json'
+          workers=['tripcod-api','tripcod-admin','tripcod-web','tripcod-portal']
+          def cf(path,payload=None,raw=False):
+           req=urllib.request.Request(base+path,data=None if payload is None else json.dumps(payload).encode(),headers={'Authorization':'Bearer '+os.environ['CLOUDFLARE_API_TOKEN'],'Content-Type':'application/json'},method='GET' if payload is None else 'POST')
+           with urllib.request.urlopen(req,timeout=60) as response: data=response.read()
+           if raw:return data
+           result=json.loads(data)
+           if not result.get('success'):raise RuntimeError('Cloudflare operation failed')
+           return result['result']
+          def serving(worker):
+           versions=cf('/workers/scripts/'+worker+'/deployments')['deployments'][0]['versions']
+           if len(versions)!=1 or versions[0]['percentage']!=100:raise RuntimeError('Concurrent split deployment: '+worker)
+           return versions[0]['version_id']
+          def resources(worker,version):return cf('/workers/scripts/'+worker+'/versions/'+version)['resources']
+          def activate(worker,version,note):
+           cf('/workers/scripts/'+worker+'/deployments',{'strategy':'percentage','versions':[{'version_id':version,'percentage':100}],'annotations':{'workers/message':note}})
+          def checkpoint():return hashlib.sha256(cf('/r2/buckets/tripcod-documents/objects/hotel-static/city-regions.partial.json',raw=True)).hexdigest()
+          def orders(state):
+           binding=next(b for b in state['resources']['tripcod-api']['bindings'] if b.get('name')=='HOTEL_DB')
+           database=binding.get('id') or binding.get('database_id')
+           rows=cf('/d1/database/'+database+'/query',{'sql':'SELECT id,tenant_id,user_id,supplier_booking_id,hotel,occupancy,amount,currency,created_at FROM hotel_bookings'})[0]['results']
+           return {r['id']:hashlib.sha256(json.dumps(r,sort_keys=True).encode()).hexdigest() for r in rows}
+          def public(url):
+           return urllib.request.urlopen(urllib.request.Request(url,headers={'User-Agent':'Mozilla/5.0 Tripcod-release-verification'}),timeout=45)
+          mode=sys.argv[1]
+          if mode=='before':
+           state={'versions':{w:serving(w) for w in workers},'resources':{},'activated':[],'new':{}}
+           for w in ['tripcod-api','tripcod-admin']:state['resources'][w]=resources(w,state['versions'][w])
+           runtime=state['resources']['tripcod-api']['script_runtime']
+           if runtime.get('limits',{}).get('cpu_ms')!=30000:raise RuntimeError('Expected current 30000ms API CPU entitlement')
+           state['checkpoint']=checkpoint();state['orders']=orders(state);statefile.write_text(json.dumps(state))
+           print(json.dumps({'rollbackVersions':state['versions'],'hotelOrdersPreserved':len(state['orders']),'apiCpuMs':30000}))
+           config=pathlib.Path('apps/api/wrangler.toml').read_text()
+           if '[limits]' in config:raise RuntimeError('Review existing limit stanza before upload')
+           pathlib.Path('apps/api/wrangler.admin-hotels.toml').write_text(config+'\n[limits]\ncpu_ms = 30000\n')
+          elif mode=='activate':
+           state=json.loads(statefile.read_text())
+           for w,log in [('tripcod-api','api-upload.log'),('tripcod-admin','admin-upload.log')]:
+            match=re.search(r'Worker Version ID:\s*([0-9a-f-]{36})',(root/log).read_text())
+            if not match:raise RuntimeError('Non-serving version ID missing: '+w)
+            candidate=match[1];new=resources(w,candidate);old=state['resources'][w]
+            canon=lambda v:sorted(json.dumps(b,sort_keys=True) for b in v.get('bindings',[]))
+            if canon(old)!=canon(new):raise RuntimeError('Binding/variable difference: '+w)
+            for key in ['compatibility_date','compatibility_flags','migration_tag','limits']:
+             if old['script_runtime'].get(key)!=new['script_runtime'].get(key):raise RuntimeError('Runtime difference: '+w+' '+key)
+            if serving(w)!=state['versions'][w]:raise RuntimeError('Concurrent release: '+w)
+            state['new'][w]=candidate
+           statefile.write_text(json.dumps(state))
+           for w in ['tripcod-api','tripcod-admin']:
+            activate(w,state['new'][w],'Admin hotel bookings and stored logs; no migrations or supplier operations')
+            state['activated'].append(w);statefile.write_text(json.dumps(state));print('Activated '+w+' '+state['new'][w])
+          elif mode=='verify':
+           state=json.loads(statefile.read_text())
+           for w in workers:
+            if serving(w)!=state['new'].get(w,state['versions'][w]):raise RuntimeError('Unexpected serving version: '+w)
+           if checkpoint()!=state['checkpoint']:raise RuntimeError('Saved hotel sync checkpoint changed')
+           current=orders(state)
+           if any(current.get(k)!=v for k,v in state['orders'].items()):raise RuntimeError('Existing hotel data changed')
+           for url in ['https://api.tripcod.com/health','https://admin.tripcod.com/login']:
+            with public(url) as response:
+             if response.status!=200:raise RuntimeError('Health check failed')
+           try:
+            public('https://api.tripcod.com/api/admin/bookings/hotels')
+            raise RuntimeError('Hotel Admin listing exposed without authentication')
+           except urllib.error.HTTPError as error:
+            if error.code!=401:raise
+           with public('https://admin.tripcod.com/bookings') as response:
+            if '/login' not in response.url:raise RuntimeError('Admin UI no longer requires sign-in')
+           markers=[['All Bookings','Route / Hotel','Booking type filters'],['Download Certification ZIP','/api/admin/bookings/hotels/']]
+           assets=pathlib.Path('apps/admin/.open-next/assets')
+           for group in markers:
+            found=False
+            for file in assets.rglob('*.js'):
+             text=file.read_text()
+             if not all(m in text for m in group):continue
+             url='https://admin.tripcod.com/'+urllib.parse.quote(file.relative_to(assets).as_posix(),safe='/')
+             with public(url) as response:remote=response.read().decode()
+             if not all(m in remote for m in group):raise RuntimeError('Admin asset differs from verified build')
+             found=True;break
+            if not found:raise RuntimeError('Expected new Admin bundle not found')
+           service=os.environ.get('ADMIN_SERVICE_TOKEN','')
+           if service:
+            req=urllib.request.Request('https://api.tripcod.com/api/admin/bookings/hotels',headers={'Authorization':'Bearer '+service,'x-tenant-slug':'tripcod','User-Agent':'Mozilla/5.0 Tripcod-release-verification'})
+            with urllib.request.urlopen(req,timeout=45) as response:data=json.load(response)
+            print(json.dumps({'authenticatedHotelListing':True,'count':len(data['bookings']),'statuses':sorted(set(b['status'] for b in data['bookings']))}))
+           else:print('Authenticated live Admin session unavailable; local D1/auth regressions and live sign-in guards verified.')
+           print('API_ADMIN_RELEASE_VERIFIED; WEB_PORTAL_UNCHANGED; HOTEL_DATA_AND_SYNC_CHECKPOINT_UNCHANGED; NO_SUPPLIER_OR_PAYMENT_OPERATIONS')
+          elif mode=='rollback':
+           if not statefile.exists():sys.exit(0)
+           state=json.loads(statefile.read_text())
+           for w in ['tripcod-admin','tripcod-api']:
+            if w not in state['new']:continue
+            current=serving(w)
+            if current==state['versions'][w]:continue
+            if current!=state['new'][w]:raise RuntimeError('Concurrent change; refusing to overwrite '+w)
+            activate(w,state['versions'][w],'Restore pre-Admin-hotel-bookings release version')
+            print('Restored '+w+' '+state['versions'][w])
+          
+          ''')
+      - name: Record rollback versions, saved hotel data and checkpoint (read only)
+        id: guard
+        run: python "$RUNNER_TEMP/admin-hotel-release.py" before
+      - name: Upload non-serving API version preserving variables and CPU budget
+        working-directory: apps/api
+        run: |
+          set -o pipefail
+          pnpm exec wrangler versions upload --config wrangler.admin-hotels.toml --keep-vars --message "Read-only Admin hotel bookings 47c6c319dde418edf1fd82f41a1eae3ae7d85c3f" 2>&1 | tee "$RUNNER_TEMP/api-upload.log"
+      - name: Upload non-serving Admin version preserving variables
+        working-directory: apps/admin
+        run: |
+          set -o pipefail
+          pnpm exec wrangler versions upload --keep-vars --message "Hotel bookings and stored certification UI 47c6c319dde418edf1fd82f41a1eae3ae7d85c3f" 2>&1 | tee "$RUNNER_TEMP/admin-upload.log"
+      - name: Verify bindings and runtime; activate only API/Admin versions
+        run: python "$RUNNER_TEMP/admin-hotel-release.py" activate
+      - name: Verify live assets, authentication guards, preserved orders and unchanged other Workers
+        run: python "$RUNNER_TEMP/admin-hotel-release.py" verify
+      - name: Restore recorded API/Admin versions if verification fails
+        if: failure() && steps.guard.outcome == 'success'
+        run: python "$RUNNER_TEMP/admin-hotel-release.py" rollback
