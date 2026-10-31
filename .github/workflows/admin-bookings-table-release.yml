@@ -1,0 +1,110 @@
+name: Admin booking table isolated release
+on:
+  push:
+    branches: [release/admin-bookings-table]
+    paths: [.github/workflows/admin-bookings-table-release.yml]
+permissions:
+  contents: read
+concurrency:
+  group: tripcod-production-release
+  cancel-in-progress: false
+env:
+  CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+  CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+  WRANGLER_SEND_METRICS: 'false'
+  NEXT_TELEMETRY_DISABLED: '1'
+jobs:
+  admin-only:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with: {fetch-depth: 0}
+      - name: Pin reviewed Admin source
+        run: git diff --exit-code 37f3170f86fc35d579e9c7973cfe7316696264d0 HEAD -- apps packages pnpm-lock.yaml
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: 22, cache: pnpm}
+      - run: pnpm install --frozen-lockfile
+      - name: Build Admin only
+        working-directory: apps/admin
+        env:
+          NEXT_PUBLIC_API_URL: https://api.tripcod.com
+        run: pnpm exec opennextjs-cloudflare build --dangerouslyUseUnsupportedNextVersion
+      - name: Prepare Admin-only release helper
+        shell: python
+        run: |
+          import os,pathlib
+          pathlib.Path(os.environ['RUNNER_TEMP'],'admin-table-release.py').write_text(r'''
+          import json,os,pathlib,re,sys,urllib.request,urllib.parse
+          root=pathlib.Path(os.environ['RUNNER_TEMP']);file=root/'admin-table-state.json'
+          base='https://api.cloudflare.com/client/v4/accounts/'+os.environ['CLOUDFLARE_ACCOUNT_ID']
+          workers=['tripcod-admin','tripcod-api','tripcod-web','tripcod-portal']
+          def cf(path,payload=None):
+           req=urllib.request.Request(base+path,data=None if payload is None else json.dumps(payload).encode(),method='GET' if payload is None else 'POST',headers={'Authorization':'Bearer '+os.environ['CLOUDFLARE_API_TOKEN'],'Content-Type':'application/json'})
+           with urllib.request.urlopen(req,timeout=60) as response:data=json.load(response)
+           if not data.get('success'):raise RuntimeError('Cloudflare request failed')
+           return data['result']
+          def serving(worker):
+           versions=cf('/workers/scripts/'+worker+'/deployments')['deployments'][0]['versions']
+           if len(versions)!=1 or versions[0]['percentage']!=100:raise RuntimeError('Split release: '+worker)
+           return versions[0]['version_id']
+          def resource(version):return cf('/workers/scripts/tripcod-admin/versions/'+version)['resources']
+          def activate(version,note):cf('/workers/scripts/tripcod-admin/deployments',{'strategy':'percentage','versions':[{'version_id':version,'percentage':100}],'annotations':{'workers/message':note}})
+          def public(url):return urllib.request.urlopen(urllib.request.Request(url,headers={'User-Agent':'Mozilla/5.0 Tripcod-release-verification'}),timeout=45)
+          mode=sys.argv[1]
+          if mode=='record':
+           state={'versions':{w:serving(w) for w in workers}}
+           state['resources']=resource(state['versions']['tripcod-admin']);file.write_text(json.dumps(state));print(json.dumps({'rollbackVersions':state['versions']}))
+          elif mode=='activate':
+           state=json.loads(file.read_text());match=re.search(r'Worker Version ID:\s*([0-9a-f-]{36})',(root/'admin-table-upload.log').read_text())
+           if not match:raise RuntimeError('Candidate version not found')
+           candidate=match[1];old=state['resources'];new=resource(candidate)
+           canon=lambda r:sorted(json.dumps(x,sort_keys=True) for x in r.get('bindings',[]))
+           if canon(old)!=canon(new):raise RuntimeError('Admin bindings or variables changed')
+           for key in ['compatibility_date','compatibility_flags','migration_tag','limits']:
+            if old['script_runtime'].get(key)!=new['script_runtime'].get(key):raise RuntimeError('Admin runtime changed: '+key)
+           for w in workers:
+            if serving(w)!=state['versions'][w]:raise RuntimeError('Concurrent deployment: '+w)
+           state['new']=candidate;file.write_text(json.dumps(state));activate(candidate,'Admin booking table CSS; no API, data or payment changes');print('Activated Admin '+candidate)
+          elif mode=='verify':
+           state=json.loads(file.read_text())
+           for w in workers:
+            expected=state['new'] if w=='tripcod-admin' else state['versions'][w]
+            if serving(w)!=expected:raise RuntimeError('Unexpected deployment version: '+w)
+           with public('https://admin.tripcod.com/login') as response:
+            if response.status!=200:raise RuntimeError('Admin login unavailable')
+           with public('https://admin.tripcod.com/bookings') as response:
+            if '/login' not in response.url:raise RuntimeError('Admin sign-in guard changed')
+           assets=pathlib.Path('apps/admin/.open-next/assets')
+           for suffix,markers in [('js',['Booking results','Show full ']),('css',['1667px','table-layout:fixed','position:sticky'])]:
+            found=False
+            for asset in assets.rglob('*.'+suffix):
+             if not all(m in asset.read_text() for m in markers):continue
+             with public('https://admin.tripcod.com/'+urllib.parse.quote(asset.relative_to(assets).as_posix(),safe='/')) as response:body=response.read().decode()
+             if not all(m in body for m in markers):raise RuntimeError('Live table asset differs from reviewed build')
+             found=True;break
+            if not found:raise RuntimeError('New table asset missing: '+suffix)
+           print('ADMIN_TABLE_RELEASE_VERIFIED; API_WEB_PORTAL_UNCHANGED; NO_MIGRATIONS_OR_BOOKING_OPERATIONS')
+          elif mode=='rollback':
+           if file.exists():
+            state=json.loads(file.read_text())
+            if state.get('new') and serving('tripcod-admin')==state['new']:
+             activate(state['versions']['tripcod-admin'],'Restore prior Admin version after table verification failure');print('Restored prior Admin '+state['versions']['tripcod-admin'])
+          
+          ''')
+      - name: Record rollback and unchanged other Workers
+        id: record
+        run: python "$RUNNER_TEMP/admin-table-release.py" record
+      - name: Upload non-serving Admin version preserving variables
+        working-directory: apps/admin
+        run: |
+          set -o pipefail
+          pnpm exec wrangler versions upload --keep-vars --message "Admin booking table layout 37f3170f86fc35d579e9c7973cfe7316696264d0" 2>&1 | tee "$RUNNER_TEMP/admin-table-upload.log"
+      - name: Verify bindings/runtime and activate only Admin
+        run: python "$RUNNER_TEMP/admin-table-release.py" activate
+      - name: Verify live assets and unchanged API/Web/Portal
+        run: python "$RUNNER_TEMP/admin-table-release.py" verify
+      - name: Restore previous Admin version on verification failure
+        if: failure() && steps.record.outcome == 'success'
+        run: python "$RUNNER_TEMP/admin-table-release.py" rollback
