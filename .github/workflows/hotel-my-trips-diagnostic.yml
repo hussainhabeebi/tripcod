@@ -1,0 +1,32 @@
+name: Hotel My Trips ownership check - read only
+on:
+  push:
+    branches: [codex/hotel-my-trips]
+    paths: [.github/workflows/hotel-my-trips-diagnostic.yml]
+permissions: {contents: read}
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - name: Read D1 order ownership and deployed bindings only
+        shell: python
+        run: |
+          import json,os,urllib.request
+          base="https://api.cloudflare.com/client/v4/accounts/"+os.environ["CLOUDFLARE_ACCOUNT_ID"]
+          def cf(path,body=None):
+              req=urllib.request.Request(base+path,data=None if body is None else json.dumps(body).encode(),headers={"Authorization":"Bearer "+os.environ["CLOUDFLARE_API_TOKEN"],"Content-Type":"application/json"},method="GET" if body is None else "POST")
+              with urllib.request.urlopen(req,timeout=60) as response: value=json.load(response)
+              if not value.get("success"): raise SystemExit("Read-only Cloudflare query failed")
+              return value["result"]
+          settings=cf("/workers/scripts/tripcod-api/settings")
+          db=next(b["id"] for b in settings["bindings"] if b["name"]=="HOTEL_DB")
+          sql="SELECT status,mode,CASE WHEN user_id IS NULL OR user_id='' THEN 'GUEST' ELSE 'ACCOUNT' END AS ownership,COUNT(*) AS count,SUM(CASE WHEN hold_deadline IS NOT NULL THEN 1 ELSE 0 END) AS with_deadline FROM hotel_bookings GROUP BY status,mode,ownership"
+          rows=cf("/d1/database/"+db+"/query",{"sql":sql,"params":[]})[0]["results"]
+          print(json.dumps({"ordersByStatusAndOwnership":rows}))
+          for worker in ("tripcod-api","tripcod-web"):
+              print(json.dumps({"worker":worker,"deployment":cf("/workers/scripts/"+worker+"/deployments")["deployments"][0]}))
+          print("No supplier requests, data writes, booking, cancellation, payment or deployment operations.")
