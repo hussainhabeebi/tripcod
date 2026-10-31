@@ -65,6 +65,39 @@ jobs:
         run: |
           "$RUNNER_TEMP/d1.sh" holds | python3 -m json.tool
           "$RUNNER_TEMP/d1.sh" counts
+          cd apps/api && pnpm exec wrangler d1 execute tripcod-hotels --remote --json --command "SELECT supplier_booking_id AS tj, supplier_submitted_at AS submitted, confirm_submitted_at AS confirmSubmitted, mode FROM hotel_bookings WHERE status = 'ON_HOLD'" 2>/dev/null | python3 -c 'import json,sys; print(json.dumps(json.load(sys.stdin)[0]["results"]))'
+
+      - name: Observe — cron executions, schedules, booking UAT logs (read-only)
+        if: env.MODE == 'observe'
+        shell: python
+        run: |
+          import datetime, json, os, urllib.parse, urllib.request
+          acct, tok = os.environ["CLOUDFLARE_ACCOUNT_ID"], os.environ["CLOUDFLARE_API_TOKEN"]
+          def call(url, payload=None):
+              r = urllib.request.Request(url, data=None if payload is None else json.dumps(payload).encode(), method="GET" if payload is None else "POST",
+                                         headers={"Authorization": "Bearer " + tok, "Content-Type": "application/json"})
+              with urllib.request.urlopen(r, timeout=60) as res: return res.read()
+          base = "https://api.cloudflare.com/client/v4/accounts/" + acct
+          print("schedules:", [s["cron"] for s in json.loads(call(base + "/workers/scripts/tripcod-api/schedules"))["result"]["schedules"]])
+          since = (datetime.datetime.utcnow() - datetime.timedelta(hours=1)).strftime("%Y-%m-%dT%H:%M:%SZ")
+          q = {"query": "query($a:String!,$s:Time!){viewer{accounts(filter:{accountTag:$a}){workersInvocationsScheduled(limit:20,filter:{scriptName:\"tripcod-api\",datetime_geq:$s},orderBy:[datetime_DESC]){cron datetime status cpuTimeUs}}}}",
+               "variables": {"a": acct, "s": since}}
+          try:
+              d = json.loads(call("https://api.cloudflare.com/client/v4/graphql", q))
+              print("scheduled runs (last hour):", json.dumps(d.get("data", {}).get("viewer", {}).get("accounts", [{}])[0].get("workersInvocationsScheduled"), indent=1) if d.get("data") else d.get("errors"))
+          except Exception as e:
+              print("scheduled runs: not readable", type(e).__name__)
+          tenant = "4c86636b-fb0a-4948-92ff-d62d602642b8"
+          prefix = f"api-logs/{tenant}/booking-TJP202803274047/"
+          try:
+              objs = json.loads(call(base + "/r2/buckets/tripcod-documents/objects?" + urllib.parse.urlencode({"prefix": prefix, "per_page": 1000})))["result"]
+              keys = sorted(o["key"] for o in objs)
+              print("TJP202803274047 UAT log files:", len(keys))
+              for k in [k for k in keys if "booking-details-response" in k][-4:]:
+                  body = json.loads(call(base + "/r2/buckets/tripcod-documents/objects/" + urllib.parse.quote(k, safe="")))
+                  print("  ", k[len(prefix):], "→ TripJack status", (body.get("order") or {}).get("status"))
+          except Exception as e:
+              print("R2 listing not readable", type(e).__name__)
 
       # ── Release ────────────────────────────────────────────────────────────
       - name: Gate — code is merged PR #25 and the API differs from live only by it
