@@ -1,4 +1,4 @@
-name: Hotel listing 503 - read-only diagnostic
+name: Hotel intermittent errors - read-only comparison
 on:
   push:
     branches: [codex/hotel-listing-503]
@@ -23,6 +23,7 @@ jobs:
         run: |
           node --input-type=module <<'JS'
           import { createRequire } from "node:module";
+          import {createHash} from "node:crypto";
           const require=createRequire(process.cwd()+"/apps/api/package.json");
           const {neon}=require("@neondatabase/serverless");
           const sql=neon(process.env.DATABASE_URL);
@@ -56,9 +57,9 @@ jobs:
            const deployments=await json("/workers/scripts/tripcod-api/deployments");
            out({currentApiDeployment:deployments.deployments[0]});
            async function logs(label){
-            const rows=await read("select created_at,endpoint,http_status,error_code,error_message,response_snippet,request_id,request_summary from supplier_api_logs where tenant_id=$1 and supplier='TRIPJACK' and endpoint like '%hotel/listing%' order by created_at desc limit 5",[tenant.id]);
+            const rows=await read("select created_at,endpoint,http_status,error_code,error_message,response_snippet,request_id,request_summary from supplier_api_logs where tenant_id=$1 and supplier='TRIPJACK' and endpoint like '%hotel/listing%' order by created_at desc limit 12",[tenant.id]);
             out({phase:label,supplierLogs:rows.map(r=>({at:r.created_at,endpoint:r.endpoint,httpStatus:r.http_status,errorCode:r.error_code,error:r.error_message,bodySnippet:r.response_snippet?.slice(0,600),requestId:r.request_id,gatewayRequestId:r.request_summary?.gatewayRequestId,upstreamStatus:r.request_summary?.upstreamStatus}))});
-            const exchanges=await read("select endpoint,http_status,duration_ms,request_id,request_key,response_key,started_at from supplier_exchanges where tenant_id=$1 and supplier='TRIPJACK' and endpoint='/hms/v3/hotel/listing' order by started_at desc limit 2",[tenant.id]);
+            const exchanges=await read("select endpoint,http_status,duration_ms,request_id,request_key,response_key,started_at from supplier_exchanges where tenant_id=$1 and supplier='TRIPJACK' and endpoint='/hms/v3/hotel/listing' order by started_at desc limit 9",[tenant.id]);
             for(const row of exchanges){
              const request=JSON.parse((await cf("/r2/buckets/tripcod-documents/objects/"+row.request_key)).text);
              const headers=Object.fromEntries(Object.entries(request.headers??{}).map(([k,v])=>[k.toLowerCase(),v]));
@@ -67,21 +68,32 @@ jobs:
              let body=null;try{body=JSON.parse(response?.text??"null");}catch{}
              let metadata={};try{metadata=JSON.parse(response?.headers["cf-r2-custom-metadata"]??"{}");}catch{}
              let rh={};try{rh=JSON.parse(metadata.responseHeaders??response?.headers["x-amz-meta-responseheaders"]??"{}");}catch{}
-             out({phase:label,exchange:{at:row.started_at,httpStatus:row.http_status,durationMs:row.duration_ms,requestId:row.request_id,gatewayHost:new URL(request.url).hostname,requestedHotelEnvironment:headers["x-tripcod-hotel-environment"],selectedKeyMatchesAdminHotel:!!saved.hotelApiKey&&headers.apikey===saved.hotelApiKey,selectedKeyMatchesAdminFlight:!!saved.apiKey&&headers.apikey===saved.apiKey,hasApiKey:!!headers.apikey,hotelIds:request.body?.hids?.length,upstreamStatus:rh["x-tripjack-upstream-status"]??null,gatewayRequestId:rh["x-request-id"]??null,actualUpstreamHost:rh["x-tripjack-upstream-host"]??rh["x-tripcod-upstream-host"]??null,errorBody:row.http_status>=400?(body??response?.text.slice(0,600)):null,hotelCount:body?.hotels?.length??null,metadataHeaderNames:response?Object.keys(response.headers).filter(k=>k.includes("meta")):[]}});
+             out({phase:label,exchange:{at:row.started_at,httpStatus:row.http_status,durationMs:row.duration_ms,requestId:row.request_id,gatewayHost:new URL(request.url).hostname,requestedHotelEnvironment:headers["x-tripcod-hotel-environment"],selectedKeyMatchesAdminHotel:!!saved.hotelApiKey&&headers.apikey===saved.hotelApiKey,selectedKeyMatchesAdminFlight:!!saved.apiKey&&headers.apikey===saved.apiKey,hasApiKey:!!headers.apikey,hotelIds:request.body?.hids?.length,correlationId:request.body?.correlationId,checkIn:request.body?.checkIn,checkOut:request.body?.checkOut,currency:request.body?.currency,payloadHash:createHash("sha256").update(JSON.stringify({...request.body,correlationId:undefined})).digest("hex"),upstreamStatus:rh["x-tripjack-upstream-status"]??null,gatewayRequestId:rh["x-request-id"]??null,actualUpstreamHost:rh["x-tripjack-upstream-host"]??rh["x-tripcod-upstream-host"]??null,errorBody:row.http_status>=400?(body??response?.text.slice(0,600)):null,hotelCount:body?.hotels?.length??null,metadataHeaderNames:response?Object.keys(response.headers).filter(k=>k.includes("meta")):[]}});
             }
            }
+           const groups=await read("select search_id, min(started_at) as first_at, max(started_at) as last_at, array_agg(distinct http_status) as statuses, count(*) as listing_calls from supplier_exchanges where tenant_id=$1 and endpoint='/hms/v3/hotel/listing' and started_at > now()-interval '6 hours' group by search_id order by max(started_at) desc limit 12",[tenant.id]);
+           out({recentSearchGroups:groups});
+           async function readiness(phase){
+            try{const r=await fetch("https://proxy.tripcod.com/ready",{signal:AbortSignal.timeout(15000)});const text=await r.text();let body;try{body=JSON.parse(text);}catch{body=text.slice(0,200);}out({gatewayReady:{phase,httpStatus:r.status,body}});}catch(e){out({gatewayReady:{phase,error:e.name}});}
+           }
+           await readiness("before");
            await logs("before");
            if(hotelEnvironment!=="UAT"||source==="none")throw new Error("Authorized UAT routing/key not configured; no search executed");
            const today=new Date();today.setUTCDate(today.getUTCDate()+14);const checkIn=today.toISOString().slice(0,10);today.setUTCDate(today.getUTCDate()+2);const checkOut=today.toISOString().slice(0,10);
            const u=new URL("https://tripcod.com/hotels/search");
            for(const [k,v]of Object.entries({city:"DXB",cityName:"Dubai",checkIn,checkOut,rooms:"1",adults:"1",currency:"INR",nationality:"IN"}))u.searchParams.set(k,v);
-           out({authorizedReadOnlyUatSearch:{city:"Dubai",checkIn,checkOut,rooms:1,adults:1,retries:0}});
-           const response=await fetch(u,{signal:AbortSignal.timeout(90000)});const page=await response.text();
-           const hotelCount=page.match(/(\d+)\s*(?:<!--\s*-->)?\s*hotel(?:<!--\s*-->)?s?(?:<!--\s*-->)?\s*found/i)?.[1]??null;
-           out({searchPage:{httpStatus:response.status,hotelCount,errorText:page.match(/TripJack hotel[^<]{0,550}/)?.[0]??null}});
-           await new Promise(r=>setTimeout(r,4000));
-           await logs("after");
-           out({complete:true,supplierSearchesRequested:1,bookingRequests:0,paymentRequests:0,deployments:0,credentialChanges:0});
+           for(let check=1;check<=2;check++){
+            out({authorizedReadOnlyUatSearch:{check,city:"Dubai",checkIn,checkOut,rooms:1,adults:1,retries:0}});
+            const response=await fetch(u,{signal:AbortSignal.timeout(90000)});const page=await response.text();
+            const plain=page.replace(/<!--[\s\S]*?-->/g,"").replace(/<[^>]*>/g," ");
+            const hotelCount=plain.match(/(\d+)\s+hotels?\s+found/i)?.[1]??null;
+            out({searchPage:{check,httpStatus:response.status,hotelCount,errorText:page.match(/TripJack hotel[^<]{0,550}/)?.[0]??null}});
+            await new Promise(r=>setTimeout(r,4000));
+            await logs("after-"+check);
+            await readiness("after-"+check);
+            if(check===1)await new Promise(r=>setTimeout(r,20000));
+           }
+           out({complete:true,supplierSearchesRequested:2,bookingRequests:0,paymentRequests:0,deployments:0,credentialChanges:0});
           }
           main().catch(e=>{out({diagnosticError:e.message});process.exitCode=1;});
           JS
