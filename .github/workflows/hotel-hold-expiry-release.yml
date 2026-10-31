@@ -1,0 +1,256 @@
+name: Hotel hold expiry release (API only + cron)
+
+# Releases PR #25 (merge e0c88e0) to tripcod-api only, then adds the 15-minute
+# cron through the Cloudflare Schedules API (crons only; routes / custom domain
+# untouched). No migration, no Admin / web / portal / gateway / secret change.
+# Smoke checks are searches and read-only reads. Any failure restores the
+# recorded API version and the recorded cron set.
+#
+# Runs when .github/release/hotel-hold-expiry-mode.txt changes on this branch:
+#   release — gates → API → crons → smoke → watch the first sweep (read-only)
+#   observe — read-only: expired holds in D1 and their latest checks
+on:
+  push:
+    branches: [release/hotel-hold-auto-cancel]
+    paths: [.github/release/hotel-hold-expiry-mode.txt]
+
+permissions:
+  contents: read
+concurrency:
+  group: tripcod-production-release
+  cancel-in-progress: false
+
+env:
+  RELEASE_COMMIT: e0c88e0959cb0445cfe818c607aeb57ca2716908
+  LIVE_COMMIT: 3c0d57c8c4d8271c06f89279cbbd0f608a27b413   # serving tripcod-api since 2026-10-31 07:07 UTC
+  CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+  CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+  DATABASE_URL: ${{ secrets.DATABASE_URL }}
+  WRANGLER_SEND_METRICS: "false"
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+
+      - name: Read mode
+        run: |
+          mode=$(tr -d '[:space:]' < .github/release/hotel-hold-expiry-mode.txt)
+          case "$mode" in release|observe) ;; *) echo "Unknown mode '$mode'"; exit 1;; esac
+          echo "MODE=$mode" >> "$GITHUB_ENV"; echo "Mode: $mode"
+
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+
+      - name: Read-only D1 helper (expired holds, status counts)
+        run: |
+          cat > "$RUNNER_TEMP/d1.sh" <<'SH'
+          set -euo pipefail
+          cd apps/api
+          q() { pnpm exec wrangler d1 execute tripcod-hotels --remote --json --command "$1" 2>/dev/null | python3 -c 'import json,sys; print(json.dumps(json.load(sys.stdin)[0]["results"]))'; }
+          case "$1" in
+            counts) q "SELECT status, payment_status AS payment, COUNT(*) AS n FROM hotel_bookings GROUP BY status, payment_status ORDER BY status, payment_status" ;;
+            holds)  q "SELECT supplier_booking_id AS tj, status, supplier_status AS supplier, payment_status AS payment, hold_deadline AS deadline, last_checked_at AS checked, updated_at AS updated FROM hotel_bookings WHERE mode = 'HOLD' AND hold_deadline IS NOT NULL ORDER BY hold_deadline DESC LIMIT 20" ;;
+          esac
+          SH
+          chmod +x "$RUNNER_TEMP/d1.sh"
+
+      - name: Observe — expired holds and latest checks (read-only)
+        if: env.MODE == 'observe'
+        run: |
+          "$RUNNER_TEMP/d1.sh" holds | python3 -m json.tool
+          "$RUNNER_TEMP/d1.sh" counts
+
+      # ── Release ────────────────────────────────────────────────────────────
+      - name: Gate — code is merged PR #25 and the API differs from live only by it
+        if: env.MODE == 'release'
+        run: |
+          git merge-base --is-ancestor "$RELEASE_COMMIT" origin/main
+          git diff --exit-code "$RELEASE_COMMIT" HEAD -- apps/api packages pnpm-lock.yaml
+          changed=$(git diff --name-only "$LIVE_COMMIT" "$RELEASE_COMMIT" -- apps/api packages pnpm-lock.yaml | sort)
+          expected=$(git diff --name-only "${RELEASE_COMMIT}^1" "$RELEASE_COMMIT" -- apps/api packages | sort)
+          echo "$changed"
+          [ "$changed" = "$expected" ] || { echo "STOP: API code has changes beyond PR #25"; exit 1; }
+
+      - name: Gate — typecheck and hotel / payment / wallet tests
+        if: env.MODE == 'release'
+        run: |
+          TSX=./node_modules/.pnpm/tsx@4.23.12/node_modules/tsx/dist/loader.mjs
+          pnpm --filter @tripcod/api typecheck
+          node --import $TSX --test apps/api/test/hotel-hold-expiry.test.ts apps/api/test/hotel-orders.test.ts apps/api/test/hotel-orders-d1.test.ts \
+            apps/api/test/hotel-cert-logs.test.ts apps/api/test/hotel-credentials.test.ts apps/api/test/hotel-validation.test.ts \
+            apps/api/test/phonepe.test.ts apps/api/test/tripjack-reviewed-total.test.ts apps/api/test/certification-pack.test.ts apps/api/test/tripsafe.test.ts
+          node --experimental-test-module-mocks --import $TSX --test apps/api/test/hotel-wallet.test.ts
+          node --test packages/suppliers/test/*.test.cjs apps/tripjack-gateway/test/*.test.mjs
+
+      - name: Cloudflare helper
+        if: env.MODE == 'release'
+        run: |
+          cat > "$RUNNER_TEMP/cf.py" <<'PY'
+          import json, os, pathlib, re, sys, urllib.request, urllib.error
+          root = pathlib.Path(os.environ["RUNNER_TEMP"])
+          base = "https://api.cloudflare.com/client/v4/accounts/" + os.environ["CLOUDFLARE_ACCOUNT_ID"]
+          W = "tripcod-api"
+          NEW_CRONS = ["17 */4 * * *", "*/15 * * * *"]
+          def req(path, payload=None, method=None):
+              h = {"Authorization": "Bearer " + os.environ["CLOUDFLARE_API_TOKEN"]}
+              if payload is not None: h["Content-Type"] = "application/json"
+              r = urllib.request.Request(base + path, data=None if payload is None else json.dumps(payload).encode(), headers=h,
+                                         method=method or ("GET" if payload is None else "POST"))
+              try:
+                  with urllib.request.urlopen(r, timeout=60) as res: v = json.load(res)
+              except urllib.error.HTTPError as e: raise SystemExit("Cloudflare HTTP %s for %s" % (e.code, path))
+              if not v.get("success"): raise SystemExit("Cloudflare call failed: " + path)
+              return v["result"]
+          def deployment(): return req("/workers/scripts/%s/deployments" % W)["deployments"][0]
+          def version(vid): return req("/workers/scripts/%s/versions/%s" % (W, vid))
+          def bind(v): return {(b.get("name"), b.get("type")) for b in v["resources"].get("bindings", [])}
+          def crons(): return sorted(s["cron"] for s in req("/workers/scripts/%s/schedules" % W)["schedules"])
+          mode = sys.argv[1]
+          if mode == "record":
+              d = deployment(); vs = d["versions"]
+              if len(vs) != 1 or vs[0]["percentage"] != 100: raise SystemExit("split deployment in progress — stop")
+              note = (d.get("annotations") or {}).get("workers/message", "")
+              current = crons()
+              print(json.dumps({"rollbackVersion": vs[0]["version_id"], "deployedAt": d.get("created_on"), "note": note, "crons": current}))
+              if "Hotel UAT credentials release" not in note: raise SystemExit("serving API is not the recorded PR #22 release — stop and review")
+              if current != ["17 */4 * * *"]: raise SystemExit("unexpected cron set %s — stop and review" % current)
+              (root / "before.json").write_text(json.dumps(version(vs[0]["version_id"])))
+              (root / "rollback.json").write_text(json.dumps({"version": vs[0]["version_id"], "crons": current}))
+          elif mode == "limits":
+              lim = json.loads((root / "before.json").read_text())["resources"].get("script_runtime", {}).get("limits") or {}
+              if lim.get("cpu_ms"): print("\n[limits]\ncpu_ms = %d" % int(lim["cpu_ms"]))
+          elif mode == "activate":
+              m = re.search(r"Worker Version ID:\s*([0-9a-f-]{36})", pathlib.Path(sys.argv[2]).read_text())
+              if not m: raise SystemExit("uploaded version id missing — not activated")
+              old = json.loads((root / "before.json").read_text()); new = version(m[1])
+              if bind(new) != bind(old): raise SystemExit("bindings differ (added %s, removed %s) — not activated" % (sorted(bind(new) - bind(old)), sorted(bind(old) - bind(new))))
+              o, n = old["resources"].get("script_runtime", {}), new["resources"].get("script_runtime", {})
+              for k in ("compatibility_date", "compatibility_flags", "migration_tag", "limits"):
+                  if o.get(k) != n.get(k): raise SystemExit("runtime %s differs (%s → %s) — not activated" % (k, o.get(k), n.get(k)))
+              (root / "activated").write_text(m[1])
+              req("/workers/scripts/%s/deployments" % W, {"strategy": "percentage", "versions": [{"version_id": m[1], "percentage": 100}],
+                  "annotations": {"workers/message": "Hotel hold expiry release %s" % os.environ["RELEASE_COMMIT"][:7]}})
+              print(json.dumps({"activated": W, "version": m[1]}))
+          elif mode == "crons":
+              (root / "crons-changed").write_text("1")
+              req("/workers/scripts/%s/schedules" % W, [{"cron": c} for c in NEW_CRONS], method="PUT")
+              now = crons()
+              print(json.dumps({"crons": now}))
+              if now != sorted(NEW_CRONS): raise SystemExit("cron set not applied as expected")
+          elif mode == "after":
+              print(json.dumps({"serving": deployment()["versions"], "crons": crons()}))
+          elif mode == "rollback":
+              rb = json.loads((root / "rollback.json").read_text())
+              if (root / "crons-changed").exists():
+                  req("/workers/scripts/%s/schedules" % W, [{"cron": c} for c in rb["crons"]], method="PUT")
+                  print(json.dumps({"cronsRestored": rb["crons"]}))
+              if (root / "activated").exists():
+                  req("/workers/scripts/%s/deployments" % W, {"strategy": "percentage", "versions": [{"version_id": rb["version"], "percentage": 100}],
+                      "annotations": {"workers/message": "Rollback of hotel hold expiry release"}})
+                  print(json.dumps({"rolledBack": W, "version": rb["version"]}))
+          PY
+          cat > "$RUNNER_TEMP/smoke.py" <<'PY'
+          import datetime, json, urllib.request, urllib.error
+          H = {"Content-Type": "application/json", "x-tenant-slug": "tripcod", "User-Agent": "Mozilla/5.0 tripcod-release"}
+          day = datetime.date.today() + datetime.timedelta(days=21)
+          def post(path, payload):
+              r = urllib.request.Request("https://api.tripcod.com" + path, data=json.dumps(payload).encode(), headers=H, method="POST")
+              try:
+                  with urllib.request.urlopen(r, timeout=120) as res: return res.status, json.load(res)
+              except urllib.error.HTTPError as e:
+                  try: return e.code, json.loads(e.read())
+                  except Exception: return e.code, {}
+          s, b = post("/api/search", {"origin": "DEL", "destination": "BOM", "departureDate": str(day), "adults": 1, "cabinClass": "ECONOMY", "tripType": "ONEWAY"})
+          print(json.dumps({"flightSearch": {"httpStatus": s, "fares": len(b.get("fares") or [])}}))
+          s2, b2 = post("/api/hotels/search", {"cityName": "Doha", "countryCode": "QA", "checkIn": str(day), "checkOut": str(day + datetime.timedelta(days=2)), "rooms": [{"adults": 1, "children": 0}], "nationality": "IN", "currency": "INR"})
+          print(json.dumps({"hotelSearch": {"httpStatus": s2, "hotels": len(b2.get("hotels") or []), "errorCode": b2.get("errorCode"), "error": str(b2.get("error") or "")[:200]}}))
+          PY
+
+      - name: Record rollback point, cron set and baselines (read-only)
+        if: env.MODE == 'release'
+        run: |
+          python3 "$RUNNER_TEMP/cf.py" record
+          python3 "$RUNNER_TEMP/smoke.py" | tee "$RUNNER_TEMP/smoke-before.txt"
+          "$RUNNER_TEMP/d1.sh" counts | tee "$RUNNER_TEMP/d1-before.json"
+          "$RUNNER_TEMP/d1.sh" holds | python3 -m json.tool
+          export PGOPTIONS="-c default_transaction_read_only=on"
+          psql "$DATABASE_URL" -At -c "SELECT json_build_object('payments', (SELECT count(*) FROM payments), 'bookings', (SELECT count(*) FROM bookings), 'walletTransactions', (SELECT count(*) FROM wallet_transactions))" | tee "$RUNNER_TEMP/neon-before.json"
+
+      - name: API — upload (same CPU limit), verify, activate
+        if: env.MODE == 'release'
+        working-directory: apps/api
+        run: |
+          set -o pipefail
+          cp wrangler.toml wrangler.release.toml
+          python3 "$RUNNER_TEMP/cf.py" limits >> wrangler.release.toml
+          pnpm exec wrangler versions upload --config wrangler.release.toml --keep-vars --message "Hotel hold expiry $RELEASE_COMMIT" 2>&1 | tee "$RUNNER_TEMP/api.log"
+          python3 "$RUNNER_TEMP/cf.py" activate "$RUNNER_TEMP/api.log"
+
+      - name: Add the 15-minute hold-expiry cron (crons only)
+        if: env.MODE == 'release'
+        run: python3 "$RUNNER_TEMP/cf.py" crons
+
+      - name: Smoke — health, searches, payment / order routes
+        if: env.MODE == 'release'
+        run: |
+          sleep 10
+          curl -fsS -m 30 https://api.tripcod.com/health; echo
+          python3 "$RUNNER_TEMP/smoke.py" | tee "$RUNNER_TEMP/smoke-after.txt"
+          python3 - <<'PY'
+          import json, os
+          t = os.environ["RUNNER_TEMP"]
+          f = lambda n: [json.loads(l) for l in open(t + n) if l.startswith("{")][0]["flightSearch"]
+          b, a = f("/smoke-before.txt"), f("/smoke-after.txt")
+          if b["httpStatus"] == 200 and b["fares"] > 0 and not (a["httpStatus"] == 200 and a["fares"] > 0):
+              raise SystemExit("Flight Production search regressed")
+          print("Flight Production search OK:", a)
+          PY
+          c=$(curl -s -o /dev/null -w "%{http_code}" -m 60 -H "x-tenant-slug: tripcod" https://api.tripcod.com/api/hotels/orders/release-probe-00000000); echo "hotel order probe: $c"; [ "$c" = 404 ]
+          c=$(curl -s -o /dev/null -w "%{http_code}" -m 30 -H "x-tenant-slug: tripcod" https://api.tripcod.com/api/checkout/payment-options); echo "payment options: $c"; [ "$c" = 200 ]
+
+      - name: Data preservation (read-only)
+        if: env.MODE == 'release'
+        run: |
+          export PGOPTIONS="-c default_transaction_read_only=on"
+          psql "$DATABASE_URL" -At -c "SELECT json_build_object('payments', (SELECT count(*) FROM payments), 'bookings', (SELECT count(*) FROM bookings), 'walletTransactions', (SELECT count(*) FROM wallet_transactions))" > "$RUNNER_TEMP/neon-after.json"
+          "$RUNNER_TEMP/d1.sh" counts > "$RUNNER_TEMP/d1-after.json"
+          python3 - <<'PY'
+          import json, os
+          t = os.environ["RUNNER_TEMP"]
+          b, a = json.load(open(t + "/neon-before.json")), json.load(open(t + "/neon-after.json"))
+          print(json.dumps({"neonBefore": b, "neonAfter": a}))
+          for k in b: assert a[k] >= b[k], "Neon row count dropped: " + k
+          tot = lambda rows: sum(r["n"] for r in rows)
+          paid = lambda rows: sum(r["n"] for r in rows if r["payment"] in ("PAID", "REFUND_PENDING", "REFUNDED"))
+          db, da = json.load(open(t + "/d1-before.json")), json.load(open(t + "/d1-after.json"))
+          print(json.dumps({"d1Before": db, "d1After": da}))
+          assert tot(da) >= tot(db), "D1 hotel orders lost"
+          assert paid(da) >= paid(db), "D1 paid hotel orders changed"
+          print("No payment, booking, wallet or hotel order rows lost.")
+          PY
+          python3 "$RUNNER_TEMP/cf.py" after
+
+      - name: Restore recorded API version and cron set on any failure
+        if: failure() && env.MODE == 'release'
+        run: |
+          python3 "$RUNNER_TEMP/cf.py" rollback
+          echo "Restored whatever had been changed (none listed = nothing had been changed)."
+
+      - name: Watch the first scheduled sweep (read-only, up to 17 min)
+        if: success() && env.MODE == 'release'
+        run: |
+          start=$(date -u +%Y-%m-%dT%H:%M:%S)
+          echo "Waiting for a */15 run after $start …"
+          for i in $(seq 1 17); do
+            sleep 60
+            if "$RUNNER_TEMP/d1.sh" holds | python3 -c "import json,sys; rows=json.load(sys.stdin); sys.exit(0 if any((r.get('checked') or '') > '$start' for r in rows) else 1)"; then
+              echo "A hold was checked by the scheduled sweep:"; break
+            fi
+          done
+          "$RUNNER_TEMP/d1.sh" holds | python3 -m json.tool
