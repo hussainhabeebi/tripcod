@@ -36,10 +36,10 @@ export function BookingList({ filters, initial }: { filters: Record<string, stri
   const visible = rows.filter((r) => product === "all" || r.product === product);
   return <div style={{ minWidth: 0 }}>
     <h1 style={{ fontSize: 22, color: "#f1f5f9" }}>All Bookings</h1>
-    <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 16 }} aria-label="Booking type filters">
+    <div className={styles.tabs} aria-label="Booking type filters">
       {(["all", "flights", "hotels"] as const).map((p) => <button key={p} type="button" aria-pressed={product === p} onClick={() => setProduct(p)} style={{ ...button, background: product === p ? "#FFB005" : "#1e293b", color: product === p ? "#111827" : "#f1f5f9" }}>{p === "all" ? "All" : p === "flights" ? "Flights" : "Hotels"}</button>)}
     </div>
-    <form method="GET" style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 16 }}>
+    <form method="GET" className={styles.filters}>
       <input type="hidden" name="type" value={product} />
       <select name="status" aria-label="Booking status" defaultValue={filters.status ?? ""} style={field}><option value="">All Statuses</option>{["SEARCHED","HELD","ON_HOLD","PAYMENT_PENDING","PAYMENT_FAILED","PROCESSING","CONFIRMED","TICKETED","CANCELLATION_PENDING","CANCELLED","FAILED","REFUND_PENDING","REFUNDED"].map(s=><option key={s} value={s}>{s.replaceAll("_"," ")}</option>)}</select>
       <input name="tenantId" aria-label="Tenant ID" placeholder="Tenant ID (super admin)" defaultValue={filters.tenantId ?? ""} style={field} />
@@ -50,13 +50,15 @@ export function BookingList({ filters, initial }: { filters: Record<string, stri
     {!!errors.length && <button type="button" style={button} onClick={() => initial ? window.location.reload() : setAttempt(n=>n+1)}>Retry bookings</button>}
     {loading ? <p role="status">Loading bookings…</p> : <>
       <p style={{ color: "#94a3b8" }}>{visible.length} bookings shown (up to 50 per source by default)</p>
-      <div style={{ overflowX: "auto", maxWidth: "100%", marginBottom: 24 }}>
-        <table className={styles.table} style={{ width: "100%", minWidth: 1100, borderCollapse: "collapse", background: "#1e293b" }}>
-          <thead><tr>{["Type", "Route / Hotel", "Customer", "Tenant", "PNR / TripJack ID", "Supplier", "Channel / Mode", "Status", "Amount", "Travel / Stay dates", ""].map(x=><th key={x} style={cell}>{x}</th>)}</tr></thead>
+      <p id="booking-scroll-help" className={styles.scrollHint}>Scroll horizontally for more columns. Details stays visible.</p>
+      <div className={styles.tableScroll} role="region" aria-label="Booking results" aria-describedby="booking-scroll-help" tabIndex={0}>
+        <table className={styles.table}>
+          <colgroup>{[80,200,150,140,170,110,145,180,150,230,112].map((width,index)=><col key={index} style={{width}} />)}</colgroup>
+          <thead><tr>{["Type", "Route / Hotel", "Customer", "Tenant", "PNR / TripJack ID", "Supplier", "Channel / Mode", "Status", "Amount", "Travel / Stay dates", "Details"].map(x=><th key={x} style={cell}>{x}</th>)}</tr></thead>
           <tbody>{visible.map(b=><tr key={`${b.product}-${b.id}`}>
-            <td data-label="Type" style={cell}>{b.product === "hotels" ? "Hotel" : "Flight"}</td><td data-label="Route / Hotel" style={cell}>{b.name}</td><td data-label="Customer" style={cell}>{b.customer}</td><td data-label="Tenant" style={cell}>{b.tenant}</td><td data-label="PNR / TripJack ID" style={cell}>{b.reference}</td><td data-label="Supplier" style={cell}>{b.supplier}</td><td data-label="Channel / Mode" style={cell}>{b.channel}</td>
+            <td data-label="Type" style={cell}>{b.product === "hotels" ? "Hotel" : "Flight"}</td><td data-label="Route / Hotel" style={cell}><span className={styles.clip} title={b.name}>{b.name}</span></td><td data-label="Customer" style={cell}><FullValue value={b.customer} label="customer" /></td><td data-label="Tenant" style={cell}><FullValue value={b.tenant} label="tenant ID" /></td><td data-label="PNR / TripJack ID" style={cell}><FullValue value={b.reference} label="booking reference" /></td><td data-label="Supplier" style={cell}>{b.supplier}</td><td data-label="Channel / Mode" style={cell}>{b.channel}</td>
             <td data-label="Status" style={{ ...cell, color: b.status === "ON_HOLD" ? "#fbbf24" : b.status === "CONFIRMED" || b.status === "TICKETED" ? "#4ade80" : "#cbd5e1" }}>{b.status}</td>
-            <td data-label="Amount" style={cell}>{b.currency} {Number(b.amount).toLocaleString("en-IN")}</td><td data-label="Travel / Stay dates" style={cell}>{b.date?.slice(0,10) || "—"}{b.end ? ` → ${b.end}` : ""}</td><td data-label="Details" style={cell}><a style={{ color: "#93c5fd" }} href={`/bookings/${b.product === "hotels" ? "hotels/" : ""}${b.id}`}>Details →</a></td>
+            <td data-label="Amount" style={cell}>{b.currency} {Number(b.amount).toLocaleString("en-IN")}</td><td data-label="Travel / Stay dates" style={cell}><span className={styles.date}>{b.date?.slice(0,10) || "—"}</span>{b.end && <span className={styles.date}>→ {b.end.slice(0,10)}</span>}</td><td data-label="Details" style={cell}><a style={{ color: "#93c5fd" }} href={`/bookings/${b.product === "hotels" ? "hotels/" : ""}${b.id}`}>Details →</a></td>
           </tr>)}{!visible.length && <tr><td colSpan={11} style={cell}>No bookings found</td></tr>}</tbody>
         </table>
       </div>
@@ -67,4 +69,13 @@ export function BookingList({ filters, initial }: { filters: Record<string, stri
 }
 const field: React.CSSProperties = { background: "#1e293b", border: "1px solid #334155", borderRadius: 8, color: "#f1f5f9", padding: 10, minHeight: 44, maxWidth: "100%" };
 const button: React.CSSProperties = { ...field, cursor: "pointer", fontWeight: 700, padding: "10px 16px" };
-const cell: React.CSSProperties = { padding: "12px", textAlign: "left", borderBottom: "1px solid #334155", color: "#e2e8f0", fontSize: 13, overflowWrap: "anywhere", maxWidth: 240 };
+const cell: React.CSSProperties = { padding: "12px", textAlign: "left", borderBottom: "1px solid #334155", color: "#e2e8f0", fontSize: 13 };
+
+function FullValue({ value, label }: { value?: string; label: string }) {
+  const text = value || "—";
+  if (text.length <= 20) return <span className={styles.clip} title={text}>{text}</span>;
+  return <details className={styles.fullValue}>
+    <summary title={text} aria-label={`Show full ${label}`}>{text.slice(0,6)}…{text.slice(-4)}</summary>
+    <span className={styles.expandedValue}>{text}</span>
+  </details>;
+}
