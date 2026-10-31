@@ -1,0 +1,41 @@
+name: Admin booking table responsive checks
+on:
+  push:
+    branches: [codex/admin-bookings-table]
+permissions:
+  contents: read
+env:
+  NEXT_TELEMETRY_DISABLED: '1'
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: 22, cache: pnpm}
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @tripcod/admin typecheck
+      - run: pnpm --filter @tripcod/admin build
+      - name: Install QA browser
+        run: |
+          npm install --prefix "$RUNNER_TEMP/browser" playwright@1.56.1 --ignore-scripts
+          node "$RUNNER_TEMP/browser/node_modules/playwright/cli.js" install --with-deps chromium
+      - name: Verify table geometry and booking interactions at seven widths
+        env:
+          API_BASE_URL: http://127.0.0.1:9
+          PLAYWRIGHT_MODULE: ${{ runner.temp }}/browser/node_modules/playwright
+          QA_OUTPUT: ${{ runner.temp }}/admin-booking-table-qa
+        run: |
+          pnpm --filter @tripcod/admin start --hostname 127.0.0.1 --port 3003 > "$RUNNER_TEMP/admin.log" 2>&1 &
+          admin_pid=$!
+          trap 'kill "$admin_pid" 2>/dev/null || true' EXIT
+          for attempt in $(seq 1 45); do if curl -fsS -H 'Cookie: tripcod_admin_token=synthetic-admin' http://127.0.0.1:3003/bookings > /dev/null; then break; fi; sleep 1; done
+          export CHROMIUM_PATH=$(node -e 'console.log(require(process.env.PLAYWRIGHT_MODULE).chromium.executablePath())')
+          BASE_URL=http://127.0.0.1:3003 node apps/admin/test/browser/hotel-bookings.cjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: admin-booking-table-screenshots
+          path: ${{ runner.temp }}/admin-booking-table-qa
