@@ -87,3 +87,6 @@
 
 /* Keep every trip filter visible on narrow screens. */
 .filters { flex-wrap:wrap; overflow:visible; margin-right:0; }
+
+/* Hotel names and supplier references may be long. */
+.cardHead > div { min-width:0; overflow-wrap:anywhere; }

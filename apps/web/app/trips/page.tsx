@@ -48,7 +48,7 @@ export default function TripsPage() {
     setSignedIn(ok);
     if (!ok) { setLoading(false); return; }
     apiCall<{ trips: TripRow[] }>("/api/profile/trips").then((data) => setTrips(data.trips))
-      .catch((e) => { if (e.status === 401 || e.status === 403) setSignedIn(false); else setError(e.message); })
+      .catch((e) => setError(e.status === 401 || e.status === 403 ? "Please sign in again to see your flight bookings." : e.message))
       .finally(() => setLoading(false));
   }, []);
   const now = new Date();
@@ -61,7 +61,7 @@ export default function TripsPage() {
       <img className={styles.heroImage} src="/trips/airplane-wing-clouds.webp" alt="" width="2048" height="694" fetchPriority="high" />
       <div className={styles.heroContent}><h1>My Trips</h1><p>Manage your bookings and travel details</p></div>
     </header>
-    {signedIn === null || (loading && signedIn) ? <div className={styles.message} role="status">Loading your bookings…</div>
+    {signedIn === null ? <div className={styles.message} role="status">Loading your bookings…</div>
       : !signedIn ? <section className={styles.message}>
         <h2>Sign in to see your trips</h2><p>Bookings made with your account will appear here.</p>
         <div className={styles.actions}>
@@ -70,21 +70,22 @@ export default function TripsPage() {
         </div>
         <p className={styles.guest}>Booked as a guest? <a href="/trips/find">Find your booking with PNR + email</a></p>
       </section> : <>
-        <nav className={styles.filters} aria-label="Filter bookings">
+        <HotelStays />
+        <h2 style={{ fontSize: 20, margin: "28px 0 12px" }}>Flight bookings</h2>
+        <nav className={styles.filters} aria-label="Filter flight bookings">
           {filters.map(({ id, label }) => <button key={id} type="button"
             className={`${styles.filter} ${filter === id ? styles.selected : ""}`}
             aria-pressed={filter === id} onClick={() => setFilter(id)}>{label} <span className={styles.count}>{counts[id]}</span></button>)}
         </nav>
-        {error ? <div className={styles.error} role="alert">{error}</div>
+        {loading ? <div className={styles.message} role="status">Loading your flight bookings…</div> : error ? <div className={styles.error} role="alert">{error}</div>
           : visible.length ? <div className={styles.list}>{visible.map((trip) => <TripCard key={trip.id} trip={trip} />)}</div>
             : <section className={styles.message}>
               <span className={styles.emptyIcon} aria-hidden="true">✈</span>
-              <h2>{trips.length ? "No bookings in this view" : "No bookings yet"}</h2>
-              <p>{trips.length ? "Try another filter to see your other bookings." : "Your bookings will appear here after you book while signed in."}</p>
+              <h2>{trips.length ? "No flight bookings in this view" : "No flight bookings yet"}</h2>
+              <p>{trips.length ? "Try another filter to see your other bookings." : "Your flight bookings will appear here after you book while signed in."}</p>
               {trips.length ? <button type="button" className={styles.secondaryAction} onClick={() => setFilter("all")}>View all bookings</button>
                 : <a className={styles.primaryAction} href="/">Search flights</a>}
             </section>}
-        <HotelStays />
       </>}
   </div></main>;
 }
