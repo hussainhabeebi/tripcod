@@ -24,7 +24,7 @@ export default function HotelBookingDetail() {
   }
   async function download() {
     setBusy(true); setError("");
-    try { const res = await get(`${root}/certification.zip`); const url=URL.createObjectURL(await res.blob()); const a=document.createElement("a"); a.href=url; a.download=`tripjack-hotel-${booking.supplierBookingId}.zip`; document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(url),5000); }
+    try { const res = await get(`${root}/certification.zip`); const url=URL.createObjectURL(await res.blob()); const a=document.createElement("a"); a.href=url; a.download=/filename="([^"]+)"/.exec(res.headers.get("Content-Disposition") ?? "")?.[1] ?? `tripjack-hotel-${booking.supplierBookingId}.zip`; document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(url),5000); }
     catch(e:any) {setError(e.message);} finally {setBusy(false);}
   }
   return <div style={{ minWidth: 0, color: "#e2e8f0" }}><a href="/bookings" style={{ color: "#93c5fd" }}>← Bookings</a><h1>Hotel Booking Details</h1>

@@ -158,7 +158,8 @@ test("Admin downloads one certification ZIP per TripJack hotel booking", async (
 
   const res = await adminApp(db)(`/hotel-certification/${TJ}/zip`, env);
   assert.equal(res.status, 200);
-  assert.match(res.headers.get("Content-Disposition") ?? "", new RegExp(`tripjack-hotel-${TJ}.zip`));
+  // No Tripcod order here: occupancy and type come from the logged calls (hold → confirm; no CANCELLED status from TripJack).
+  assert.equal(res.headers.get("Content-Disposition"), `attachment; filename="hotel-HOTEL-1A-0C-1R-CONFIRMED-${TJ}.zip"`);
   const files = unzip(new Uint8Array(await res.arrayBuffer()));
   const names = Object.keys(files);
   for (const n of ["HotelSearch", "HotelDetail", "HotelReview", "HotelHoldBook", "HotelBookingDetail", "HotelConfirmBook", "HotelBook", "HotelCancelBooking"]) {
@@ -257,4 +258,32 @@ test("Bookings hotel JSON viewer and ZIP reuse original linked logs without muta
     assert.equal((await read("/exchanges/999/request")).status,404);
     assert.deepEqual(r2.files,stored,"original TripJack logs are untouched");
   } finally {globalThis.fetch=original;}
+});
+
+test("certification ZIP names carry city, occupancy, booking type and TripJack ID from the booking record", async () => {
+  const { hotelZipFileName } = await import("../src/lib/hotel-cert-logs.js");
+  const order = (over: Record<string, unknown>) => ({ mode: "HOLD", status: "ON_HOLD", hotel: { city: "Delhi" }, occupancy: [{ adults: 1, childAges: [] }], cancellation: null, ...over });
+  const det = (s: string) => ({ step: "BookingDetails", supplierStatus: s });
+  const hold = [{ step: "HoldBook" }, det("ON_HOLD")];
+  assert.equal(hotelZipFileName("TJP202703296297", order({}), hold), "hotel-DELHI-1A-0C-1R-ON-HOLD-TJP202703296297.zip");
+  assert.equal(hotelZipFileName("TJP1", order({ mode: "INSTANT", status: "CONFIRMED", hotel: { city: "Sharjah" }, occupancy: [{ adults: 2, childAges: [6] }] }),
+    [{ step: "InstantBook" }, det("SUCCESS")]), "hotel-SHARJAH-2A-1C-1R-INSTANT-TJP1.zip");
+  assert.equal(hotelZipFileName("TJP2", order({ status: "CONFIRMED", hotel: { city: "Kochi" } }), [...hold, { step: "ConfirmHold" }, det("SUCCESS")]),
+    "hotel-KOCHI-1A-0C-1R-CONFIRMED-TJP2.zip");
+  // TripJack released the hold itself (no cancel-booking call) → AUTO; cancel-booking called → MANUAL.
+  assert.equal(hotelZipFileName("TJP3", order({ status: "CANCELLED", hotel: { city: "Dubai" }, occupancy: [{ adults: 2, childAges: [] }] }), [...hold, det("CANCELLED")]),
+    "hotel-DUBAI-2A-0C-1R-AUTO-CANCELLED-TJP3.zip");
+  assert.equal(hotelZipFileName("TJP4", order({ status: "CANCELLED", cancellation: { charge: 0 } }), [...hold, { step: "Cancellation" }, det("CANCELLED")]),
+    "hotel-DELHI-1A-0C-1R-MANUAL-CANCELLED-TJP4.zip");
+  assert.equal(hotelZipFileName("TJP5", order({ mode: "INSTANT", status: "CANCELLED", cancellation: { charge: 0 } }), [{ step: "InstantBook" }, { step: "Cancellation" }]),
+    "hotel-DELHI-1A-0C-1R-MANUAL-CANCELLED-TJP5.zip");
+  // A hold past its deadline that TripJack has not reported CANCELLED is not called cancelled.
+  assert.equal(hotelZipFileName("TJP6", order({ status: "PROCESSING" }), [...hold, det("UNCONFIRMED")]), "hotel-DELHI-1A-0C-1R-ON-HOLD-TJP6.zip");
+  assert.equal(hotelZipFileName("TJP7", order({ mode: "INSTANT", status: "FAILED" }), [{ step: "InstantBook" }, det("FAILED")]), "hotel-DELHI-1A-0C-1R-FAILED-TJP7.zip");
+  // Multi-room UAT case, city with spaces / accents.
+  assert.equal(hotelZipFileName("TJP8", order({ hotel: { city: "Ras Al Khaimah" }, occupancy: [{ adults: 2, childAges: [4, 9] }, { adults: 3, childAges: [7] }, { adults: 2, childAges: [1] }] }), hold),
+    "hotel-RAS-AL-KHAIMAH-7A-4C-3R-ON-HOLD-TJP8.zip");
+  // No Tripcod order: occupancy from the logged Book request, type from the calls.
+  const book = { step: "HoldBook", requestBody: { roomTravellerInfo: [{ travellerInfo: [{ pt: "ADULT" }, { pt: "ADULT" }, { pt: "CHILD" }] }] } };
+  assert.equal(hotelZipFileName("TJP9", null, [book, det("ON_HOLD"), det("CANCELLED")]), "hotel-HOTEL-2A-1C-1R-AUTO-CANCELLED-TJP9.zip");
 });

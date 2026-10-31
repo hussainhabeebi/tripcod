@@ -192,3 +192,50 @@ export async function hotelFolderSummary(r2: R2Like, tenantId: string, bookingId
   }
   return { calls: calls.length, firstAt: calls[0]?.at ?? null, lastAt: calls[calls.length - 1]?.at ?? null, steps };
 }
+
+// ── Certification ZIP file name ──────────────────────────────────────────────
+//
+// hotel-CITY-<adults>A-<children>C-<rooms>R-<TYPE>-<TripJack booking ID>.zip,
+// from the Tripcod order (D1); the logged Book request fills in when no order
+// exists. TYPE: ON-HOLD, INSTANT, CONFIRMED (hold then confirmed), FAILED,
+// MANUAL-CANCELLED (cancel-booking was called) or AUTO-CANCELLED (TripJack
+// released an unconfirmed hold — no cancel-booking call).
+
+export type HotelZipType = "ON-HOLD" | "INSTANT" | "CONFIRMED" | "FAILED" | "MANUAL-CANCELLED" | "AUTO-CANCELLED" | "BOOKING";
+
+interface ZipOrder { mode: string; status: string; hotel?: unknown; occupancy?: unknown; cancellation?: unknown }
+interface ZipCall { step: string; requestBody?: unknown; supplierStatus?: string | null }
+
+export function hotelZipType(order: ZipOrder | null, calls: ZipCall[]): HotelZipType {
+  const has = (step: string) => calls.some((x) => x.step === step);
+  const cancelCalled = has("Cancellation") || Boolean(order?.cancellation);
+  const cancelled = order ? order.status === "CANCELLED" : calls.some((x) => x.step === "BookingDetails" && x.supplierStatus === "CANCELLED");
+  const hold = order ? order.mode === "HOLD" : has("HoldBook");
+  if (cancelled) return cancelCalled || !hold ? "MANUAL-CANCELLED" : "AUTO-CANCELLED";
+  if (order?.status === "FAILED") return "FAILED";
+  if (hold) return (order ? order.status === "CONFIRMED" : has("ConfirmHold")) ? "CONFIRMED" : "ON-HOLD";
+  if (order ? order.mode === "INSTANT" : has("InstantBook")) return "INSTANT";
+  return "BOOKING";
+}
+
+function occupancyOf(order: ZipOrder | null, calls: ZipCall[]): { adults: number; children: number; rooms: number } | null {
+  const rooms = Array.isArray(order?.occupancy) ? order!.occupancy as { adults?: number; childAges?: unknown[]; children?: number }[] : null;
+  if (rooms?.length) {
+    return { rooms: rooms.length, adults: rooms.reduce((n, r) => n + (Number(r.adults) || 0), 0),
+      children: rooms.reduce((n, r) => n + (Array.isArray(r.childAges) ? r.childAges.length : Number(r.children) || 0), 0) };
+  }
+  const book = calls.find((x) => x.step === "HoldBook" || x.step === "InstantBook")?.requestBody as any;
+  const info = Array.isArray(book?.roomTravellerInfo) ? book.roomTravellerInfo as { travellerInfo?: { pt?: string }[] }[] : null;
+  if (!info?.length) return null;
+  const people = info.flatMap((r) => r.travellerInfo ?? []);
+  return { rooms: info.length, adults: people.filter((p) => p.pt !== "CHILD").length, children: people.filter((p) => p.pt === "CHILD").length };
+}
+
+const slug = (v: unknown) => String(v ?? "").normalize("NFKD").replace(/[^A-Za-z0-9]+/g, "-").replace(/^-+|-+$/g, "").toUpperCase();
+
+export function hotelZipFileName(bookingId: string, order: ZipOrder | null, calls: ZipCall[]): string {
+  const city = slug((order?.hotel as any)?.city) || "HOTEL";
+  const occ = occupancyOf(order, calls);
+  const party = occ ? `${occ.adults}A-${occ.children}C-${occ.rooms}R` : "0A-0C-0R";
+  return `hotel-${city}-${party}-${hotelZipType(order, calls)}-${slug(bookingId)}.zip`;
+}
