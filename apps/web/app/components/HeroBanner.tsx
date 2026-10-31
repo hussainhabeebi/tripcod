@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 
 type Slide = { image: string; eyebrow: string; title: string; sub: string; cta: string; href?: string; secondary?: { label: string; href: string } };
 
@@ -8,11 +8,11 @@ const SLIDES: Slide[] = [
   {
     image: "/hero/airplane-wing-clouds.webp",
     eyebrow: "Tripcod Travel Solutions",
-    title: "Every Destination Tells a Story — Let Yours Begin Today",
-    sub: "Your story begins here. From serenity to adventure, we make every journey unforgettable.",
-    cta: "Explore Destinations",
-    href: "/destinations",
-    secondary: { label: "About More", href: "/about-us" },
+    title: "Your next journey, made simple.",
+    sub: "Flights, stays and holidays across India, the Gulf and beyond. Start with your route. We’ll help with the rest.",
+    cta: "Find a flight",
+    href: "#flight-search",
+    secondary: { label: "Explore holidays", href: "/destinations" },
   },
   {
     image: "/hero/kerala-backwaters.webp",
@@ -33,14 +33,7 @@ const SLIDES: Slide[] = [
 
 export default function HeroBanner({ banners }: { banners: unknown[] }) {
   const [idx, setIdx] = useState(0);
-  const [paused, setPaused] = useState(false);
   const touchX = useRef<number | null>(null);
-
-  useEffect(() => {
-    if (paused) return;
-    const timer = window.setInterval(() => setIdx((i) => (i + 1) % SLIDES.length), 6000);
-    return () => window.clearInterval(timer);
-  }, [paused]);
 
   function move(delta: number) {
     setIdx((i) => (i + delta + SLIDES.length) % SLIDES.length);
@@ -51,8 +44,6 @@ export default function HeroBanner({ banners }: { banners: unknown[] }) {
   return (
     <section
       className="hero hero-photo"
-      onMouseEnter={() => setPaused(true)}
-      onMouseLeave={() => setPaused(false)}
       onTouchStart={(e) => { touchX.current = e.touches[0]?.clientX ?? null; }}
       onTouchEnd={(e) => {
         if (touchX.current == null) return;
@@ -83,7 +74,7 @@ export default function HeroBanner({ banners }: { banners: unknown[] }) {
         <div className="hero-dots">
           {SLIDES.map((_, i) => (
             <button key={i} className={i === idx ? "hero-dot hero-dot-active" : "hero-dot"}
-              onClick={() => setIdx(i)} aria-label={`Show travel offer ${i + 1}`} />
+              onClick={() => setIdx(i)} aria-pressed={i === idx} aria-label={`Show travel offer ${i + 1}`} />
           ))}
         </div>
       </div>

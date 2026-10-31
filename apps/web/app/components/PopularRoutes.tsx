@@ -7,12 +7,12 @@ interface Route {
 }
 
 const DEFAULT_ROUTES: Route[] = [
-  { origin: "COK", destination: "DXB", label: "Kochi → Dubai",      fromPrice: 12500, currency: "INR" },
-  { origin: "CCJ", destination: "AUH", label: "Kozhikode → Abu Dhabi", fromPrice: 13200, currency: "INR" },
-  { origin: "BOM", destination: "DXB", label: "Mumbai → Dubai",      fromPrice: 10800, currency: "INR" },
-  { origin: "MAA", destination: "DXB", label: "Chennai → Dubai",     fromPrice: 11500, currency: "INR" },
-  { origin: "DEL", destination: "DXB", label: "Delhi → Dubai",       fromPrice: 9900,  currency: "INR" },
-  { origin: "HYD", destination: "DXB", label: "Hyderabad → Dubai",   fromPrice: 10200, currency: "INR" },
+  { origin: "COK", destination: "DXB", label: "Kochi → Dubai" },
+  { origin: "CCJ", destination: "AUH", label: "Kozhikode → Abu Dhabi" },
+  { origin: "BOM", destination: "DXB", label: "Mumbai → Dubai" },
+  { origin: "MAA", destination: "DXB", label: "Chennai → Dubai" },
+  { origin: "DEL", destination: "DXB", label: "Delhi → Dubai" },
+  { origin: "HYD", destination: "DXB", label: "Hyderabad → Dubai" },
 ];
 
 const CITY_IMAGES: Record<string, { name: string; src: string }> = {
