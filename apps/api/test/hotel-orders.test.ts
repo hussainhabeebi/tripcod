@@ -8,7 +8,7 @@ import {
   type HotelGuestInput, type HotelV3Option, type RoomOccupancy,
 } from "@tripcod/suppliers";
 import {
-  buildOrderRow, canAccess, checkExpiredHold, holdCheckDue, cancelOrder, cancelQuote, claimPayment, payable, placeHold, processPaidOrder, publicOrder,
+  bookRequest, buildOrderRow, canAccess, checkExpiredHold, holdCheckDue, cancelOrder, cancelQuote, claimPayment, payable, placeHold, processPaidOrder, publicOrder,
   recordPaid, refreshOrder, sha256Hex, type HotelOrder, type HotelOrderDeps, type HotelOrderStore, type ReviewSnapshot,
 } from "../src/lib/hotel-orders.js";
 import { hotelRoutes } from "../src/routes/hotel.js";
@@ -632,4 +632,61 @@ test("UPI refunds only use the credentials of the order's PhonePe environment", 
   const r = await refundHotelPayment(env, db, order, 30000, "test");
   assert.equal(r.ok, false);
   assert.match(r.note, /needs the team/);
+});
+
+for (const statusCode of [400, 200]) test(`PAN 1092 rejected Book (${statusCode}) never polls a nonexistent order, including forced refresh`, async () => {
+  const store = newStore();
+  const rejected = Object.assign(new Error("TripJack hotel Book: 1092 Invalid PAN"), { code: "1092", statusCode });
+  const tj = tripjack(["SUCCESS"], { bookError: rejected });
+  const { d, refunds } = deps(store, tj.client);
+  const order = await newOrder(store, "INSTANT");
+  await pay(d, order);
+  const done = (await processPaidOrder(d, order.id))!;
+  assert.equal(done.status, "FAILED");
+  assert.match(done.lastError!, /1092/);
+  assert.equal(tj.calls.details, 0, "do not replace the PAN rejection with Order not found");
+  assert.equal(refunds.length, 1, "existing mocked failure settlement still runs once");
+  await refreshOrder(d, done, true);
+  await processPaidOrder(d, done.id);
+  assert.equal(tj.calls.details, 0);
+  assert.equal(tj.calls.book.length, 1);
+  assert.equal(refunds.length, 1);
+});
+
+test("rejected Hold Book keeps original 1092 and does not poll on later page reads", async () => {
+  const store = newStore();
+  const rejected = Object.assign(new Error("1092 Invalid PAN"), { code: "1092", statusCode: 400 });
+  const tj = tripjack(["ON_HOLD"], { bookError: rejected });
+  const { d, refunds } = deps(store, tj.client);
+  const order = await newOrder(store, "HOLD");
+  await assert.rejects(placeHold(d, order), /1092/);
+  const failed = (await store.get(order.id))!;
+  assert.equal(failed.status, "FAILED");
+  await refreshOrder(d, failed, true);
+  assert.equal(tj.calls.details, 0);
+  assert.equal(refunds.length, 0);
+});
+
+test("Book conflict still reconciles a possibly existing supplier order", async () => {
+  const store = newStore();
+  const conflict = Object.assign(new Error("Duplicate booking"), { code: "CONFLICT", statusCode: 409 });
+  const tj = tripjack(["SUCCESS"], { bookError: conflict });
+  const { d, refunds } = deps(store, tj.client);
+  const order = await newOrder(store, "INSTANT"); await pay(d, order);
+  assert.equal((await processPaidOrder(d, order.id))!.status, "CONFIRMED");
+  assert.equal(tj.calls.details, 1);
+  assert.equal(refunds.length, 0);
+});
+
+
+test("Hold and Instant keep identical room-wise PAN and guest mapping; only Instant adds paymentInfos", async () => {
+  const store = newStore();
+  const base = await newOrder(store, "HOLD");
+  const rooms = (base.guests as HotelGuestInput[][]).map(room => room.map(g => ({ ...g, pan: "AAACA1111A" })));
+  const order = { ...base, guests: rooms };
+  const hold = bookRequest(order, false);
+  const { paymentInfos, ...instant } = bookRequest({ ...order, mode: "INSTANT" }, true);
+  assert.deepEqual(instant, hold);
+  assert.deepEqual(paymentInfos, [{ amount: Number(order.amount) }]);
+  assert.ok(hold.roomTravellerInfo.every(room => room.travellerInfo.every(g => g.pan === "AAACA1111A" && ["ADULT", "CHILD"].includes(g.pt))));
 });
