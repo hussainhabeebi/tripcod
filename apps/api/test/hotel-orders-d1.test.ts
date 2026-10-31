@@ -79,3 +79,40 @@ for (const [label, debited, expected] of [["debited in Neon", true, "PAID"], ["n
     assert.deepEqual(queued, debited ? [order.id] : []);
   });
 }
+
+test("My Trips lists hold, confirmed and cancelled hotels only for the authenticated tenant/account without supplier calls", async () => {
+  const { Hono } = await import("hono");
+  const { SignJWT } = await import("jose");
+  const { hotelRoutes } = await import("../src/routes/hotel.js");
+  await d1.exec("DELETE FROM hotel_bookings");
+  const store = d1HotelOrderStore(d1);
+  for (const status of ["ON_HOLD", "CONFIRMED", "CANCELLED"]) {
+    await store.insert(row({ supplierBookingId: `MY-${status}`, status, mode: "HOLD", holdDeadline: "2026-11-20T18:00", hotel: { name: "Test Hotel", city: "Dubai", checkIn: "2026-11-25", checkOut: "2026-11-27", nights: 2 } }));
+  }
+  await store.insert(row({ supplierBookingId: "OTHER-USER", userId: "user-2" }));
+  await store.insert(row({ supplierBookingId: "OTHER-TENANT", tenantId: "t2" }));
+  await store.insert(row({ supplierBookingId: "GUEST", userId: null }));
+  const secret = "isolated-test-secret";
+  const token = (userId: string, tenantId = "t1", sessionId = "session-1") => new SignJWT({ userId, tenantId, role: "CUSTOMER", sessionId, scope: "customer-profile" }).setProtectedHeader({ alg: "HS256" }).setExpirationTime("5m").sign(new TextEncoder().encode(secret));
+  const app = new Hono<any>();
+  app.use("*", async (c, next) => { c.set("tenantId", "t1"); c.set("db", {}); await next(); });
+  app.route("/api/hotels", hotelRoutes);
+  const env = { JWT_SECRET: secret, HOTEL_DB: d1,
+    SESSIONS_KV: { get: async (key: string) => key === "session:user-1" ? { sessionId: "session-1" } : null },
+    TENANT_CACHE_KV: { get: async () => null },
+  };
+  const originalFetch = globalThis.fetch;
+  let externalCalls = 0;
+  globalThis.fetch = (async () => { externalCalls++; throw new Error("Unexpected external request"); }) as any;
+  try {
+    const get = (jwt?: string) => app.request("/api/hotels/orders/mine", { headers: jwt ? { Authorization: `Bearer ${jwt}` } : {} }, env, { waitUntil() {} } as any);
+    const response = await get(await token("user-1"));
+    assert.equal(response.status, 200);
+    const { orders } = await response.json() as any;
+    assert.deepEqual(orders.map((o: any) => o.status).sort(), ["CANCELLED", "CONFIRMED", "ON_HOLD"]);
+    assert.ok(orders.every((o: any) => o.holdDeadline === "2026-11-20T18:00" && o.hotel.city === "Dubai" && o.supplierBookingId.startsWith("MY-")));
+    for (const jwt of [undefined, await token("user-1", "t2"), await token("user-1", "t1", "ended-session"), await token("user-2")]) assert.equal((await get(jwt)).status, 401);
+    assert.equal(externalCalls, 0, "listing never books, cancels, pays or refreshes at the supplier");
+    assert.equal((await d1.prepare("SELECT COUNT(*) AS count FROM hotel_bookings").first()).count, 6);
+  } finally { globalThis.fetch = originalFetch; }
+});
