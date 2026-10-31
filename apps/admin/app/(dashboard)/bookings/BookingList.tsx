@@ -75,7 +75,7 @@ function FullValue({ value, label }: { value?: string; label: string }) {
   const text = value || "—";
   if (text.length <= 20) return <span className={styles.clip} title={text}>{text}</span>;
   return <details className={styles.fullValue}>
-    <summary title={text} aria-label={`Show full ${label}`}>{text.slice(0,8)}…{text.slice(-6)}</summary>
+    <summary title={text} aria-label={`Show full ${label}`}>{text.slice(0,6)}…{text.slice(-4)}</summary>
     <span className={styles.expandedValue}>{text}</span>
   </details>;
 }

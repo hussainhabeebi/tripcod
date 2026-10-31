@@ -33,6 +33,7 @@ const hotel=(status)=>({id:`hotel-${status}`,tenantId:'4c86636b-fb0a-4948-92ff-d
   const originalWidth=await region.evaluate(el=>el.querySelector('table').getBoundingClientRect().width);
   const summary=page.locator('summary[aria-label="Show full tenant ID"]').first();
   assert.equal(await summary.getAttribute('title'),'4c86636b-fb0a-4948-92ff-d62d602642b8');
+  assert.ok(await summary.evaluate(el=>el.scrollWidth<=el.clientWidth),'short ID must fit without a second truncation');
   assert.equal(await page.locator('summary[aria-label="Show full customer"]').first().getAttribute('title'),'4404f481-de7c-4c04-a283-34554422d8d2');
   await summary.evaluate(el=>{const region=el.closest('[role="region"]');region.scrollLeft=el.closest('td').offsetLeft-10;});
   await summary.click();await page.locator('details[open]').getByText('4c86636b-fb0a-4948-92ff-d62d602642b8',{exact:true}).waitFor();
