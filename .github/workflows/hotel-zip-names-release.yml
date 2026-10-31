@@ -1,0 +1,264 @@
+name: Hotel certification ZIP names release (API + Admin only)
+
+# Releases PR #29 (merge 2c77e4a): tripcod-api, then tripcod-admin. No migration,
+# no web / portal, no gateway, cron, secret or setting change. Smoke checks are
+# searches only (no review, booking or payment). Any failure restores both
+# recorded versions.
+#
+# Runs when .github/release/hotel-zip-names-mode.txt changes on this branch:
+#   release — gates → API → search smoke → Admin → data check
+#   smoke   — search smoke only
+on:
+  push:
+    branches: [release/hotel-zip-names]
+    paths: [.github/release/hotel-zip-names-mode.txt]
+
+permissions:
+  contents: read
+concurrency:
+  group: tripcod-production-release
+  cancel-in-progress: false
+
+env:
+  RELEASE_COMMIT: 2c77e4a33cf2f5e41583638c71bdc1b0006394d5
+  LIVE_COMMIT: 47c6c319dde418edf1fd82f41a1eae3ae7d85c3f   # PR #28 Admin hotel bookings, serving API / Admin since 2026-10-31 09:22
+  CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+  CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+  DATABASE_URL: ${{ secrets.DATABASE_URL }}
+  WRANGLER_SEND_METRICS: "false"
+  NEXT_TELEMETRY_DISABLED: "1"
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+
+      - name: Read mode
+        run: |
+          mode=$(tr -d '[:space:]' < .github/release/hotel-zip-names-mode.txt)
+          case "$mode" in release|smoke) ;; *) echo "Unknown mode '$mode'"; exit 1;; esac
+          echo "MODE=$mode" >> "$GITHUB_ENV"; echo "Mode: $mode"
+
+      - name: Search smoke helper (hotel + flight searches only)
+        run: |
+          cat > "$RUNNER_TEMP/smoke.py" <<'PY'
+          import datetime, json, sys, time, urllib.request, urllib.error
+          H = {"Content-Type": "application/json", "x-tenant-slug": "tripcod", "User-Agent": "Mozilla/5.0 tripcod-release"}
+          def post(path, payload, timeout=120):
+              r = urllib.request.Request("https://api.tripcod.com" + path, data=json.dumps(payload).encode(), headers=H, method="POST")
+              try:
+                  with urllib.request.urlopen(r, timeout=timeout) as res: return res.status, json.load(res)
+              except urllib.error.HTTPError as e:
+                  try: return e.code, json.loads(e.read())
+                  except Exception: return e.code, {}
+          day = datetime.date.today() + datetime.timedelta(days=21)
+          def hotel():
+              s, b = post("/api/hotels/search", {"cityName": "Doha", "countryCode": "QA", "checkIn": str(day), "checkOut": str(day + datetime.timedelta(days=2)),
+                                                 "rooms": [{"adults": 1, "children": 0}], "nationality": "IN", "currency": "INR"})
+              return {"httpStatus": s, "hotels": len(b.get("hotels") or []), "candidates": b.get("totalCandidates"), "errorCode": b.get("errorCode"), "error": str(b.get("error") or "")[:300]}
+          def flight():
+              s, b = post("/api/search", {"origin": "DEL", "destination": "BOM", "departureDate": str(day), "adults": 1, "cabinClass": "ECONOMY", "tripType": "ONEWAY"})
+              return {"httpStatus": s, "fares": len(b.get("fares") or []), "error": str(b.get("error") or "")[:200]}
+          mode = sys.argv[1]
+          if mode == "flight":
+              print(json.dumps({"flightSearch": flight()}))
+          elif mode == "hotel-new-code":
+              # The previous version sends the flight Production key (403 Invalid API key);
+              # the new one either searches with the hotel key or stops with NOT_CONFIGURED.
+              for i in range(18):
+                  r = hotel(); print(json.dumps({"hotelSearch": r}))
+                  if r["httpStatus"] == 200 or r["errorCode"] == "NOT_CONFIGURED": break
+                  time.sleep(5)
+              if not (r["httpStatus"] == 200 or r["errorCode"] == "NOT_CONFIGURED"): raise SystemExit("New hotel credential code not serving / unexpected hotel result")
+              print("HOTEL_SEARCH_RESULT=" + ("PASSED" if r["httpStatus"] == 200 and r["hotels"] > 0 else "NEEDS_HOTEL_UAT_KEY" if r["errorCode"] == "NOT_CONFIGURED" else "NO_HOTELS"))
+          elif mode == "hotel":
+              r = hotel(); print(json.dumps({"hotelSearch": r}))
+              print("HOTEL_SEARCH_RESULT=" + ("PASSED" if r["httpStatus"] == 200 and r["hotels"] > 0 else "NEEDS_HOTEL_UAT_KEY" if r["errorCode"] == "NOT_CONFIGURED" else "FAILED"))
+          PY
+
+      - name: Smoke — searches only
+        if: env.MODE == 'smoke'
+        run: |
+          python3 "$RUNNER_TEMP/smoke.py" hotel
+          python3 "$RUNNER_TEMP/smoke.py" flight
+
+      # ── Release ────────────────────────────────────────────────────────────
+      - name: Gate — code is merged PR #29 and differs from the live code only by it
+        if: env.MODE == 'release'
+        run: |
+          git merge-base --is-ancestor "$RELEASE_COMMIT" origin/main
+          git diff --exit-code "$RELEASE_COMMIT" HEAD -- apps packages pnpm-lock.yaml
+          changed=$(git diff --name-only "$LIVE_COMMIT" "$RELEASE_COMMIT" -- apps packages pnpm-lock.yaml | sort)
+          expected=$(git diff --name-only "${RELEASE_COMMIT}^1" "$RELEASE_COMMIT" -- apps packages | sort)
+          echo "$changed"
+          [ "$changed" = "$expected" ] || { echo "STOP: main has application changes beyond PR #29"; exit 1; }
+
+      - uses: pnpm/action-setup@v4
+        if: env.MODE == 'release'
+      - uses: actions/setup-node@v4
+        if: env.MODE == 'release'
+        with: { node-version: 22, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+        if: env.MODE == 'release'
+
+      - name: Gate — typecheck and hotel / payment / gateway tests
+        if: env.MODE == 'release'
+        run: |
+          TSX=./node_modules/.pnpm/tsx@4.23.12/node_modules/tsx/dist/loader.mjs
+          pnpm --filter @tripcod/api typecheck
+          (cd apps/admin && pnpm exec tsc --noEmit -p .)
+          node --import $TSX --test apps/api/test/hotel-cert-logs.test.ts apps/api/test/hotel-hold-expiry.test.ts apps/api/test/hotel-orders-d1.test.ts \
+            apps/api/test/hotel-credentials.test.ts apps/api/test/hotel-validation.test.ts apps/api/test/admin-access.test.ts apps/api/test/tripsafe.test.ts \
+            apps/api/test/phonepe.test.ts apps/api/test/tripjack-reviewed-total.test.ts apps/api/test/certification-pack.test.ts
+          node --experimental-test-module-mocks --import $TSX --test apps/api/test/hotel-wallet.test.ts
+          node --test packages/suppliers/test/*.test.cjs apps/tripjack-gateway/test/*.test.mjs
+
+      - name: Cloudflare helper
+        if: env.MODE == 'release'
+        run: |
+          cat > "$RUNNER_TEMP/cf.py" <<'PY'
+          import json, os, pathlib, re, sys, urllib.request, urllib.error
+          root = pathlib.Path(os.environ["RUNNER_TEMP"])
+          base = "https://api.cloudflare.com/client/v4/accounts/" + os.environ["CLOUDFLARE_ACCOUNT_ID"]
+          WORKERS = ["tripcod-api", "tripcod-admin"]
+          def req(path, payload=None):
+              h = {"Authorization": "Bearer " + os.environ["CLOUDFLARE_API_TOKEN"]}
+              if payload is not None: h["Content-Type"] = "application/json"
+              r = urllib.request.Request(base + path, data=None if payload is None else json.dumps(payload).encode(), headers=h, method="GET" if payload is None else "POST")
+              try:
+                  with urllib.request.urlopen(r, timeout=60) as res: v = json.load(res)
+              except urllib.error.HTTPError as e: raise SystemExit("Cloudflare HTTP %s for %s" % (e.code, path))
+              if not v.get("success"): raise SystemExit("Cloudflare call failed: " + path)
+              return v["result"]
+          def deployment(w):
+              d = req("/workers/scripts/%s/deployments" % w)["deployments"]
+              if not d: raise SystemExit(w + ": no recorded deployment")
+              return d[0]
+          def version(w, vid): return req("/workers/scripts/%s/versions/%s" % (w, vid))
+          def bind(v): return {(b.get("name"), b.get("type")) for b in v["resources"].get("bindings", [])}
+          mode = sys.argv[1]
+          if mode == "record":
+              out = {}
+              for w in WORKERS:
+                  d = deployment(w); vs = d["versions"]
+                  if len(vs) != 1 or vs[0]["percentage"] != 100: raise SystemExit(w + ": split deployment in progress — stop")
+                  note = (d.get("annotations") or {}).get("workers/message", "")
+                  print(json.dumps({"worker": w, "rollbackVersion": vs[0]["version_id"], "deployedAt": d.get("created_on"), "note": note}))
+                  if "Admin hotel bookings and stored logs" not in note and "Hotel bookings and stored certification UI" not in note:
+                      raise SystemExit(w + ": serving version is not the recorded PR #28 release — stop and review")
+                  (root / (w + "-before.json")).write_text(json.dumps(version(w, vs[0]["version_id"])))
+                  out[w] = vs[0]["version_id"]
+              (root / "rollback.json").write_text(json.dumps(out))
+              crons = sorted(x["cron"] for x in req("/workers/scripts/tripcod-api/schedules")["schedules"])
+              print(json.dumps({"tripcod-api crons": crons}))
+              if crons != ["*/15 * * * *", "17 */4 * * *"]: raise SystemExit("unexpected cron set — stop and review")
+          elif mode == "crons-unchanged":
+              crons = sorted(x["cron"] for x in req("/workers/scripts/tripcod-api/schedules")["schedules"])
+              print(json.dumps({"tripcod-api crons": crons}))
+              if crons != ["*/15 * * * *", "17 */4 * * *"]: raise SystemExit("cron set changed")
+          elif mode == "limits":
+              lim = json.loads((root / "tripcod-api-before.json").read_text())["resources"].get("script_runtime", {}).get("limits") or {}
+              if lim.get("cpu_ms"): print("\n[limits]\ncpu_ms = %d" % int(lim["cpu_ms"]))
+          elif mode == "activate":
+              w, log = sys.argv[2], sys.argv[3]
+              m = re.search(r"Worker Version ID:\s*([0-9a-f-]{36})", pathlib.Path(log).read_text())
+              if not m: raise SystemExit(w + ": uploaded version id missing — not activated")
+              old = json.loads((root / (w + "-before.json")).read_text()); new = version(w, m[1])
+              if bind(new) != bind(old): raise SystemExit("%s: bindings differ (added %s, removed %s) — not activated" % (w, sorted(bind(new) - bind(old)), sorted(bind(old) - bind(new))))
+              o, n = old["resources"].get("script_runtime", {}), new["resources"].get("script_runtime", {})
+              for k in ("compatibility_date", "compatibility_flags", "migration_tag", "limits"):
+                  if o.get(k) != n.get(k): raise SystemExit("%s: runtime %s differs (%s → %s) — not activated" % (w, k, o.get(k), n.get(k)))
+              (root / ("activated-" + w)).write_text(m[1])
+              req("/workers/scripts/%s/deployments" % w, {"strategy": "percentage", "versions": [{"version_id": m[1], "percentage": 100}],
+                  "annotations": {"workers/message": "Hotel certification ZIP names release %s" % os.environ["RELEASE_COMMIT"][:7]}})
+              print(json.dumps({"activated": w, "version": m[1]}))
+          elif mode == "after":
+              for w in WORKERS: print(json.dumps({"serving": w, "versions": deployment(w)["versions"]}))
+          elif mode == "rollback":
+              rb = json.loads((root / "rollback.json").read_text())
+              for w in WORKERS:
+                  if not (root / ("activated-" + w)).exists(): continue
+                  req("/workers/scripts/%s/deployments" % w, {"strategy": "percentage", "versions": [{"version_id": rb[w], "percentage": 100}],
+                      "annotations": {"workers/message": "Rollback of hotel certification ZIP names release"}})
+                  print(json.dumps({"rolledBack": w, "version": rb[w]}))
+          PY
+
+      - name: Record serving versions (rollback points) and baseline searches
+        if: env.MODE == 'release'
+        run: |
+          python3 "$RUNNER_TEMP/cf.py" record
+          python3 "$RUNNER_TEMP/smoke.py" flight | tee "$RUNNER_TEMP/flight-before.json"
+          python3 "$RUNNER_TEMP/smoke.py" hotel || true
+          export PGOPTIONS="-c default_transaction_read_only=on"
+          psql "$DATABASE_URL" -At -c "SELECT json_build_object('payments', (SELECT count(*) FROM payments), 'bookings', (SELECT count(*) FROM bookings), 'walletTransactions', (SELECT count(*) FROM wallet_transactions))" | tee "$RUNNER_TEMP/neon-before.json"
+
+      - name: Build Admin (production API URL) before touching the API
+        if: env.MODE == 'release'
+        working-directory: apps/admin
+        env: { NEXT_PUBLIC_API_URL: https://api.tripcod.com }
+        run: |
+          pnpm exec opennextjs-cloudflare build --dangerouslyUseUnsupportedNextVersion
+          grep -rl "Download Certification ZIP" .open-next >/dev/null || { echo "Admin build is missing the hotel booking page"; exit 1; }
+
+      - name: API — upload (same CPU limit), verify, activate
+        id: api
+        if: env.MODE == 'release'
+        working-directory: apps/api
+        run: |
+          set -o pipefail
+          cp wrangler.toml wrangler.release.toml
+          python3 "$RUNNER_TEMP/cf.py" limits >> wrangler.release.toml
+          pnpm exec wrangler versions upload --config wrangler.release.toml --keep-vars --message "Hotel certification ZIP names $RELEASE_COMMIT" 2>&1 | tee "$RUNNER_TEMP/api.log"
+          python3 "$RUNNER_TEMP/cf.py" activate tripcod-api "$RUNNER_TEMP/api.log"
+
+      - name: API smoke — health, hotel search (new code), flight search unchanged
+        if: env.MODE == 'release'
+        run: |
+          curl -fsS -m 30 https://api.tripcod.com/health; echo
+          python3 "$RUNNER_TEMP/smoke.py" hotel
+          python3 "$RUNNER_TEMP/smoke.py" flight | tee "$RUNNER_TEMP/flight-after.json"
+          python3 - <<'PY'
+          import json, os
+          t = os.environ["RUNNER_TEMP"]
+          b = json.loads(open(t + "/flight-before.json").read())["flightSearch"]; a = json.loads(open(t + "/flight-after.json").read())["flightSearch"]
+          if b["httpStatus"] == 200 and b["fares"] > 0 and not (a["httpStatus"] == 200 and a["fares"] > 0):
+              raise SystemExit("Flight Production search regressed after the API release")
+          print("Flight Production search:", "OK" if a["httpStatus"] == 200 and a["fares"] > 0 else "same as before release", a)
+          PY
+          c=$(curl -s -o /dev/null -w "%{http_code}" -m 60 -H "x-tenant-slug: tripcod" https://api.tripcod.com/api/hotels/orders/release-probe-00000000); echo "hotel order probe: $c"; [ "$c" = 404 ]
+          c=$(curl -s -o /dev/null -w "%{http_code}" -m 30 -H "x-tenant-slug: tripcod" https://api.tripcod.com/api/checkout/payment-options); echo "payment options: $c"; [ "$c" = 200 ]
+
+      - name: Admin — upload, verify, activate
+        id: admin
+        if: env.MODE == 'release'
+        working-directory: apps/admin
+        run: |
+          set -o pipefail
+          pnpm exec wrangler versions upload --keep-vars --message "Hotel certification ZIP names $RELEASE_COMMIT" 2>&1 | tee "$RUNNER_TEMP/admin.log"
+          python3 "$RUNNER_TEMP/cf.py" activate tripcod-admin "$RUNNER_TEMP/admin.log"
+          sleep 15
+          curl -fsS -m 30 -o /dev/null -w "admin login %{http_code}\n" https://admin.tripcod.com/login
+
+      - name: Data preservation and serving versions (read-only)
+        if: env.MODE == 'release'
+        run: |
+          export PGOPTIONS="-c default_transaction_read_only=on"
+          psql "$DATABASE_URL" -At -c "SELECT json_build_object('payments', (SELECT count(*) FROM payments), 'bookings', (SELECT count(*) FROM bookings), 'walletTransactions', (SELECT count(*) FROM wallet_transactions))" > "$RUNNER_TEMP/neon-after.json"
+          python3 - <<'PY'
+          import json, os
+          t = os.environ["RUNNER_TEMP"]; b = json.load(open(t + "/neon-before.json")); a = json.load(open(t + "/neon-after.json"))
+          print(json.dumps({"before": b, "after": a}))
+          for k in b: assert a[k] >= b[k], "row count dropped: " + k
+          print("No payment, booking or wallet rows lost.")
+          PY
+          python3 "$RUNNER_TEMP/cf.py" after
+          python3 "$RUNNER_TEMP/cf.py" crons-unchanged
+
+      - name: Restore recorded API / Admin versions on any failure
+        if: failure() && env.MODE == 'release'
+        run: |
+          python3 "$RUNNER_TEMP/cf.py" rollback
+          echo "Any activated Worker was restored to its recorded version (none listed = nothing had been activated)."
