@@ -84,7 +84,8 @@ new_sqlite_classes = ["TenantRateLimiter"]
 
 # ── Cron: fare-alert sweep (re-checks alert routes nobody searched lately) ──
 [triggers]
-crons = ["17 */4 * * *"]
+# "17 */4": fare alerts + exchange rates; "*/15": hotel hold expiry checks (see src/index.ts).
+crons = ["17 */4 * * *", "*/15 * * * *"]
 
 # ── Environment Variables (non-secret) ───────────────────────────
 [vars]

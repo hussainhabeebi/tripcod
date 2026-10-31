@@ -5,6 +5,8 @@
 //             → customer pays → confirm-book → poll → CONFIRMED; an expired hold is cancelled
 //               by TripJack and shows as CANCELLED.
 //   Cancel:   CONFIRMED / ON_HOLD → cancel-booking → Booking Details → CANCELLED only when TripJack says so.
+//   Expiry:   a scheduled sweep queues holds whose deadline has passed; each is claimed
+//             once and re-read from Booking Details — CANCELLED only when TripJack says so.
 //
 // Rules this module enforces:
 //   • A booking is CONFIRMED only when TripJack's Booking Details status is SUCCESS —
@@ -47,6 +49,8 @@ export interface OrderGuard {
   paymentStatus?: string[];
   supplierSubmittedAtNull?: boolean;
   confirmSubmittedAtNull?: boolean;
+  // Compare-and-set on last_checked_at (null = never checked): one claimant per expiry check.
+  lastCheckedAt?: Date | null;
 }
 
 export interface HotelOrderStore {
@@ -438,6 +442,42 @@ export async function refreshOrder(deps: HotelOrderDeps, order: HotelOrder, forc
   // A confirmed booking is re-read only on demand; holds and in-flight orders every 20 s.
   if (!force && (SETTLED.includes(order.status) || (order.lastCheckedAt && now - order.lastCheckedAt.getTime() < 20_000))) return order;
   return applySupplierStatus(deps, order, await details(deps, order, "refresh"));
+}
+
+// ── Hold expiry (scheduled) ──────────────────────────────────────────────────
+//
+// TripJack releases an unconfirmed hold at its deadline. The deadline only makes
+// a hold due for a check: the order changes only from TripJack's Booking Details
+// (applySupplierStatus), so a hold TripJack still reports ON_HOLD stays ON_HOLD.
+// Paid holds are left to processPaidOrder (confirm-book / refund), never raced.
+
+const HOLD_CHECK_PAYMENTS = ["UNPAID", "PENDING", "REFUNDED"];
+const HOLD_CHECK_EVERY_MS = 10 * 60_000;          // first day after the deadline
+const HOLD_CHECK_SLOW_MS = 6 * 3600_000;          // then every 6 hours
+const HOLD_CHECK_GIVE_UP_MS = 30 * 24 * 3600_000; // after 30 days, only on demand
+
+export function holdCheckDue(order: Pick<HotelOrder, "mode" | "status" | "holdDeadline" | "paymentStatus" | "supplierSubmittedAt" | "lastCheckedAt">, now = Date.now()): boolean {
+  if (order.mode !== "HOLD" || order.status !== "ON_HOLD" || !order.holdDeadline || !order.supplierSubmittedAt) return false;
+  if (!HOLD_CHECK_PAYMENTS.includes(order.paymentStatus)) return false;
+  if (!deadlinePassed(order.holdDeadline, now)) return false;
+  const deadline = /[zZ]|[+-]\d\d:?\d\d$/.test(order.holdDeadline) ? Date.parse(order.holdDeadline) : Date.parse(`${order.holdDeadline}+05:30`);
+  const overdue = now - deadline;
+  if (overdue > HOLD_CHECK_GIVE_UP_MS) return false;
+  const every = overdue > 24 * 3600_000 ? HOLD_CHECK_SLOW_MS : HOLD_CHECK_EVERY_MS;
+  // A status read before the deadline says nothing about the release.
+  return !order.lastCheckedAt || order.lastCheckedAt.getTime() < deadline || now - order.lastCheckedAt.getTime() >= every;
+}
+
+// One expiry check of one hold: claim it (a duplicate queue delivery or a second
+// sweep finds the claim taken), then let TripJack's Booking Details decide.
+export async function checkExpiredHold(deps: HotelOrderDeps, orderId: string): Promise<{ order: HotelOrder | null; checked: boolean }> {
+  const now = deps.now?.() ?? Date.now();
+  const order = await deps.store.get(orderId);
+  if (!order || !holdCheckDue(order, now)) return { order, checked: false };
+  const claimed = await deps.store.update(order.id, { lastCheckedAt: new Date(now) },
+    { status: ["ON_HOLD"], paymentStatus: HOLD_CHECK_PAYMENTS, lastCheckedAt: order.lastCheckedAt });
+  if (!claimed) return { order: (await deps.store.get(order.id)) ?? order, checked: false };
+  return { order: await refreshOrder(deps, claimed, true), checked: true };
 }
 
 // ── Cancellation ─────────────────────────────────────────────────────────────

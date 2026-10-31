@@ -1,3 +1,4 @@
+import { parseHotelBookingDetails } from "@tripcod/suppliers";
 import { Hono } from "hono";
 import { supplierApiLogs, supplierExchanges } from "@tripcod/db/schema";
 import { eq, and, desc, gte, inArray, like, lte, or, asc } from "drizzle-orm";
@@ -310,6 +311,26 @@ supplierLogsAdminRoutes.get("/hotel-certification", async (c) => {
   return c.json({ packs: page });
 });
 
+// TripJack status in a stored Booking Details response (null when unreadable).
+function bookingDetailsStatus(bytes: Uint8Array): string | null {
+  try { return parseHotelBookingDetails(JSON.parse(new TextDecoder().decode(bytes))).status || null; } catch { return null; }
+}
+
+// Hold evidence for the UAT pack: the Booking Details that showed the hold, and
+// the one where TripJack reported it cancelled (after its deadline when no
+// Cancellation call was made — TripJack's automatic release).
+export function holdLifecycle(calls: { step: string; files: string[]; at: string; supplierStatus?: string }[]) {
+  if (!calls.some((x) => x.step === "HoldBook")) return null;
+  const evidence = (status: string) => calls.find((x) => x.step === "BookingDetails" && x.supplierStatus === status);
+  const held = evidence("ON_HOLD"), cancelled = evidence("CANCELLED");
+  const cancelCall = calls.some((x) => x.step === "Cancellation");
+  return {
+    onHold:    held ? { at: held.at, files: held.files } : null,
+    cancelled: cancelled ? { at: cancelled.at, files: cancelled.files } : null,
+    outcome:   !cancelled ? (held ? "ON_HOLD" : "UNKNOWN") : cancelCall ? "CANCELLED_ON_REQUEST" : "CANCELLED_BY_TRIPJACK_AFTER_HOLD_DEADLINE",
+  };
+}
+
 supplierLogsAdminRoutes.get("/hotel-certification/:bookingId/zip", async (c) => {
   const bookingId = c.req.param("bookingId");
   if (!HOTEL_BOOKING_ID.test(bookingId)) throw new HTTPException(400, { message: "Invalid TripJack booking ID" });
@@ -327,6 +348,7 @@ supplierLogsAdminRoutes.get("/hotel-certification/:bookingId/zip", async (c) => 
     const base = n > 1 ? `${name}_${n}` : name;
     const date = new Date(x.at);
     const written: string[] = [];
+    let supplierStatus: string | null = null;
     // Request as TripJack received it (TripJack URL + apikey, never the gateway secret).
     const req = certificationRequest((x.request ?? {}) as Record<string, any>, hostFor(x.endpoint, env));
     const query = (() => { try { return new URL(String(x.request?.url)).search; } catch { return ""; } })();
@@ -339,18 +361,22 @@ supplierLogsAdminRoutes.get("/hotel-certification/:bookingId/zip", async (c) => 
       const obj = await c.env.DOCUMENTS_R2.get(x.responseKey);
       if (obj) {
         const fname = `${base}Response.${x.responseKey.endsWith(".txt") ? "txt" : "json"}`;
-        files.push({ name: fname, data: new Uint8Array(await obj.arrayBuffer()), date });   // byte-for-byte as received
+        const bytes = new Uint8Array(await obj.arrayBuffer());
+        files.push({ name: fname, data: bytes, date });   // byte-for-byte as received
         written.push(fname);
+        if (step === "BookingDetails") supplierStatus = bookingDetailsStatus(bytes);
       }
     }
-    listed.push({ step, service: x.endpoint, at: x.at, folder: x.folder, files: written });
+    listed.push({ step, service: x.endpoint, at: x.at, folder: x.folder, files: written, ...(supplierStatus ? { supplierStatus } : {}) });
   }
+  const lifecycle = holdLifecycle(listed as { step: string; files: string[]; at: string; supplierStatus?: string }[]);
   const order = c.env.HOTEL_DB ? await d1HotelOrderStore(c.env.HOTEL_DB, c.get("tenantId")).bySupplierBooking(c.get("tenantId"), bookingId).catch(() => null) : null;
   const summary = {
     tripjackBookingId: bookingId,
     correlationIds,
     environment: env,
     ...hotelScenario(steps),
+    ...(lifecycle ? { holdLifecycle: lifecycle } : {}),
     tripcodOrder: order ? {
       id: order.id, mode: order.mode, status: order.status, supplierStatus: order.supplierStatus, confirmationNo: order.confirmationNo,
       holdDeadline: order.holdDeadline, occupancy: order.occupancy, hotel: (order.hotel as any)?.name, amount: order.amount, currency: order.currency,

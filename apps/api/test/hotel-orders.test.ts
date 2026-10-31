@@ -8,7 +8,7 @@ import {
   type HotelGuestInput, type HotelV3Option, type RoomOccupancy,
 } from "@tripcod/suppliers";
 import {
-  buildOrderRow, canAccess, cancelOrder, cancelQuote, claimPayment, payable, placeHold, processPaidOrder, publicOrder,
+  buildOrderRow, canAccess, checkExpiredHold, holdCheckDue, cancelOrder, cancelQuote, claimPayment, payable, placeHold, processPaidOrder, publicOrder,
   recordPaid, refreshOrder, sha256Hex, type HotelOrder, type HotelOrderDeps, type HotelOrderStore, type ReviewSnapshot,
 } from "../src/lib/hotel-orders.js";
 import { hotelRoutes } from "../src/routes/hotel.js";
@@ -89,7 +89,8 @@ function memoryStore(): HotelOrderStore & { rows: Map<string, HotelOrder> } {
   let n = 0;
   const pass = (o: HotelOrder, g: any = {}) => (!g.status || g.status.includes(o.status))
     && (!g.paymentStatus || g.paymentStatus.includes(o.paymentStatus))
-    && (!g.supplierSubmittedAtNull || !o.supplierSubmittedAt) && (!g.confirmSubmittedAtNull || !o.confirmSubmittedAt);
+    && (!g.supplierSubmittedAtNull || !o.supplierSubmittedAt) && (!g.confirmSubmittedAtNull || !o.confirmSubmittedAt)
+    && (!("lastCheckedAt" in g) || (o.lastCheckedAt?.getTime() ?? null) === (g.lastCheckedAt?.getTime() ?? null));
   return {
     rows,
     async insert(row) {
@@ -332,6 +333,87 @@ test("expired hold auto-cancelled by the supplier shows CANCELLED and can't be p
   const fresh = await refreshOrder(d, held, true);
   assert.equal(fresh.status, "CANCELLED");
   assert.equal(refunds.length, 0, "nothing was paid");
+});
+
+// ── Hold expiry (scheduled check) ───────────────────────────────────────────
+// Deadline 2026-11-01T12:00 IST; the mocked clock starts at 10:00 and is moved past it.
+
+async function heldOrder(store: HotelOrderStore, statuses = ["ON_HOLD"]) {
+  const tj = tripjack(statuses, { deadline: "2026-11-01T12:00" });
+  const ctx = deps(store, tj.client);
+  const held = await placeHold(ctx.d, await newOrder(store, "HOLD"));
+  assert.equal(held.status, "ON_HOLD");
+  return { tj, ...ctx, held, advance: (ms: number) => { const t = ctx.d.now!() + ms; ctx.d.now = () => t; } };
+}
+
+test("hold expiry: nothing is checked before the deadline, and the deadline alone never cancels", async () => {
+  const store = newStore();
+  const h = await heldOrder(store);
+  const before = h.tj.calls.details;
+  assert.equal((await checkExpiredHold(h.d, h.held.id)).checked, false, "deadline not reached");
+  assert.equal(h.tj.calls.details, before);
+
+  h.advance(3 * 3600_000);   // 13:00 — an hour past the deadline; TripJack still reports ON_HOLD
+  const r = await checkExpiredHold(h.d, h.held.id);
+  assert.equal(r.checked, true);
+  assert.equal(h.tj.calls.details, before + 1, "one Booking Details call");
+  assert.equal(r.order!.status, "ON_HOLD", "not CANCELLED without TripJack saying so");
+  assert.equal(r.order!.supplierStatus, "ON_HOLD");
+});
+
+test("hold expiry: TripJack confirms CANCELLED → order CANCELLED, nothing to refund, checks stop", async () => {
+  const store = newStore();
+  const h = await heldOrder(store);
+  h.advance(3 * 3600_000);
+  h.tj.setStatuses(["CANCELLED"]);
+  const r = await checkExpiredHold(h.d, h.held.id);
+  assert.equal(r.order!.status, "CANCELLED");
+  assert.equal(r.order!.supplierStatus, "CANCELLED");
+  assert.equal(r.order!.paymentStatus, "UNPAID");
+  assert.equal(h.refunds.length, 0);
+  assert.equal(publicOrder(r.order!, h.d.now!()).status, "CANCELLED", "customer page / My Trips / Admin read this status");
+  h.advance(3600_000);
+  assert.equal((await checkExpiredHold(h.d, h.held.id)).checked, false, "a cancelled hold is never re-checked");
+});
+
+test("hold expiry: duplicate deliveries / overlapping sweeps call TripJack once", async () => {
+  const store = newStore();
+  const h = await heldOrder(store);
+  h.advance(3 * 3600_000);
+  h.tj.setStatuses(["CANCELLED"]);
+  const before = h.tj.calls.details;
+  const results = await Promise.all([1, 2, 3, 4].map(() => checkExpiredHold(h.d, h.held.id)));
+  assert.equal(results.filter((r) => r.checked).length, 1, "exactly one claim wins");
+  assert.equal(h.tj.calls.details, before + 1);
+  assert.equal((await store.get(h.held.id))!.status, "CANCELLED");
+});
+
+test("hold expiry: re-checked every 10 min while TripJack still holds it; a failed call changes nothing", async () => {
+  const store = newStore();
+  const h = await heldOrder(store);
+  h.advance(3 * 3600_000);
+  await checkExpiredHold(h.d, h.held.id);
+  h.advance(5 * 60_000);
+  assert.equal((await checkExpiredHold(h.d, h.held.id)).checked, false, "too soon");
+  h.advance(6 * 60_000);
+  const failing = { ...h.tj.client, async bookingDetails() { throw Object.assign(new Error("Invalid API key"), { statusCode: 403, code: "403" }); } };
+  const r = await checkExpiredHold({ ...h.d, client: failing }, h.held.id);
+  assert.equal(r.checked, true);
+  assert.equal(r.order!.status, "ON_HOLD", "unreadable TripJack status never cancels");
+  h.advance(11 * 60_000);
+  h.tj.setStatuses(["CANCELLED"]);
+  assert.equal((await checkExpiredHold(h.d, h.held.id)).order!.status, "CANCELLED");
+});
+
+test("hold expiry: paid holds are left to the confirm / refund flow", async () => {
+  const store = newStore();
+  const h = await heldOrder(store);
+  await pay(h.d, h.held);
+  h.advance(3 * 3600_000);
+  const before = h.tj.calls.details;
+  assert.equal(holdCheckDue((await store.get(h.held.id))!, h.d.now!()), false);
+  assert.equal((await checkExpiredHold(h.d, h.held.id)).checked, false);
+  assert.equal(h.tj.calls.details, before);
 });
 
 test("hold paid just before expiry: supplier released it, so the payment is refunded", async () => {

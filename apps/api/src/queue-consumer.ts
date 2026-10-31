@@ -27,7 +27,7 @@ import { parseBookingDetails } from "./lib/trips.js";
 import { sendWhatsApp, buildBookingConfirmationMessage } from "./lib/notify.js";
 import { emailLayout, sendMail } from "./lib/email.js";
 import { escapeHtml, WEB_URL } from "./lib/customer-notify.js";
-import { processHotelPayment, type HotelQueueMsg } from "./lib/hotel-order-store.js";
+import { processHoldExpiry, processHotelPayment, type HotelQueueMsg } from "./lib/hotel-order-store.js";
 
 // ── Message type discriminated union ─────────────────────────────
 
@@ -89,6 +89,9 @@ export async function handleBookingQueue(
       if (data.type === "HOTEL_PAYMENT_CAPTURED") {
         // Hotel orders: TripJack book / confirm-book once per order (idempotent on retry).
         await processHotelPayment(env, db, data);
+      } else if (data.type === "HOTEL_HOLD_EXPIRY_CHECK") {
+        // Hold deadline passed: TripJack Booking Details decides (claimed once per check).
+        await processHoldExpiry(env, db, data);
       } else if (data.type === "INITIATE_PAYMENT") {
         await handleInitiatePayment(db, env, data);
       } else if (data.type === "PAYMENT_CAPTURED") {
