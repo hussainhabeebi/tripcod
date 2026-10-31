@@ -44,7 +44,18 @@ const order = (status, extra = {}) => ({
     assert.equal(await hotels.getByText('Hold deadline', { exact: true }).count(), 3);
     assert.equal(await hotels.getByRole('link', { name: 'View booking' }).count(), 3);
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true, `overflow at ${width}`);
-    assert.equal(await hotels.getByText('2 rooms').count(), 0);
+    const hotelTab = page.getByRole('tab', { name: 'Hotel Stays', exact: true });
+    const flightTab = page.getByRole('tab', { name: 'Flight Bookings', exact: true });
+    const a = await hotelTab.boundingBox(), b = await flightTab.boundingBox();
+    assert.ok(b.y >= a.y + a.height, `main tabs must form a column at ${width}`);
+    await flightTab.click();
+    await page.getByText('No flight bookings yet', { exact: true }).waitFor();
+    assert.equal(await hotels.isVisible(), false);
+    assert.equal(await flightTab.getAttribute('aria-selected'), 'true');
+    await flightTab.press('ArrowUp');
+    assert.equal(await hotelTab.getAttribute('aria-selected'), 'true');
+    assert.equal(await hotelTab.evaluate(el => el === document.activeElement), true);
+    await hotels.getByText('On hold', { exact: true }).waitFor();
     if ([390, 1440].includes(width)) await page.screenshot({ path: `${output}/my-trips-${width}.png`, fullPage: true });
   }
   mode = 'error'; await page.reload();
@@ -56,10 +67,12 @@ const order = (status, extra = {}) => ({
   mode = 'expired'; await page.reload(); await page.getByText('Hold deadline (passed)').waitFor();
   await page.getByText('On hold', { exact: true }).waitFor(); assert.equal(await page.getByText('Hold expired', { exact: true }).count(), 0);
   mode = 'success'; flightMode = 'pending'; await page.reload(); await page.getByText('On hold', { exact: true }).waitFor();
+  await page.getByRole('tab', { name: 'Flight Bookings', exact: true }).click();
   await page.getByText('Loading your flight bookings…').waitFor();
-  flightMode = 'auth'; await page.reload(); await page.getByText('Please sign in again to see your flight bookings.').waitFor();
+  flightMode = 'auth'; await page.reload(); await page.getByRole('tab', { name: 'Flight Bookings', exact: true }).click(); await page.getByText('Please sign in again to see your flight bookings.').waitFor();
+  await page.getByRole('tab', { name: 'Hotel Stays', exact: true }).click();
   await page.getByText('On hold', { exact: true }).waitFor();
   assert.deepEqual(errors, []);
   await browser.close();
-  console.log('PASS: seven widths; statuses/details/deadlines; authenticated request; error/retry/auth/empty; flight independence; no overflow or browser errors.');
+  console.log('PASS: seven widths; vertical main tabs, switching and keyboard focus; statuses/details/deadlines; authenticated request; error/retry/auth/empty; flight independence; no overflow or browser errors.');
 })().catch((error) => { console.error(error); process.exit(1); });
