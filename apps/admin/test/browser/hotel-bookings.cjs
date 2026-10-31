@@ -10,7 +10,7 @@ const hotel=(status)=>({id:`hotel-${status}`,tenantId:'t1',userId:'customer-1',s
  else if(p==='/api/admin/bookings')data={bookings:[{id:'flight-1',origin:'DEL',destination:'DXB',supplier:'TRIPJACK',pnr:'ABC123',status:'TICKETED',totalAmount:'9000',currency:'INR',channel:'WEB',departureDate:'2026-11-10',createdAt:'2026-10-30T00:00:00Z'}]};
  else if(p==='/api/admin/bookings/hotels')data={bookings:['ON_HOLD','CONFIRMED','CANCELLED'].filter(s=>!url.searchParams.get('status')||s===url.searchParams.get('status')).map(hotel)};
  else if(p.includes('/hotel-certification')){if(p.endsWith('/zip'))return route.fulfill({contentType:'application/zip',body:'synthetic-zip'});data={packs:[]};}
- else if(p.endsWith('/certification.zip'))return route.fulfill({contentType:'application/zip',body:'synthetic-zip'});
+ else if(p.endsWith('/certification.zip'))return route.fulfill({contentType:'application/zip',headers:{'Content-Disposition':'attachment; filename="hotel-DELHI-1A-0C-1R-ON-HOLD-TJH-ON_HOLD.zip"','Access-Control-Allow-Origin':'*','Access-Control-Expose-Headers':'Content-Disposition'},body:'synthetic-zip'});
  else if(p.endsWith('/exchanges'))data={exchanges:[{id:0,endpoint:'/oms/v3/hotel/book',startedAt:'2026-10-31T00:00:00Z',hasResponse:true}]};
  else if(/\/exchanges\/0\//.test(p))data=p.endsWith('/request')?{body:{bookingId:'TJH-ON_HOLD'}}:{status:{success:true}};
  else if(p==='/api/admin/bookings/hotels/hotel-ON_HOLD')data={booking:hotel('ON_HOLD')};
@@ -30,7 +30,7 @@ const hotel=(status)=>({id:`hotel-${status}`,tenantId:'t1',userId:'customer-1',s
   await page.goto(`${base}/bookings/hotels/hotel-ON_HOLD`);await page.getByText('TJH-ON_HOLD',{exact:true}).waitFor();await page.getByRole('button',{name:'View Request JSON'}).waitFor();
   await page.getByRole('button',{name:'View Request JSON'}).click();await page.getByRole('region',{name:'Request/Response JSON'}).getByText(/TJH-ON_HOLD/).waitFor();
   await page.getByRole('button',{name:'Close JSON'}).click();await page.getByRole('button',{name:'View Response JSON'}).click();await page.getByRole('region',{name:'Request/Response JSON'}).getByText(/success/).waitFor();
-  const downloaded=page.waitForEvent('download');await page.getByRole('button',{name:'Download Certification ZIP'}).click();assert.match((await downloaded).suggestedFilename(),/tripjack-hotel-TJH-ON_HOLD.zip/);
+  const downloaded=page.waitForEvent('download');await page.getByRole('button',{name:'Download Certification ZIP'}).click();assert.equal((await downloaded).suggestedFilename(),'hotel-DELHI-1A-0C-1R-ON-HOLD-TJH-ON_HOLD.zip');
   assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),`detail overflow ${width}`);
   if([390,1440].includes(width))await page.screenshot({path:`${out}/details-${width}.png`,fullPage:true});
  }

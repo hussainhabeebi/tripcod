@@ -7,7 +7,7 @@ import { buildZip } from "../../lib/zip.js";
 import { certificationRequest, tripjackHost } from "../../lib/certification.js";
 import { hotelEnvironment, tripjackEnvironment } from "../../lib/hotels.js";
 import {
-  hotelBookingFolders, hotelFolderSummary, hotelScenario, hotelStep, storedHotelCalls, type HotelStep, type R2Like, type StoredCall,
+  hotelBookingFolders, hotelFolderSummary, hotelScenario, hotelStep, hotelZipFileName, storedHotelCalls, type HotelStep, type R2Like, type StoredCall,
 } from "../../lib/hotel-cert-logs.js";
 import { d1HotelOrderStore } from "../../lib/hotel-order-store.js";
 import type { Env, Variables } from "../../types.js";
@@ -341,6 +341,7 @@ export async function hotelCertificationZip(c: any) {
   const files: { name: string; data: Uint8Array; date: Date }[] = [];
   const used = new Map<string, number>();
   const listed: Record<string, unknown>[] = [];
+  const zipCalls: { step: string; requestBody?: unknown; supplierStatus?: string | null }[] = [];
   for (const x of calls) {
     const { step, name } = hotelStep(x.endpoint, x.request?.body);
     // Repeated services get _2, _3 … (several listing batches, status polls).
@@ -369,6 +370,7 @@ export async function hotelCertificationZip(c: any) {
       }
     }
     listed.push({ step, service: x.endpoint, at: x.at, folder: x.folder, files: written, ...(supplierStatus ? { supplierStatus } : {}) });
+    zipCalls.push({ step, requestBody: x.request?.body, supplierStatus });
   }
   const lifecycle = holdLifecycle(listed as { step: string; files: string[]; at: string; supplierStatus?: string }[]);
   const order = c.env.HOTEL_DB ? await d1HotelOrderStore(c.env.HOTEL_DB, c.get("tenantId")).bySupplierBooking(c.get("tenantId"), bookingId).catch(() => null) : null;
@@ -389,7 +391,7 @@ export async function hotelCertificationZip(c: any) {
   files.push({ name: "HotelBookingSummary.json", data: new TextEncoder().encode(JSON.stringify(summary, null, 2)), date: new Date() });
   return new Response(buildZip(files), { headers: {
     "Content-Type": "application/zip",
-    "Content-Disposition": `attachment; filename="tripjack-hotel-${bookingId}.zip"`,
+    "Content-Disposition": `attachment; filename="${hotelZipFileName(bookingId, order, zipCalls)}"`,
     "Cache-Control": "private, no-store",
   } });
 }
