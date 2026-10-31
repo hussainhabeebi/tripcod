@@ -1,64 +1,84 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 
-const SLIDES = [
-  { image: "/hero/sunset-wing.webp", label: "Sunset above the clouds", caption: "A new perspective awaits." },
-  { image: "/hero/airport-sunset.webp", label: "Your next departure", caption: "Every departure is a new beginning." },
-  { image: "/hero/global-connections.webp", label: "Connections around the world", caption: "India, the Gulf and wherever comes next." },
+type Slide = { image: string; eyebrow: string; title: string; sub: string; cta: string; href?: string; secondary?: { label: string; href: string } };
+
+const SLIDES: Slide[] = [
+  {
+    image: "/hero/airplane-wing-clouds.webp",
+    eyebrow: "Tripcod Travel Solutions",
+    title: "Your next journey, made simple.",
+    sub: "Flights, stays and holidays across India, the Gulf and beyond. Start with your route. We’ll help with the rest.",
+    cta: "Find a flight",
+    href: "#flight-search",
+    secondary: { label: "Explore holidays", href: "/destinations" },
+  },
+  {
+    image: "/hero/kerala-backwaters.webp",
+    eyebrow: "India ↔ Gulf specialists",
+    title: "Your next journey starts here",
+    sub: "Compare live fares, share passenger details securely and complete your booking in minutes.",
+    cta: "Search live flights",
+  },
+  {
+    image: "/hero/dubai-skyline.webp",
+    eyebrow: "Travel beyond borders",
+    title: "Gulf, India and the world",
+    sub: "Book confidently with secure checkout, WhatsApp updates and human support when you need it.",
+    cta: "Explore destinations",
+    href: "/destinations",
+  },
 ];
 
-export default function HeroBanner() {
+export default function HeroBanner({ banners }: { banners: unknown[] }) {
   const [idx, setIdx] = useState(0);
-  const [playing, setPlaying] = useState(true);
   const touchX = useRef<number | null>(null);
-
-  useEffect(() => {
-    const media = window.matchMedia("(prefers-reduced-motion: reduce)");
-    const stop = () => { if (media.matches) setPlaying(false); };
-    stop();
-    media.addEventListener("change", stop);
-    return () => media.removeEventListener("change", stop);
-  }, []);
-
-  useEffect(() => {
-    if (!playing) return;
-    const timer = window.setInterval(() => setIdx((i) => (i + 1) % SLIDES.length), 6000);
-    return () => window.clearInterval(timer);
-  }, [playing]);
 
   function move(delta: number) {
     setIdx((i) => (i + delta + SLIDES.length) % SLIDES.length);
   }
 
-  return <section className="flight-hero" aria-label="Travel inspiration" aria-roledescription="carousel"
-    onFocusCapture={() => setPlaying(false)} onMouseEnter={() => setPlaying(false)} onTouchStart={(e) => { touchX.current = e.touches[0]?.clientX ?? null; }}
+  const slide = SLIDES[idx];
+
+  return (
+    <section
+      className="hero hero-photo"
+      onTouchStart={(e) => { touchX.current = e.touches[0]?.clientX ?? null; }}
       onTouchEnd={(e) => {
         if (touchX.current == null) return;
         const distance = (e.changedTouches[0]?.clientX ?? touchX.current) - touchX.current;
-        if (Math.abs(distance) > 45) { setPlaying(false); move(distance > 0 ? -1 : 1); }
+        if (Math.abs(distance) > 45) move(distance > 0 ? -1 : 1);
         touchX.current = null;
-      }} onTouchCancel={() => { touchX.current = null; }}>
-    <div className="flight-hero-copy">
-      <p className="flight-eyebrow">TRIPCOD / YOUR NEXT DEPARTURE</p>
-      <h1>Good journeys<br />start with <em>better choices.</em></h1>
-      <p className="flight-intro-text">Find your flight. Compare the details. Travel your way.<br />India, the Gulf and wherever comes next.</p>
-      <a className="flight-hero-cta" href="#flight-search">Find your flight <span aria-hidden="true">↗</span></a>
-      <div className="flight-intro-note"><span aria-hidden="true">✈</span> One way, return or a journey with more stops.</div>
-      <p className="flight-hero-caption" aria-live={playing ? "off" : "polite"}>{SLIDES[idx].caption}</p>
-      <div className="flight-slider-controls" aria-label="Hero slideshow controls">
-        <button type="button" onClick={() => move(-1)} aria-label="Previous slide">←</button>
-        {SLIDES.map((slide, i) => <button key={slide.image} type="button" className="flight-slide-dot"
-          onClick={() => setIdx(i)} aria-label={`Show slide ${i + 1}: ${slide.label}`} aria-pressed={i === idx}>
-          <span aria-hidden="true" />
-        </button>)}
-        <button type="button" onClick={() => move(1)} aria-label="Next slide">→</button>
+      }}
+    >
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        key={slide.image}
+        src={slide.image}
+        alt=""
+        className={`hero-photo-img hero-photo-img-${idx + 1}`}
+        loading={idx === 0 ? "eager" : "lazy"}
+        fetchPriority={idx === 0 ? "high" : "auto"}
+      />
+      <div className={`hero-shade hero-shade-${idx + 1}`} />
+      <button className="hero-arrow hero-arrow-left" onClick={() => move(-1)} aria-label="Previous offer">‹</button>
+      <div className="hero-inner hero-copy">
+        <div className="hero-badge">{slide.eyebrow}</div>
+        <h1 className="hero-title">{slide.title}</h1>
+        <p className="hero-subtitle">{slide.sub}</p>
+        <div className="hero-cta-row">
+          <a className="hero-cta" href={slide.href ?? "#flight-search"}>{slide.cta} <span>→</span></a>
+          {slide.secondary && <a className="hero-cta hero-cta-ghost" href={slide.secondary.href}>{slide.secondary.label}</a>}
+        </div>
+        <div className="hero-dots">
+          {SLIDES.map((_, i) => (
+            <button key={i} className={i === idx ? "hero-dot hero-dot-active" : "hero-dot"}
+              onClick={() => setIdx(i)} aria-pressed={i === idx} aria-label={`Show travel offer ${i + 1}`} />
+          ))}
+        </div>
       </div>
-    </div>
-    <div className="flight-hero-scenes">
-      {SLIDES.map((slide, i) => <img key={slide.image} src={slide.image} alt="" width="1672" height="941"
-        className={i === idx ? "flight-hero-scene is-active" : "flight-hero-scene"} aria-hidden={i !== idx} loading={i === 0 ? "eager" : "lazy"} fetchPriority={i === 0 ? "high" : "auto"} />)}
-
-    </div>
-  </section>;
+      <button className="hero-arrow hero-arrow-right" onClick={() => move(1)} aria-label="Next offer">›</button>
+    </section>
+  );
 }
