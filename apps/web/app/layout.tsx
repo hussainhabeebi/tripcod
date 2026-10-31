@@ -1,5 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
+import "./experience.css";
+import MobileDock from "./components/MobileDock";
 import SiteNav from "./components/SiteNav";
 import SiteFooter from "./components/SiteFooter";
 
@@ -38,6 +40,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         </header>
         {children}
         <SiteFooter />
+        <MobileDock />
       </body>
     </html>
   );

@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import {
-  bookingLink, GALLERY, HOME_STATS, SERVICES, TESTIMONIALS,
+  bookingLink, destinationSlug, GALLERY, SERVICES, TESTIMONIALS, whatsappLink,
   type Destination, type ServiceIcon,
 } from "../lib/tripcod-content";
 
@@ -48,11 +48,9 @@ export function AboutPreview() {
         <div className="tc-about-copy">
           <div className="section-kicker">About our company</div>
           <h2 id="tc-about-title" className="home-title">Our Journey</h2>
-          <p className="tc-lead">Discover the story behind Tripcod travel solutions and our passion for creating unforgettable travel experiences.</p>
-          <p>Tripcod Travel Solutions was born from a shared passion a desire to help travelers go beyond the guidebooks and into the heart of authentic experiences.</p>
-          <p>What began as a small, dedicated team of explorers has grown into a global community of adventurers, each seeking more than just a destination. We curate meaningful journeys that connect you with local cultures, hidden gems, and stories worth telling.</p>
-          <p>For us, travel is more than movement it’s transformation. That’s why we craft every trip with care, blending sustainability, accessibility, and deep cultural insight.</p>
-          <StatRow stats={HOME_STATS} />
+          <p className="tc-lead">Travel plans, with a human touch.</p>
+          <p>Tripcod helps you plan flights, stays and holidays across India, the Gulf and beyond. Speak with our team about your dates, route and the details that matter to you.</p>
+          <p>From choosing a journey to finding an existing booking, keep your next step simple.</p>
           <a href="/about-us" className="tc-btn tc-btn-dark">Learn More <span aria-hidden="true">→</span></a>
         </div>
         <figure className="tc-about-photo">
@@ -78,6 +76,7 @@ export function ServicesSection() {
             <span className="tc-service-icon"><Icon>{SERVICE_ICONS[s.icon]}</Icon></span>
             <h3>{s.title}</h3>
             <p>{s.text}</p>
+            <a className="tc-service-link" href={whatsappLink(`Hi Tripcod, I would like help with ${s.title}.`)} target="_blank" rel="noopener noreferrer">Enquire about this service ↗</a>
           </article>
         ))}
       </div>
@@ -95,9 +94,10 @@ export function DestinationGrid({ destinations }: { destinations: Destination[] 
             <h3>{d.name}</h3>
           </div>
           <p>{d.text}</p>
+          <p className="destination-note">Tailored quote · Dates, duration and inclusions confirmed before booking.</p>
           <div className="tc-destination-foot">
-            <div className="tc-price"><small>From</small><strong>AED {d.price.toLocaleString("en-US")}</strong></div>
-            <a href={bookingLink(d)} target="_blank" rel="noopener" className="tc-btn tc-btn-amber" aria-label={`Book ${d.name} on WhatsApp`}>Book Now</a>
+            <a className="text-link" href={`/destinations/${destinationSlug(d)}`}>View trip details →</a>
+            <a href={bookingLink(d)} target="_blank" rel="noopener" className="tc-btn tc-btn-amber" aria-label={`Enquire about ${d.name} on WhatsApp`}>Enquire on WhatsApp</a>
           </div>
         </article>
       ))}

@@ -26,6 +26,8 @@ const columns = [
     links: [
       { label: "About Us", href: "/about-us" },
       { label: "Destinations", href: "/destinations" },
+      { label: "Services", href: "/services" },
+      { label: "Support", href: "/support" },
     ],
   },
   {
@@ -99,7 +101,7 @@ export default function SiteFooter() {
               </span>
               <span>
                 <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M12 3 4 6v6c0 4.5 3.4 8.2 8 9 4.6-.8 8-4.5 8-9V6l-8-3Z" /><path d="m9 12 2 2 4-4" /></svg>
-                Instant e-tickets
+                Ticket status updates
               </span>
             </div>
             <ul className="footer-social" aria-label="Follow Tripcod">
@@ -138,6 +140,12 @@ export default function SiteFooter() {
           </nav>
         </div>
 
+        <nav className="footer-policy-links" aria-label="Travel information and policies">
+          <a href="/terms">Booking terms</a>
+          <a href="/cancellations">Changes, cancellations & refunds</a>
+          <a href="/privacy">Privacy & data</a>
+          <a href="/support">Contact support</a>
+        </nav>
         <div className="footer-bottom">
           <span>© {year} Tripcod. All rights reserved.</span>
           <span className="footer-bottom-note">Fares are subject to availability until ticketed.</span>
