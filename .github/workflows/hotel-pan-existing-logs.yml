@@ -42,18 +42,18 @@ jobs:
             request=get(key);body=request.get('body') or {}
             responsekey=key[:-len('request.json')]+'response.json'
             response=get(responsekey) if responsekey in keys else {}
-            status=response.get('status');errors=response.get('errors',[])
+            status=response.get('status');errors=response.get('errors') or []
             if isinstance(response.get('error'),dict):errors=errors+[response['error']]
             report={'booking':row['supplier_booking_id'],'path':urllib.parse.urlparse(request.get('url','')).path,'at':key.split('/')[-1].split('-oms-')[0].split('-hms-')[0],'status':status,'errors':[{'code':e.get('errCode',e.get('code')),'message':re.sub(r'[A-Z]{5}[0-9]{4}[A-Z]','[PAN]',str(e.get('message','')))} for e in errors]}
             if report['path'].endswith('/book'):
              rooms=body.get('roomTravellerInfo',[])
-             report.update({'topLevelFields':sorted(body),'paymentInfosPresent':'paymentInfos' in body,'paymentCount':len(body.get('paymentInfos',[])),'type':body.get('type'),'rooms':[]})
+             report.update({'topLevelFields':sorted(body),'paymentInfosPresent':'paymentInfos' in body,'paymentCount':len(body.get('paymentInfos') or []),'type':body.get('type'),'rooms':[]})
              saved=json.loads(row['guests'])
              for i,room in enumerate(rooms):
               guests=[]
               for j,g in enumerate(room.get('travellerInfo',[])):
                pan=g.get('pan','');sg=saved[i][j] if i<len(saved) and j<len(saved[i]) else {}
-               guests.append({'position':[i,j],'fields':sorted(g),'title':g.get('ti'),'passengerType':g.get('pt'),'firstNameHash':digest(g.get('fN','')),'lastNameHash':digest(g.get('lN','')),'panPresent':bool(pan),'panLength':len(pan),'panMatchesDocumentationSample':pan=='AAACA1111A','panMatchesSaved':pan==sg.get('pan',''),'panUppercaseAndTrimmed':pan==pan.strip().upper()})
+               guests.append({'position':[i,j],'fields':sorted(g),'title':g.get('ti'),'passengerType':g.get('pt'),'firstNameHash':digest(g.get('fN','')),'lastNameHash':digest(g.get('lN','')),'panPresent':bool(pan),'panLength':len(pan),'panFingerprint':digest(pan),'panMatchesOtherDocSample':pan=='BBBCB1111B','panMatchesDocumentationSample':pan=='AAACA1111A','panMatchesSaved':pan==sg.get('pan',''),'panUppercaseAndTrimmed':pan==pan.strip().upper()})
               report['rooms'].append(guests)
             if report['path'].endswith('/review'):
              option=response.get('option') or {}
