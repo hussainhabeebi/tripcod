@@ -36,7 +36,7 @@ export function HotelCertificationPacks() {
   const load = useCallback(async () => {
     setPacks(null); setError("");
     try {
-      const res = await fetch(`${API}/api/admin/supplier-logs/hotel-certification?limit=100`, { headers: apiHeaders() });
+      const res = await fetch(`${API}/api/admin/bookings/hotel-certification?limit=100`, { headers: apiHeaders() });
       const d = await res.json();
       if (!res.ok) throw new Error(d.error ?? d.message ?? `HTTP ${res.status}`);
       setPacks(d.packs);
@@ -46,7 +46,7 @@ export function HotelCertificationPacks() {
 
   const get = async (id: string) => {
     setBusy(id); setError("");
-    try { await download(`/api/admin/supplier-logs/hotel-certification/${encodeURIComponent(id)}/zip`, `tripjack-hotel-${id}.zip`); }
+    try { await download(`/api/admin/bookings/hotel-certification/${encodeURIComponent(id)}/zip`, `tripjack-hotel-${id}.zip`); }
     catch (e: any) { setError(e.message); }
     finally { setBusy(""); }
   };
@@ -99,8 +99,8 @@ export function HotelCertificationPacks() {
 }
 
 const pill: React.CSSProperties = { background: "#1e293b", color: "#f1f5f9", border: "1px solid #334155", borderRadius: 8, padding: "7px 12px", fontSize: 13, fontWeight: 600, cursor: "pointer" };
-const dl: React.CSSProperties = { background: "#2563eb", color: "#fff", border: 0, borderRadius: 6, padding: "6px 10px", fontSize: 12, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" };
-const input: React.CSSProperties = { flex: "1 1 260px", maxWidth: 360, background: "#020617", color: "#f1f5f9", border: "1px solid #334155", borderRadius: 8, padding: "7px 10px", fontSize: 13, fontFamily: "monospace" };
+const dl: React.CSSProperties = { background: "#2563eb", color: "#fff", border: 0, borderRadius: 6, padding: "10px 12px", minHeight: 44, fontSize: 12, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" };
+const input: React.CSSProperties = { flex: "1 1 220px", minWidth: 0, width: "100%", maxWidth: 360, background: "#020617", color: "#f1f5f9", border: "1px solid #334155", borderRadius: 8, padding: "7px 10px", fontSize: 13, fontFamily: "monospace" };
 const chip: React.CSSProperties = { display: "inline-block", background: "#1e293b", color: "#93c5fd", borderRadius: 99, padding: "2px 8px", fontSize: 11, margin: "0 4px 4px 0" };
 const th: React.CSSProperties = { padding: "8px 12px", textAlign: "left", fontSize: 11, fontWeight: 700, color: "#475569", textTransform: "uppercase", whiteSpace: "nowrap" };
 const td: React.CSSProperties = { padding: "8px 12px", verticalAlign: "top", color: "#cbd5e1" };

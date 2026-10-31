@@ -1,7 +1,6 @@
 import { serverAuthHeaders } from "../../../lib/server";
 import { LogDetail } from "./LogDetail";
 import { RawApiCalls } from "./RawApiCalls";
-import { HotelCertificationPacks } from "./HotelCertificationPacks";
 
 const SERVER_API   = process.env.API_BASE_URL ?? process.env.NEXT_PUBLIC_API_URL ?? "https://api.tripcod.com";
 const SERVER_TOKEN = process.env.ADMIN_SERVICE_TOKEN ?? "";
@@ -125,7 +124,7 @@ export default async function SupplierLogsPage({
         </p>
       </div>
 
-      <HotelCertificationPacks />
+      <p><a href="/bookings#hotel-uat-logs" style={{ color: "#FFB005" }}>Hotel certification logs are now in Bookings →</a></p>
 
       {/* Error banner */}
       {fetchError && (
