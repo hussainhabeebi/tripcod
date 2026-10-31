@@ -16,6 +16,8 @@ export function BookingList({ filters, initial }: { filters: Record<string, stri
     const params = new URLSearchParams(filters); params.delete("type");
     const load = async (kind: "flights" | "hotels"): Promise<Row[]> => {
       try {
+        // These are hotel-only statuses; never send them to the Flight PostgreSQL enum.
+        if (kind === "flights" && ["ON_HOLD", "PROCESSING", "CANCELLATION_PENDING", "FAILED"].includes(filters.status)) return [];
         const prefetched = initial?.[kind];
         const res = prefetched ? null : await fetch(`${API}/api/admin/bookings${kind === "hotels" ? "/hotels" : ""}?${params}`, { headers: apiHeaders() });
         const data = prefetched ?? await res!.json();

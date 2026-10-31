@@ -11,6 +11,7 @@ export default async function AdminBookingsPage({ searchParams }: { searchParams
     const query = new URLSearchParams(filters); query.delete("type");
     const reads = await Promise.all((["flights", "hotels"] as const).map(async kind => {
       try {
+        if (kind === "flights" && ["ON_HOLD", "PROCESSING", "CANCELLATION_PENDING", "FAILED"].includes(filters.status)) return [kind, { bookings: [] }];
         const response = await fetch(`${SERVER_API}/api/admin/bookings${kind === "hotels" ? "/hotels" : ""}?${query}`, { headers, cache: "no-store" });
         if (!response.ok) return [kind, { error: `Could not load ${kind} (HTTP ${response.status})` }];
         return [kind, await response.json()];

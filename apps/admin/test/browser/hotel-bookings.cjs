@@ -4,10 +4,11 @@ const base=process.env.BASE_URL||'http://127.0.0.1:3003',out=process.env.QA_OUTP
 const hotel=(status)=>({id:`hotel-${status}`,tenantId:'t1',userId:'customer-1',supplierBookingId:`TJH-${status}`,status,mode:'HOLD',holdDeadline:'2026-11-04T18:00',hotel:{name:'Dubai Marina Test Hotel',checkIn:'2026-11-10',checkOut:'2026-11-12'},contactEmail:'guest@example.test',amount:12000,currency:'INR',createdAt:'2026-10-31T00:00:00Z',payment:{status:'UNPAID',gateway:null},cancellation:{charge:0},occupancy:[{adults:2,childAges:[]}],guests:[]});
 (async()=>{
  fs.mkdirSync(out,{recursive:true});const browser=await chromium.launch({executablePath:process.env.CHROMIUM_PATH||'/tmp/tripcod-chrome/chromium',args:['--no-sandbox','--disable-dev-shm-usage']});const ctx=await browser.newContext();await ctx.addCookies([{name:'tripcod_admin_token',value:'synthetic-admin',url:base}]);const page=await ctx.newPage();const errors=[];page.on('pageerror',e=>errors.push(e.message));
- await page.route('**/api/**',async route=>{assert.equal(route.request().method(),'GET');const p=new URL(route.request().url()).pathname;let data={};
+ await page.route('**/api/**',async route=>{assert.equal(route.request().method(),'GET');const url=new URL(route.request().url()),p=url.pathname;let data={};
+ if(p==='/api/admin/bookings')assert.notEqual(url.searchParams.get('status'),'ON_HOLD','hotel-only status must not reach the flight enum');
  if(p==='/api/admin/me')data={user:{name:'Test Admin',email:'admin@example.test'},role:'SUPER_ADMIN',roleLabel:'Admin',fullAccess:true,sections:['bookings','logs'],canManageUsers:true};
  else if(p==='/api/admin/bookings')data={bookings:[{id:'flight-1',origin:'DEL',destination:'DXB',supplier:'TRIPJACK',pnr:'ABC123',status:'TICKETED',totalAmount:'9000',currency:'INR',channel:'WEB',departureDate:'2026-11-10',createdAt:'2026-10-30T00:00:00Z'}]};
- else if(p==='/api/admin/bookings/hotels')data={bookings:['ON_HOLD','CONFIRMED','CANCELLED'].map(hotel)};
+ else if(p==='/api/admin/bookings/hotels')data={bookings:['ON_HOLD','CONFIRMED','CANCELLED'].filter(s=>!url.searchParams.get('status')||s===url.searchParams.get('status')).map(hotel)};
  else if(p.includes('/hotel-certification')){if(p.endsWith('/zip'))return route.fulfill({contentType:'application/zip',body:'synthetic-zip'});data={packs:[]};}
  else if(p.endsWith('/certification.zip'))return route.fulfill({contentType:'application/zip',body:'synthetic-zip'});
  else if(p.endsWith('/exchanges'))data={exchanges:[{id:0,endpoint:'/oms/v3/hotel/book',startedAt:'2026-10-31T00:00:00Z',hasResponse:true}]};
@@ -33,6 +34,7 @@ const hotel=(status)=>({id:`hotel-${status}`,tenantId:'t1',userId:'customer-1',s
   assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),`detail overflow ${width}`);
   if([390,1440].includes(width))await page.screenshot({path:`${out}/details-${width}.png`,fullPage:true});
  }
+ await page.goto(`${base}/bookings?status=ON_HOLD&type=hotels`);await page.locator('tbody').getByText('ON_HOLD',{exact:true}).waitFor();assert.equal(await page.locator('tbody tr').count(),1);
  await page.goto(`${base}/supplier-logs`);assert.equal(await page.getByRole('heading',{name:'Hotel UAT certification logs (TripJack Hotel API v3)'}).count(),0);await page.getByRole('link',{name:'Hotel certification logs are now in Bookings →'}).waitFor();
  assert.deepEqual(errors,[]);await browser.close();console.log('PASS: combined bookings, All/Flights/Hotels, details, JSON view, ZIP download, seven widths, no document overflow, no mutations; certification UI moved.');
 })().catch(e=>{console.error(e);process.exit(1)});
