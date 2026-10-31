@@ -41,7 +41,10 @@ function fakeR2() {
 // Neon stand-in: supplier logs / exchange index inserts are kept; legacy lookups find nothing.
 function fakeDb() {
   const inserted: any[] = [];
-  const chain: any = { from: () => chain, where: () => chain, orderBy: () => chain, limit: async () => [] };
+  // Index lookups by request key answer from the recorded exchange rows; legacy lookups find nothing.
+  const rows = () => inserted.filter((v) => v.requestKey);
+  const query: any = { orderBy: () => query, limit: async () => [], then: (ok: any, ko: any) => Promise.resolve(rows()).then(ok, ko), catch: () => Promise.resolve(rows()) };
+  const chain: any = { from: () => chain, where: () => query };
   return { inserted, insert: () => ({ values: async (v: any) => { inserted.push(v); } }), select: () => chain };
 }
 
@@ -190,4 +193,54 @@ test("hold lifecycle summary: requested cancellation and open holds are labelled
   assert.equal(holdLifecycle([book, det("ON_HOLD", 2)])!.outcome, "ON_HOLD");
   assert.equal(holdLifecycle([book, det("ON_HOLD", 2), { step: "Cancellation", files: [], at: "3" }, det("CANCELLED", 4)])!.outcome, "CANCELLED_ON_REQUEST");
   assert.equal(holdLifecycle([book, det("ON_HOLD", 2), det("CANCELLED", 3)])!.outcome, "CANCELLED_BY_TRIPJACK_AFTER_HOLD_DEADLINE");
+});
+
+test("Admin hotel booking API logs: chronological calls with status, duration, TripJack status, masked API key, named JSON files", async () => {
+  await d1.exec("DELETE FROM hotel_bookings");
+  const TJ = "TJP202803274050";
+  const { env, queued } = environment();
+  const db = fakeDb();
+  const tj = gateway(TJ, new Date(Date.now() - 2 * 3600_000).toISOString());
+  const held = await placeRecordedHold(env, db, TJ);
+  tj.status = "CANCELLED";
+  await sweepExpiredHolds(env);
+  await processHoldExpiry(env, db as any, queued[0]);
+
+  const { hotelBookingsAdminRoutes } = await import("../src/routes/admin/hotel-bookings.js");
+  const app = new Hono<any>();
+  app.use("*", async (c, n) => { c.set("tenantId", TENANT); c.set("userRole", "TENANT_ADMIN"); c.set("db", db); await n(); });
+  app.route("/hotels", hotelBookingsAdminRoutes);
+  const get = (path: string) => app.fetch(new Request(`http://x/hotels/${held.id}${path}`), env, { waitUntil() {}, passThroughOnException() {} } as any);
+
+  const logs = await (await get("/exchanges")).json() as any;
+  const labels = logs.exchanges.map((x: any) => x.label);
+  assert.deepEqual(labels, ["Hold", "Booking Details", "Booking Details"], "oldest first");
+  assert.ok(logs.exchanges.every((x: any) => x.httpStatus === 200 && x.ok && typeof x.durationMs === "number" && x.hasResponse));
+  assert.deepEqual(logs.exchanges.filter((x: any) => x.step === "BookingDetails").map((x: any) => x.supplierStatus), ["ON_HOLD", "CANCELLED"]);
+  assert.ok(logs.exchanges.every((x: any) => x.requestId), "request IDs shown");
+  assert.equal(logs.certification.scenario, "HOLD");
+  assert.ok(logs.certification.covered.includes("HoldBook") && logs.certification.missing.includes("Search"));
+  assert.equal(logs.certification.holdLifecycle.outcome, "CANCELLED_BY_TRIPJACK_AFTER_HOLD_DEADLINE");
+
+  const request = await get("/exchanges/0/request");
+  assert.equal(request.headers.get("Content-Disposition"), `attachment; filename="${TJ}-01-HotelHoldBookRequest.json"`);
+  const requestText = await request.text();
+  assert.ok(!requestText.includes("uat-hotel-key") && JSON.parse(requestText).headers.apikey.startsWith("uat-"), "API key masked in the Admin view");
+  assert.ok(!requestText.includes("gw-secret"));
+  const response = await get("/exchanges/2/response");
+  assert.equal(response.headers.get("Content-Disposition"), `attachment; filename="${TJ}-03-HotelBookingDetailResponse.json"`);
+  assert.equal(JSON.parse(await response.text()).order.status, "CANCELLED", "response exactly as stored");
+
+  // The certification ZIP keeps the exact request (API key included) for TripJack.
+  const files = unzip(new Uint8Array(await (await adminZip(env, db, TJ)).arrayBuffer()));
+  assert.equal(JSON.parse(files["HotelHoldBookRequest.json"]).headers.apikey, "uat-hotel-key");
+});
+
+test("supplier error messages are read from stored TripJack responses", async () => {
+  const { describeHotelResponse } = await import("../src/lib/hotel-cert-logs.js");
+  assert.deepEqual(describeHotelResponse("Search", 403, JSON.stringify({ error: { code: "403", message: "Invalid API key" } })),
+    { ok: false, supplierStatus: null, supplierError: "Invalid API key", errorCode: "403" });
+  assert.equal(describeHotelResponse("Review", 200, JSON.stringify({ status: { success: false, statusMessage: "Option sold out" }, errors: [{ errCode: "6506", message: "Option sold out" }] })).errorCode, "6506");
+  assert.equal(describeHotelResponse("BookingDetails", 200, JSON.stringify({ order: { status: "UNCONFIRMED" }, status: { success: true } })).supplierStatus, "UNCONFIRMED");
+  assert.equal(describeHotelResponse("Search", 502, "<html>Bad gateway</html>").ok, false);
 });

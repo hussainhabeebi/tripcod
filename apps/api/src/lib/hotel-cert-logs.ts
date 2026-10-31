@@ -11,7 +11,7 @@
 // A booking's pack = its own calls + the listing / pricing calls of the search
 // (correlationId) its Review came from.
 
-import type { SupplierExchange } from "@tripcod/suppliers";
+import { parseHotelBookingDetails, type SupplierExchange } from "@tripcod/suppliers";
 import type { Env, Variables } from "../types.js";
 import { persistExchanges } from "./api-exchanges.js";
 import { logSupplierCall } from "./supplier-logger.js";
@@ -239,3 +239,29 @@ export function hotelZipFileName(bookingId: string, order: ZipOrder | null, call
   const party = occ ? `${occ.adults}A-${occ.children}C-${occ.rooms}R` : "0A-0C-0R";
   return `hotel-${city}-${party}-${hotelZipType(order, calls)}-${slug(bookingId)}.zip`;
 }
+
+// ── Admin log view: what one stored hotel call says ──────────────────────────
+
+const HOTEL_CALL_LABEL: Record<string, string> = {
+  Search: "Search", HotelDetail: "Detail", Review: "Review", HoldBook: "Hold", InstantBook: "Instant Book",
+  ConfirmHold: "Confirm Hold", BookingDetails: "Booking Details", Cancellation: "Cancellation",
+};
+export const hotelCallLabel = (step: string, endpoint: string) => HOTEL_CALL_LABEL[step] ?? endpoint;
+
+// Success / TripJack status / supplier error message from a stored response
+// (read-only; the stored bytes are never changed).
+export function describeHotelResponse(step: string, httpStatus: number | null, text: string | null) {
+  let json: any = null;
+  if (text) { try { json = JSON.parse(text); } catch { /* non-JSON (proxy page) */ } }
+  const envelope = json?.error && typeof json.error === "object" ? json.error : null;
+  const supplierError = (envelope?.message ?? json?.errors?.[0]?.message ?? (json?.status?.success === false ? json?.status?.statusMessage : null)
+    ?? (typeof json?.error === "string" ? json.error : null)) as string | null;
+  const errorCode = (envelope?.code ?? json?.errors?.[0]?.errCode ?? null) as string | null;
+  let supplierStatus: string | null = null;
+  if (step === "BookingDetails" && json) { try { supplierStatus = parseHotelBookingDetails(json).status || null; } catch { /* unreadable */ } }
+  const ok = httpStatus !== null && httpStatus < 400 && !supplierError && (json === null ? Boolean(text) : json?.status?.success !== false);
+  return { ok, supplierStatus, supplierError: supplierError ? String(supplierError).slice(0, 300) : null, errorCode: errorCode ? String(errorCode) : null };
+}
+
+// API key shown as first 4 + last 4 characters only.
+export const maskSecret = (v: string) => v.length > 8 ? `${v.slice(0, 4)}${"•".repeat(Math.min(v.length - 8, 12))}${v.slice(-4)}` : "•".repeat(v.length);
