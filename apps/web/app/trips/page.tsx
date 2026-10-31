@@ -38,6 +38,7 @@ function dateLabel(value: string | null) {
 }
 
 export default function TripsPage() {
+  const [bookingTab, setBookingTab] = useState<"hotels" | "flights">("hotels");
   const [signedIn, setSignedIn] = useState<boolean | null>(null);
   const [loading, setLoading] = useState(true);
   const [trips, setTrips] = useState<TripRow[]>([]);
@@ -70,8 +71,24 @@ export default function TripsPage() {
         </div>
         <p className={styles.guest}>Booked as a guest? <a href="/trips/find">Find your booking with PNR + email</a></p>
       </section> : <>
-        <HotelStays />
-        <h2 style={{ fontSize: 20, margin: "28px 0 12px" }}>Flight bookings</h2>
+        <div className={styles.bookingLayout}>
+          <div className={styles.bookingTabs} role="tablist" aria-label="Booking type" aria-orientation="vertical">
+            {(["hotels", "flights"] as const).map((tab) => <button key={tab} type="button" role="tab"
+              id={`booking-tab-${tab}`} aria-controls={`booking-panel-${tab}`} aria-selected={bookingTab === tab}
+              tabIndex={bookingTab === tab ? 0 : -1} className={`${styles.bookingTab} ${bookingTab === tab ? styles.bookingTabActive : ""}`}
+              onClick={() => setBookingTab(tab)} onKeyDown={(event) => {
+                if (!["ArrowUp", "ArrowDown", "Home", "End"].includes(event.key)) return;
+                event.preventDefault();
+                const next = event.key === "Home" ? "hotels" : event.key === "End" ? "flights" : tab === "hotels" ? "flights" : "hotels";
+                setBookingTab(next); document.getElementById(`booking-tab-${next}`)?.focus();
+              }}>{tab === "hotels" ? "Hotel Stays" : "Flight Bookings"}</button>)}
+          </div>
+          <div className={styles.bookingContent}>
+          <div role="tabpanel" id="booking-panel-hotels" aria-labelledby="booking-tab-hotels" hidden={bookingTab !== "hotels"} tabIndex={0}>
+            <HotelStays />
+          </div>
+          <div role="tabpanel" id="booking-panel-flights" aria-labelledby="booking-tab-flights" hidden={bookingTab !== "flights"} tabIndex={0}>
+        <h2 style={{ fontSize: 20, margin: "0 0 12px" }}>Flight bookings</h2>
         <nav className={styles.filters} aria-label="Filter flight bookings">
           {filters.map(({ id, label }) => <button key={id} type="button"
             className={`${styles.filter} ${filter === id ? styles.selected : ""}`}
@@ -86,6 +103,9 @@ export default function TripsPage() {
               {trips.length ? <button type="button" className={styles.secondaryAction} onClick={() => setFilter("all")}>View all bookings</button>
                 : <a className={styles.primaryAction} href="/">Search flights</a>}
             </section>}
+          </div>
+          </div>
+        </div>
       </>}
   </div></main>;
 }

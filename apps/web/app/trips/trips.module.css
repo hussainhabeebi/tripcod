@@ -90,3 +90,11 @@
 
 /* Hotel names and supplier references may be long. */
 .cardHead > div { min-width:0; overflow-wrap:anywhere; }
+
+.bookingLayout { display:grid; grid-template-columns:190px minmax(0,1fr); gap:24px; align-items:start; }
+.bookingTabs { display:flex; flex-direction:column; gap:8px; }
+.bookingTab { min-height:48px; padding:13px 16px; border:1px solid var(--border); border-radius:12px; background:white; color:#4B4D4F; font:inherit; font-weight:700; text-align:left; cursor:pointer; }
+.bookingTabActive { background:#fff7df; border-color:#FFB005; box-shadow:inset 4px 0 #FFB005; }
+.bookingTab:focus-visible { outline:3px solid #FFB005; outline-offset:3px; }
+.bookingContent { min-width:0; }
+@media(max-width:767px) { .bookingLayout { grid-template-columns:minmax(0,1fr); gap:20px; } }

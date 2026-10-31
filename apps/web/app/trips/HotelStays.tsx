@@ -41,7 +41,7 @@ export function HotelStays() {
       });
     return () => { active = false; };
   }, [attempt]);
-  return <section aria-labelledby="hotel-stays" style={{ marginTop: 28 }}>
+  return <section aria-labelledby="hotel-stays" style={{ marginTop: 0 }}>
     <h2 id="hotel-stays" style={{ fontSize: 20, margin: "0 0 12px" }}>Hotel stays</h2>
     {error ? <div className={styles.error} role="alert"><p>{error}</p>
       {signInRequired ? <a className={styles.secondaryAction} href="/login?next=/trips">Sign in</a>
