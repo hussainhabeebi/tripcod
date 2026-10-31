@@ -1,6 +1,8 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import "./flight-experience.css";
+import "./experience.css";
+import MobileDock from "./components/MobileDock";
 import SiteNav from "./components/SiteNav";
 import SiteFooter from "./components/SiteFooter";
 
@@ -40,6 +42,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         </header>
         <div id="main-content" tabIndex={-1}>{children}</div>
         <SiteFooter />
+        <MobileDock />
       </body>
     </html>
   );

@@ -138,6 +138,12 @@ export default function SiteFooter() {
           </nav>
         </div>
 
+        <nav className="footer-policy-links" aria-label="Travel information and policies">
+          <a href="/terms">Booking terms</a>
+          <a href="/cancellations">Changes, cancellations & refunds</a>
+          <a href="/privacy">Privacy & data</a>
+          <a href="/support">Contact support</a>
+        </nav>
         <div className="footer-bottom">
           <span>© {year} Tripcod. All rights reserved.</span>
           <span className="footer-bottom-note">Fares are subject to availability until ticketed.</span>

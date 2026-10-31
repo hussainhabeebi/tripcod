@@ -42,7 +42,7 @@ export const SERVICES: { title: string; text: string; icon: ServiceIcon }[] = [
   { title: "Tours and Transportation", text: "Guided tours and comfortable transport across destinations.", icon: "tour" },
   { title: "Attestation Service", text: "Reliable document attestation for personal and official use.", icon: "attestation" },
   { title: "Business Solutions", text: "Comprehensive services to support and grow your business.", icon: "business" },
-  { title: "Attract Tickets", text: "Access tickets to popular attractions and theme parks worldwide.", icon: "attraction" },
+  { title: "Attraction Tickets", text: "Access tickets to popular attractions and theme parks worldwide.", icon: "attraction" },
   { title: "Visa Change By Bus", text: "Affordable visa change packages via bus for GCC travelers.", icon: "bus" },
   { title: "Visa Change By Flight", text: "Quick and efficient visa change through air travel options.", icon: "flight" },
 ];
@@ -71,7 +71,7 @@ export const DESTINATIONS: Destination[] = [
 export const POPULAR_DESTINATIONS = DESTINATIONS.slice(0, 6);
 
 export function bookingLink(d: Destination): string {
-  return whatsappLink(`Hi, I'm interested in booking a trip to ${d.name} for AED ${d.price}. Please share more details.`);
+  return whatsappLink(`Hi Tripcod, I would like a holiday quote for ${d.name}. Travel dates: __. Departure city: __. Adults / children (ages): __. Nights: __. Budget and preferred currency: __. Please share the itinerary, total price, inclusions, exclusions and cancellation conditions.`);
 }
 
 export const TESTIMONIALS = [
@@ -99,3 +99,8 @@ export const CORE_VALUES = [
   { title: "Excellence", text: "We strive for perfection in every detail, from initial planning to your safe return home, ensuring memories that last a lifetime." },
   { title: "Innovation", text: "We continuously evolve and embrace new technologies and ideas to enhance your travel experience and discover new possibilities." },
 ];
+
+/** Stable, readable public destination URLs. */
+export function destinationSlug(d: Destination): string {
+  return d.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+}

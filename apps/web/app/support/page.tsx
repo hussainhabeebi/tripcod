@@ -1,27 +1,20 @@
 import type { Metadata } from "next";
-import { CONTACT, whatsappLink } from "../lib/tripcod-content";
-export const metadata: Metadata = { title: "Support — Tripcod Travel Solutions", description: "Contact Tripcod for help with routes, bookings and travel details." };
+import { HelpTopics, TravelFaq } from "../components/TravelExperience";
+import { CONTACT } from "../lib/tripcod-content";
+
+export const metadata: Metadata = { title: "Help & Support — Tripcod", description: "Contact Tripcod about a booking, date change, refund, ticket issue or your next trip." };
 export default function SupportPage() {
- return <main className="tc-page">
-  <section className="tc-page-hero"><div className="home-shell"><div className="section-kicker light">Customer support</div><h1>How can we help?</h1><p>Get help with your journey, booking details or next trip.</p></div></section>
-      <section className="home-shell">
-        <div className="wa-cta">
-          <div>
-            <div className="section-kicker light">Need help choosing?</div>
-            <h2>Continue with our travel assistant</h2>
-            <p>Share your route on WhatsApp and move directly from flight selection to secure checkout.</p>
-          </div>
-          <a href={whatsappLink("Hi Tripcod, I need help planning a trip.")} target="_blank" rel="noopener" aria-label="Continue on WhatsApp">Continue on WhatsApp <span>→</span></a>
-        </div>
-      </section>
-
-    <section className="flight-assistance" id="booking-support"><div><p className="flight-eyebrow">A REAL PERSON, WHEN YOU NEED ONE</p><h2>Let’s make your next<br />departure a little easier.</h2><p>Ask our team about routes, booking details or your next trip.</p></div><a className="flight-primary" href={whatsappLink("Hi Tripcod, I need help with a flight booking.")} target="_blank" rel="noopener noreferrer">Talk to Tripcod ↗</a></section>
-
-      {/* Floating WhatsApp */}
-      <a href={whatsappLink("Hi Tripcod, I need help planning a trip.")} target="_blank" rel="noopener" className="wa-float" aria-label="Chat on WhatsApp">
-        <span className="wa-float-icon">💬</span>
-        <span className="wa-float-label">Need help?</span>
-      </a>
-  <section className="home-shell"><h2>Contact Tripcod</h2><p>{CONTACT.phones.map(phone => <a className="tc-btn tc-btn-dark" key={phone.href} href={phone.href}>{phone.label}</a>)}</p><p><a href={`mailto:${CONTACT.email}`}>{CONTACT.email}</a></p><p><a href="/trips">My Trips →</a> · <a href="/trips/find">Find a guest booking →</a></p></section>
- </main>;
+  return <main className="tc-page">
+    <section className="tc-page-hero"><div className="home-shell"><div className="section-kicker light">Here to help</div><h1>Let’s get your journey sorted.</h1><p>Choose a topic so your enquiry starts with the right details.</p></div></section>
+    <section className="home-shell tc-section"><HelpTopics /></section>
+    <section className="home-shell tc-section"><div className="info-content">
+      <h2>Travelling soon?</h2><p>Call our team for a time-sensitive enquiry. If you are at the airport or departure is imminent, also contact the airline directly. Response and resolution times depend on the request and supplier.</p>
+      <p>{CONTACT.phones.map((phone) => <span key={phone.href}><a className="tc-btn tc-btn-dark" href={phone.href}>{phone.label}</a>{" "}</span>)}</p>
+      <p>Email: <a href={`mailto:${CONTACT.email}`}>{CONTACT.email}</a></p>
+      <h2>Already have a booking?</h2><p><a href="/trips/find">Find your booking using your reference and email</a>, or <a href="/trips">sign in to My Trips</a>.</p>
+      <div className="info-callout"><strong>Charged but no ticket?</strong><p>Check your booking status and contact the team with your transaction reference before attempting another payment. Payment confirmation and ticket issuance are separate stages.</p></div>
+      <h2>Our offices</h2>{CONTACT.offices.map((office) => <p key={office.label}><strong>{office.label}</strong><br />{office.address}</p>)}
+    </div></section>
+    <TravelFaq />
+  </main>;
 }

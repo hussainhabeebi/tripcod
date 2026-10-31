@@ -1,0 +1,154 @@
+/* Public discovery experience. Transactional forms and supplier integrations are not styled here. */
+.mobile-app-dock { display: none; }
+.home-phase1.tripcod-experience { --experience-ink: #242829; --experience-muted: #586265; background: #fbfaf7; }
+.home-phase1.tripcod-experience .home-title { color: var(--experience-ink); letter-spacing: -.045em; }
+.home-phase1.tripcod-experience .home-title.light { color: white; }
+.home-phase1.tripcod-experience .hero-photo { min-height: 470px; padding: 0 24px; }
+.home-phase1.tripcod-experience .hero-copy { padding-top: 66px; padding-bottom: 134px; }
+.home-phase1.tripcod-experience .hero-title { max-width: 780px; font-size: clamp(38px, 4.5vw, 66px); line-height: 1.06; letter-spacing: -.055em; }
+.home-phase1.tripcod-experience .hero-subtitle { max-width: 530px; line-height: 1.7; }
+.home-phase1.tripcod-experience .search-overlap { position: relative; z-index: 11; margin-top: -60px; }
+.home-phase1.tripcod-experience .search-intro { display: flex; align-items: center; justify-content: space-between; padding: 24px 26px 0; background: white; border-radius: 22px 22px 0 0; }
+.home-phase1.tripcod-experience .search-intro .section-kicker { color: #687172; margin-bottom: 6px; text-shadow: none; }
+.search-intro h2 { margin: 0; font-size: 26px; letter-spacing: -.04em; color: #242829; }
+.search-intro > a { font-size: 13px; color: #4b4d4f; text-underline-offset: 4px; }
+.home-phase1.tripcod-experience .search-overlap .search-widget { margin-top: 0; border: 0; border-radius: 0 0 22px 22px; box-shadow: 0 18px 34px #2428290a; }
+.travel-shortcuts { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 14px; padding-top: 18px; padding-bottom: 24px; }
+.travel-shortcuts a { display: flex; align-items: center; gap: 14px; padding: 20px; background: #fff; border: 1px solid #e8e7e2; border-radius: 16px; text-decoration: none; color: #242829; }
+.travel-shortcuts a:hover { border-color: #a89152; background: #fffaf0; }
+.shortcut-icon { display: grid; place-items: center; width: 44px; height: 44px; flex-shrink: 0; border-radius: 14px; background: #fff4d9; font-size: 23px; }
+.travel-shortcuts strong, .travel-shortcuts small { display: block; }
+.travel-shortcuts strong { font-size: 15px; }
+.travel-shortcuts small { margin-top: 6px; color: #66706f; font-size: 12px; }
+.shortcut-arrow { margin-left: auto; color: #6b736e; }
+.home-phase1.tripcod-experience .trust-bar { background: transparent; border: 0; padding-block: 8px 20px; }
+.home-phase1.tripcod-experience .manage-strip { border-color: #e6e5df; background: #efeee8; box-shadow: none; }
+.home-phase1.tripcod-experience .popular-routes-section { padding-top: 64px; padding-bottom: 34px; }
+.home-phase1.tripcod-experience .popular-route-grid { grid-template-columns: repeat(3,minmax(0,1fr)); gap: 16px; }
+.home-phase1.tripcod-experience .popular-route-card { border: 1px solid #e8e7e2; border-radius: 18px; background: white; }
+.home-phase1.tripcod-experience .popular-route-view { color: #535a53; }
+.home-phase1.tripcod-experience .tc-section { padding-block: 48px; }
+.home-phase1.tripcod-experience .benefits-section { padding-block: 48px; }
+.home-phase1.tripcod-experience .tc-about-copy p:not(.tc-lead) { max-width: 560px; }
+.home-phase1.tripcod-experience .tc-services { grid-template-columns: repeat(5,minmax(0,1fr)); }
+.tc-service-link { display: inline-block; margin-top: 14px; font-size: 12px; font-weight: 700; color: #454b45; text-underline-offset: 4px; }
+.destination-note { color: #62706e; font-size: 12px; line-height: 1.6; margin: 14px 0; }
+.tc-destination .tc-destination-foot { flex-wrap: wrap; gap: 12px; }
+.tc-destination .tc-destination-foot > a { min-height: 44px; }
+.destination-quote { font-size: 12px; font-weight: 650; color: #5d665e; }
+.home-phase1.tripcod-experience .journey-section { padding-block: 48px; }
+.travel-faq { display: grid; grid-template-columns: 1fr 1.5fr; gap: 64px; align-items: start; }
+.travel-faq-list details { border-bottom: 1px solid #dedfd8; }
+.travel-faq-list summary { padding: 20px 24px 20px 0; font-size: 15px; font-weight: 650; cursor: pointer; line-height: 1.5; }
+.travel-faq-list p { color: #586265; line-height: 1.8; font-size: 14px; padding-bottom: 18px; margin: 0; }
+.help-topic-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 20px; }
+.help-topic { padding: 26px; border: 1px solid #e0e4e2; border-radius: 18px; color: #242829; text-decoration: none; background: #fff; }
+.help-topic h2 { font-size: 19px; margin: 0 0 12px; }
+.help-topic h2 span { float: right; }
+.help-topic p { font-size: 14px; color: #586265; line-height: 1.7; }
+.help-topic strong { font-size: 13px; }
+.help-topic:hover { border-color: #b49a54; }
+.info-content { max-width: 850px; margin-inline: auto; }
+.info-content h2 { margin-top: 32px; font-size: 22px; letter-spacing: -.025em; }
+.info-content p, .info-content li { color: #586265; line-height: 1.85; font-size: 15px; }
+.info-content li { margin-block: 10px; }
+.info-content a { color: #303c35; text-underline-offset: 4px; }
+.info-callout { padding: 24px; border: 1px solid #e6d5a7; background: #fff9eb; border-radius: 16px; margin-block: 24px; }
+.package-checklist { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 14px; margin-block: 24px; }
+.package-checklist > div { padding: 18px; border: 1px solid #e0e4e2; border-radius: 14px; background: #fff; }
+.package-checklist dt { font-weight: 700; font-size: 14px; color: #303936; }
+.package-checklist dd { margin: 8px 0 0; color: #586265; font-size: 13px; line-height: 1.7; }
+.footer-policy-links { display: flex; gap: 18px; flex-wrap: wrap; padding-top: 20px; border-top: 1px solid #ffffff24; }
+.footer-policy-links a { color: #e6e7e5; font-size: 12px; text-decoration: none; padding-block: 10px; }
+.footer-policy-links a:hover { text-decoration: underline; }
+body:has(.mobile-app-dock) a:focus-visible, body:has(.mobile-app-dock) button:focus-visible, body:has(.mobile-app-dock) summary:focus-visible { outline: 3px solid #cb8a00; outline-offset: 4px; }
+@media (min-width: 1024px) {
+  .home-phase1.tripcod-experience .home-shell { max-width: 1320px; }
+  .home-phase1.tripcod-experience .search-overlap { max-width: 1320px; }
+}
+@media (max-width: 1023px) {
+  .travel-shortcuts { gap: 10px; }
+  .travel-shortcuts a { flex-direction: column; text-align: center; padding: 16px 8px; gap: 10px; }
+  .shortcut-arrow { display: none; }
+  .home-phase1.tripcod-experience .tc-services { grid-template-columns: repeat(3,minmax(0,1fr)); }
+  .home-phase1.tripcod-experience .popular-route-grid { grid-template-columns: repeat(2,minmax(0,1fr)); }
+  .travel-faq { gap: 28px; }
+}
+@media (max-width: 767px) {
+  body:has(.mobile-app-dock) { padding-bottom: calc(76px + env(safe-area-inset-bottom, 0px)); }
+  .mobile-app-dock { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); position: fixed; z-index: 45; bottom: 0; left: 0; right: 0; padding: 8px 8px calc(8px + env(safe-area-inset-bottom, 0px)); background: #fffffff5; border-top: 1px solid #e2e6e2; box-shadow: 0 -4px 20px #24282908; backdrop-filter: blur(16px); }
+  .mobile-app-dock a { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; min-height: 52px; text-decoration: none; color: #65706b; font-size: 10px; font-weight: 600; border-radius: 12px; }
+  .mobile-app-dock a[aria-current="page"] { color: #292e2b; background: #fff2d1; }
+  body:has(.mobile-app-dock) .site-header { padding: 10px 16px; min-height: 62px; }
+  body:has(.mobile-app-dock) .site-logo { height: 29px; }
+  .home-phase1.tripcod-experience .hero-photo { min-height: 166px; height: auto; padding: 0; }
+  .home-phase1.tripcod-experience .hero-copy { padding: 20px 22px 32px; text-align: left; }
+  .home-phase1.tripcod-experience .hero-title { font-size: clamp(29px,7.8vw,42px); max-width: 390px; margin-block: 10px; }
+  .home-phase1.tripcod-experience .hero-subtitle, .home-phase1.tripcod-experience .hero-cta-row, .home-phase1.tripcod-experience .hero-arrow { display: none; }
+  .home-phase1.tripcod-experience .hero-badge { font-size: 10px; }
+  .home-phase1.tripcod-experience .hero-dots { justify-content: flex-start; margin-top: 16px; }
+  .home-phase1.tripcod-experience .search-overlap { margin-top: -22px; padding: 0 14px 10px; }
+  .home-phase1.tripcod-experience .search-intro { padding: 20px 18px 4px; border-radius: 20px 20px 0 0; gap: 10px; }
+  .search-intro h2 { font-size: 22px; }
+  .search-intro > a { display: none; }
+  .home-phase1.tripcod-experience .search-overlap .search-widget { padding: 14px 16px 18px; border-radius: 0 0 20px 20px; }
+  .home-phase1.tripcod-experience .search-widget .trip-tabs { gap: 8px; }
+  .home-phase1.tripcod-experience .search-widget .trip-tab { flex: 1; padding: 10px 6px; min-height: 44px; border-radius: 10px; font-size: 11px; }
+  .home-phase1.tripcod-experience .search-widget .trip-tabs > div { flex-basis: 100%; }
+  .home-phase1.tripcod-experience .search-widget .currency-pills { display: flex; margin-left: 0; }
+  .home-phase1.tripcod-experience .search-widget .passengers-select { min-height: 44px; width: 100%; text-align: left; }
+  .home-phase1.tripcod-experience .search-widget .search-input { min-height: 54px; font-size: 16px; background: #f7f8f5; border: 1px solid #e3e7df; border-radius: 12px; }
+  .home-phase1.tripcod-experience .search-widget .sw-extras-row { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 10px; }
+  .home-phase1.tripcod-experience .search-widget .sw-extras-bar { flex-wrap: wrap; }
+  .home-phase1.tripcod-experience .search-widget .search-btn { min-height: 54px; font-size: 15px; border-radius: 13px; width: 100%; background: #ffb005; color: #292e2b; }
+  .home-phase1.tripcod-experience .search-widget .search-shortcuts { font-size: 10px; gap: 8px; flex-wrap: wrap; }
+  .home-phase1.tripcod-experience .home-shell:not(.search-overlap) { padding-inline: 18px; }
+  .travel-shortcuts { padding-block: 12px 22px; gap: 7px; }
+  .travel-shortcuts a { border: 0; background: transparent; padding: 0; }
+  .shortcut-icon { width: 54px; height: 54px; border: 1px solid #eddfbd; border-radius: 18px; background: #fff7e3; }
+  .travel-shortcuts strong { font-size: 11px; }
+  .travel-shortcuts small { display: none; }
+  .home-phase1.tripcod-experience .trust-bar { gap: 10px 18px; padding-inline: 18px; }
+  .home-phase1.tripcod-experience .trust-item { font-size: 10px; }
+  .home-phase1.tripcod-experience .manage-strip { margin: 8px 18px 0; width: auto; padding: 18px; border-radius: 16px; gap: 14px; }
+  .home-phase1.tripcod-experience .manage-strip h3 { font-size: 15px; }
+  .home-phase1.tripcod-experience .manage-strip p { font-size: 12px; line-height: 1.6; }
+  .home-phase1.tripcod-experience .manage-btn { min-height: 44px; font-size: 12px; }
+  .home-phase1.tripcod-experience .tc-section, .home-phase1.tripcod-experience .benefits-section, .home-phase1.tripcod-experience .popular-routes-section { padding-block: 30px; }
+  .home-phase1.tripcod-experience .home-title { font-size: 26px; line-height: 1.15; }
+  .home-phase1.tripcod-experience .section-kicker { font-size: 9px; letter-spacing: .14em; }
+  .home-phase1.tripcod-experience .tc-intro { font-size: 12px; line-height: 1.7; }
+  .home-phase1.tripcod-experience .section-heading-row { gap: 12px; align-items: start; }
+  .home-phase1.tripcod-experience .section-heading-row > .text-link { font-size: 11px; }
+  .home-phase1.tripcod-experience .popular-route-grid { display: grid; grid-auto-flow: column; grid-auto-columns: 78%; grid-template-columns: none; overflow-x: auto; scroll-snap-type: x mandatory; gap: 12px; padding: 4px 2px 16px; }
+  .home-phase1.tripcod-experience .popular-route-card { scroll-snap-align: start; padding: 16px; }
+  .home-phase1.tripcod-experience .tc-destinations { display: grid; grid-auto-flow: column; grid-auto-columns: 86%; grid-template-columns: none; overflow-x: auto; scroll-snap-type: x mandatory; gap: 12px; padding-bottom: 16px; }
+  .home-phase1.tripcod-experience .tc-destination { scroll-snap-align: start; border-radius: 18px; }
+  .home-phase1.tripcod-experience .tc-services { grid-template-columns: repeat(2,minmax(0,1fr)); gap: 10px; }
+  .home-phase1.tripcod-experience .tc-service { padding: 18px 14px; }
+  .home-phase1.tripcod-experience .tc-service h3 { font-size: 14px; }
+  .home-phase1.tripcod-experience .tc-service p { font-size: 12px; }
+  .home-phase1.tripcod-experience .benefit-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 12px; }
+  .home-phase1.tripcod-experience .benefit-card { display: block; padding: 18px 14px; border: 1px solid #e8e7e2; border-radius: 16px; background: white; }
+  .home-phase1.tripcod-experience .benefit-icon-desktop { margin-bottom: 14px; }
+  .home-phase1.tripcod-experience .benefit-card h3 { font-size: 14px; }
+  .home-phase1.tripcod-experience .benefit-card p { font-size: 12px; }
+  .home-phase1.tripcod-experience .tc-about-photo { max-height: 280px; }
+  .home-phase1.tripcod-experience .tc-about-copy p:not(.tc-lead) { display: none; }
+  .home-phase1.tripcod-experience .tc-gallery { grid-template-columns: repeat(2,minmax(0,1fr)); gap: 10px; }
+  .home-phase1.tripcod-experience .tc-gallery-item:first-child { grid-column: 1 / -1; }
+  .home-phase1.tripcod-experience .journey-grid { grid-template-columns: repeat(2,minmax(0,1fr)); gap: 12px; }
+  .travel-faq, .help-topic-grid { grid-template-columns: 1fr; gap: 18px; }
+  .package-checklist { grid-template-columns: 1fr; }
+  .home-phase1.tripcod-experience .wa-float { position: fixed; right: 16px; bottom: calc(88px + env(safe-area-inset-bottom, 0px)); }
+  body:has(.mobile-app-dock) .footer-agent-cta { padding: 22px; }
+  body:has(.mobile-app-dock) .footer-agent-perks { display: none; }
+  .info-content h2 { font-size: 20px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .home-phase1.tripcod-experience *, .mobile-app-dock * { scroll-behavior: auto; animation: none; transition: none; }
+}
+
+@media (max-width: 360px) {
+  .home-phase1.tripcod-experience .search-widget .sw-extras-row { grid-template-columns: minmax(0,1fr); }
+}
