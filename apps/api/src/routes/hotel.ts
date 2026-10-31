@@ -57,7 +57,7 @@ function errorMessageOf(err: any): string {
   const hint = err?.code === "UNSUPPORTED_TRIPJACK_ROUTE" || err?.statusCode === 404
     ? " — route not found: redeploy the TripJack gateway (hotel v3 routes) and check TRIPJACK_HMS_UPSTREAM / TRIPJACK_HOTEL_BOOKER_UPSTREAM"
     : err?.statusCode === 401 || err?.statusCode === 403 || ["UNAUTHORIZED", "FORBIDDEN", "API_KEY_SUSPENDED", "6518", "6519", "6520"].includes(String(err?.code))
-      ? " — API key not authorised for hotels, or the gateway IP is not whitelisted on the TripJack hotel hosts"
+      ? " — the hotel API key is not valid for this TripJack hotel environment (UAT and Production keys are separate; check Admin → Integrations → TripJack → Hotels), or the gateway IP is not whitelisted on the TripJack hotel hosts"
       : "";
   return `${base}${hint}`;
 }

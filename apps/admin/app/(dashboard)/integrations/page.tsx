@@ -44,7 +44,8 @@ const SERP_WIRING = [
 
 /* ── Page ───────────────────────────────────────────────────────── */
 export default function IntegrationsPage() {
-  const [tj, setTj] = useState({ apiKey: "", configured: false, env: "UAT" as Env, enabled: false, tripsafe: false, payUserId: "", cabs: false, saving: false, saved: false, error: "" });
+  const [tj, setTj] = useState({ apiKey: "", configured: false, env: "UAT" as Env, enabled: false, tripsafe: false, payUserId: "", cabs: false,
+    hotelApiKey: "", hotelEnv: "UAT" as Env, hotelKeySource: "none", saving: false, saved: false, error: "" });
   const [duffel, setDuffel] = useState({ apiKey: "", env: "test" as "test" | "live", enabled: false, saving: false, saved: false, error: "" });
   const [serp, setSerp] = useState({ apiKey: "", saving: false, saved: false, error: "" });
 
@@ -56,6 +57,7 @@ export default function IntegrationsPage() {
         const data = await res.json() as {
           enabled?: boolean; apiKey?: string; environment?: Env;
           tripsafeEnabled?: boolean; cabsEnabled?: boolean; tripsafePayUserId?: string;
+          hotelEnvironment?: Env; hotelKeySource?: string;
         };
         setTj((s) => ({
           ...s,
@@ -65,6 +67,8 @@ export default function IntegrationsPage() {
           tripsafe: data.tripsafeEnabled === true,
           payUserId: data.tripsafePayUserId ?? "",
           cabs: data.cabsEnabled === true,
+          hotelEnv: data.hotelEnvironment ?? "UAT",
+          hotelKeySource: data.hotelKeySource ?? "none",
         }));
       } catch (err) {
         setTj((s) => ({ ...s, error: err instanceof Error ? err.message : "Unable to load TripJack configuration" }));
@@ -78,13 +82,15 @@ export default function IntegrationsPage() {
     try {
       const res = await fetch(`${API}/api/admin/integrations/tripjack`, {
         method: "POST", headers: apiHeaders(),
-        body: JSON.stringify({ enabled: tj.enabled, apiKey: tj.apiKey, environment: tj.env, tripsafeEnabled: tj.tripsafe, tripsafePayUserId: tj.payUserId.trim(), cabsEnabled: tj.cabs }),
+        body: JSON.stringify({ enabled: tj.enabled, apiKey: tj.apiKey, environment: tj.env, tripsafeEnabled: tj.tripsafe, tripsafePayUserId: tj.payUserId.trim(), cabsEnabled: tj.cabs,
+          hotelEnvironment: tj.hotelEnv, ...(tj.hotelApiKey.trim() ? { hotelApiKey: tj.hotelApiKey.trim() } : {}) }),
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({})) as { error?: string; message?: string };
         throw new Error(data.message ?? data.error ?? `Failed to save TripJack configuration (${res.status})`);
       }
-      setTj((s) => ({ ...s, configured: s.configured || Boolean(s.apiKey), apiKey: "", saved: true }));
+      setTj((s) => ({ ...s, configured: s.configured || Boolean(s.apiKey), apiKey: "",
+        hotelKeySource: s.hotelApiKey.trim() ? "admin-hotel-key" : s.hotelKeySource, hotelApiKey: "", saved: true }));
     } catch (e: any) { setTj((s) => ({ ...s, error: e.message })); }
     finally { setTj((s) => ({ ...s, saving: false })); }
   }
@@ -253,6 +259,35 @@ export default function IntegrationsPage() {
             </div>
           )}
 
+          <div style={{ border: "1px solid #1e293b", borderRadius: 8, padding: 16, marginBottom: 16 }}>
+            <SubTitle>Hotels — separate TripJack account</SubTitle>
+            <p style={{ ...hint, marginBottom: 12 }}>
+              TripJack UAT and Production are separate portals with separate keys. Hotels use this key and environment;
+              the flight key above is only reused for hotels when both are on the same environment.
+            </p>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+              <div>
+                <Label>Hotel API Key</Label>
+                <input type="password" autoComplete="off"
+                  placeholder={tj.hotelKeySource === "admin-hotel-key" ? "Configured — leave blank to keep existing key" : `Your TripJack ${tj.hotelEnv} hotel API key`}
+                  value={tj.hotelApiKey} onChange={(e) => setTj((s) => ({ ...s, hotelApiKey: e.target.value }))} style={inputStyle} />
+                <p style={hint}>{{
+                  "admin-hotel-key": "A hotel key is saved for this tenant.",
+                  "worker-hotel-secret": <>Using <code style={codeStyle}>TRIPJACK_HOTEL_API_KEY</code> on tripcod-api.</>,
+                  "flight-key": "Using the flight key (same environment).",
+                }[tj.hotelKeySource] ?? <span style={{ color: "#f87171" }}>No hotel key for {tj.hotelEnv} — hotel search is off until one is saved.</span>}</p>
+              </div>
+              <div>
+                <Label>Hotel Environment</Label>
+                <select value={tj.hotelEnv} onChange={(e) => setTj((s) => ({ ...s, hotelEnv: e.target.value as Env }))} style={inputStyle}>
+                  <option value="UAT">UAT — apitest-hms / apitest-hotel-booker</option>
+                  <option value="PRODUCTION">Production — hms-search / hms-booker</option>
+                </select>
+                <p style={hint}>Independent of the flight environment.</p>
+              </div>
+            </div>
+          </div>
+
           <HotelCitySync />
 
           {tj.error && <ErrorBanner>{tj.error}</ErrorBanner>}
@@ -286,6 +321,7 @@ export default function IntegrationsPage() {
             ["SERP_API_KEY",       "serpapi.com key — enables Google Flights trial for anonymous users"],
             ["DUFFEL_API_KEY",     "duffel_test_... for sandbox · duffel_live_... for production"],
             ["TRIPJACK_API_KEY",   "TripJack partner API key (shared for TripSafe + Cabs)"],
+            ["TRIPJACK_HOTEL_API_KEY", "Optional: TripJack hotel key when hotels use a different environment (Admin hotel key wins)"],
             ["TRIPJACK_API_BASE_URL", "https://uat.tripjack.com (UAT) or https://api.tripjack.com (Prod)"],
           ].map(([k, d]) => (
             <div key={k} style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>

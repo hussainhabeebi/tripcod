@@ -9,6 +9,7 @@ import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import type { Env, Variables } from "../../types.js";
+import { resolveHotelCredentials, type TripjackSaved } from "../../lib/hotels.js";
 
 export const integrationsAdminRoutes = new Hono<{ Bindings: Env; Variables: Variables }>();
 
@@ -81,12 +82,17 @@ const tripjackSchema = z.object({
   cabsEnabled:      z.boolean().default(false),
   // TripJack user ID whose wallet pays for TripSafe policies (paymentOptions.payUserId).
   tripsafePayUserId: z.string().trim().regex(/^[0-9]*$/, "Numeric TripJack user ID").optional(),
+  // Hotels use their own TripJack account (UAT and Production are separate keys).
+  hotelApiKey:      z.string().trim().optional(),
+  hotelEnvironment: z.enum(["UAT", "PRODUCTION"]).optional(),
 });
 
 integrationsAdminRoutes.get("/tripjack", async (c) => {
   const tenantId = c.get("tenantId");
   const saved    = await load(c.env, tenantId, "tripjack");
-  if (!saved) return c.json({ enabled: false, apiKey: "", environment: "UAT", tripsafeEnabled: false, cabsEnabled: false });
+  const hotel = resolveHotelCredentials(saved as TripjackSaved | null, c.env);
+  const hotelFields = { hotelApiKey: maskSecret(saved?.hotelApiKey as string), hotelEnvironment: hotel.environment, hotelKeySource: hotel.source };
+  if (!saved) return c.json({ enabled: false, apiKey: "", environment: "UAT", tripsafeEnabled: false, cabsEnabled: false, ...hotelFields });
   return c.json({
     enabled:         saved.enabled ?? false,
     apiKey:          maskSecret(saved.apiKey as string),
@@ -94,6 +100,7 @@ integrationsAdminRoutes.get("/tripjack", async (c) => {
     tripsafeEnabled: saved.tripsafeEnabled ?? false,
     cabsEnabled:     saved.cabsEnabled ?? false,
     tripsafePayUserId: saved.tripsafePayUserId ?? "",
+    ...hotelFields,
   });
 });
 
@@ -112,6 +119,8 @@ integrationsAdminRoutes.post("/tripjack", zValidator("json", tripjackSchema), as
     tripsafeEnabled: body.tripsafeEnabled,
     cabsEnabled:     body.cabsEnabled,
     tripsafePayUserId: body.tripsafePayUserId ?? existing.tripsafePayUserId,
+    hotelApiKey:      body.hotelApiKey || existing.hotelApiKey,
+    hotelEnvironment: body.hotelEnvironment ?? existing.hotelEnvironment,
   };
   await save(c.env, tenantId, "tripjack", merged);
   const tenant = c.get("tenant");

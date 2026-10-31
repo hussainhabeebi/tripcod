@@ -7,7 +7,7 @@ export { TripjackHotelAdapter } from "./tripjack/hotel-adapter.js";
 export {
   TripjackHotelV3Client, validHotelId, TripjackHotelError, isHotelError, normalizeOption, normalizeContent,
   parseHotelBookingDetails, HOTEL_TERMINAL_STATUSES,
-  type HotelV3Room, type HotelV3Option, type HotelV3Pricing, type HotelV3Content, type HotelV3ListingHotel,
+  type HotelV3Room, type HotelV3Option, type HotelV3Pricing, type HotelV3Content, type HotelV3ListingHotel, type HotelEnvironment,
 } from "./tripjack/hotel-v3.js";
 export {
   HOTEL_OCCUPANCY_LIMITS, PAN_PATTERN, occupancyErrors, toTripjackRooms, encodeOccupancy, decodeOccupancy, occupancyTotals,

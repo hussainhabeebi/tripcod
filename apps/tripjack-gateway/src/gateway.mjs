@@ -99,6 +99,19 @@ export function loadConfig(env = process.env) {
     upstream,
     hmsUpstream: httpsUrl(env.TRIPJACK_HMS_UPSTREAM ?? "https://apitest-hms.tripjack.com", "TRIPJACK_HMS_UPSTREAM"),
     hotelBookerUpstream: httpsUrl(env.TRIPJACK_HOTEL_BOOKER_UPSTREAM ?? "https://apitest-hotel-booker.tripjack.com", "TRIPJACK_HOTEL_BOOKER_UPSTREAM"),
+    // Hotel hosts per environment, used only when a hotel call names its environment.
+    hotelHosts: {
+      UAT: {
+        hms:    httpsUrl(env.TRIPJACK_HMS_UPSTREAM_UAT ?? "https://apitest-hms.tripjack.com", "TRIPJACK_HMS_UPSTREAM_UAT"),
+        booker: httpsUrl(env.TRIPJACK_HOTEL_BOOKER_UPSTREAM_UAT ?? "https://apitest-hotel-booker.tripjack.com", "TRIPJACK_HOTEL_BOOKER_UPSTREAM_UAT"),
+        main:   httpsUrl("https://apitest.tripjack.com", "UAT main host"),
+      },
+      PRODUCTION: {
+        hms:    httpsUrl(env.TRIPJACK_HMS_UPSTREAM_PRODUCTION ?? "https://hms-search.tripjack.com", "TRIPJACK_HMS_UPSTREAM_PRODUCTION"),
+        booker: httpsUrl(env.TRIPJACK_HOTEL_BOOKER_UPSTREAM_PRODUCTION ?? "https://hms-booker.tripjack.com", "TRIPJACK_HOTEL_BOOKER_UPSTREAM_PRODUCTION"),
+        main:   httpsUrl("https://api.tripjack.com", "Production main host"),
+      },
+    },
     // Optional fallback for self-hosted callers. Cloudflare normally supplies
     // the TripJack key per request after authenticating to this gateway.
     tripjackApiKey: env.TRIPJACK_API_KEY ?? "",
@@ -126,4 +139,19 @@ export function upstreamUrl(upstream, pathname, search = "") {
 
 export function upstreamFor(config, name) {
   return name === "hms" ? config.hmsUpstream : name === "booker" ? config.hotelBookerUpstream : config.upstream;
+}
+
+// Hotels can run on a different TripJack account (UAT / Production) than
+// flights, so a hotel call may name its environment in
+// X-Tripcod-Hotel-Environment. Without the header, and for every flight,
+// TripSafe and user route, routing is exactly upstreamFor().
+export const HOTEL_ENVIRONMENTS = ["UAT", "PRODUCTION"];
+
+export function isHotelRoute(pathname, route) {
+  return route.upstream === "hms" || route.upstream === "booker" || pathname.startsWith("/tj-main/hms/");
+}
+
+export function selectUpstream(config, pathname, route, hotelEnvironment) {
+  if (!hotelEnvironment || !isHotelRoute(pathname, route)) return upstreamFor(config, route.upstream);
+  return config.hotelHosts[hotelEnvironment][route.upstream];
 }

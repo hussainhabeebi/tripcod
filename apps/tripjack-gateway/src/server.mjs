@@ -2,7 +2,7 @@ import http from "node:http";
 import { randomUUID } from "node:crypto";
 import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
-import { loadConfig, resolveRoute, secretsEqual, upstreamFor, upstreamUrl } from "./gateway.mjs";
+import { HOTEL_ENVIRONMENTS, loadConfig, resolveRoute, secretsEqual, selectUpstream, upstreamUrl } from "./gateway.mjs";
 
 const config = loadConfig();
 const rateBuckets = new Map();
@@ -95,6 +95,11 @@ const server = http.createServer(async (req, res) => {
     const route = resolveRoute(url.pathname);
     if (!route) return json(res, 404, { error: "UNSUPPORTED_TRIPJACK_ROUTE", requestId }, requestId);
     if (req.method !== route.method) return json(res, 405, { error: "METHOD_NOT_ALLOWED", requestId }, requestId);
+    const hotelEnvironment = req.headers["x-tripcod-hotel-environment"] ? String(req.headers["x-tripcod-hotel-environment"]) : undefined;
+    if (hotelEnvironment && !HOTEL_ENVIRONMENTS.includes(hotelEnvironment)) {
+      return json(res, 400, { error: "INVALID_HOTEL_ENVIRONMENT", requestId }, requestId);
+    }
+    const upstream = selectUpstream(config, url.pathname, route, hotelEnvironment);
 
     const tripjackApiKey = String(req.headers["apikey"] ?? config.tripjackApiKey ?? "");
     if (!tripjackApiKey) {
@@ -102,7 +107,7 @@ const server = http.createServer(async (req, res) => {
     }
 
     const body = route.method === "POST" ? await readJson(req) : undefined;
-    const response = await fetch(upstreamUrl(upstreamFor(config, route.upstream), route.upstreamPath, route.method === "GET" ? url.search : ""), {
+    const response = await fetch(upstreamUrl(upstream, route.upstreamPath, route.method === "GET" ? url.search : ""), {
       method: route.method,
       headers: {
         "accept": "application/json",
@@ -134,7 +139,7 @@ const server = http.createServer(async (req, res) => {
       event: "tripjack_request",
       requestId,
       route: url.pathname,
-      upstreamHost: upstreamFor(config, route.upstream).hostname,
+      upstreamHost: upstream.hostname,
       upstreamStatus: response.status,
       durationMs: Math.round(performance.now() - startedAt),
     });

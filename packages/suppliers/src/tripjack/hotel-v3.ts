@@ -7,6 +7,11 @@
 // Calls go through the Tripcod TripJack gateway (fixed, whitelisted IP), which
 // forwards /hms/* to the hotel search host and /oms/v3/hotel/* to the hotel
 // booker host. Auth is the `apikey` header.
+//
+// Hotels have their own TripJack account per environment (UAT and Production are
+// separate portals and keys), independent of the flight key. Every hotel call
+// names its environment in X-Tripcod-Hotel-Environment so the gateway can pick
+// the matching hotel hosts; flight calls never carry it.
 
 import type { SupplierCredentials } from "../base.js";
 import type { ExchangeRecorder, SupplierExchange } from "./client.js";
@@ -92,16 +97,23 @@ export function isHotelError(err: unknown, kind: keyof typeof HOTEL_ERROR): bool
   return (HOTEL_ERROR[kind] as readonly string[]).includes(code);
 }
 
+export type HotelEnvironment = "UAT" | "PRODUCTION";
+
 export class TripjackHotelV3Client {
   private baseUrl:  string;
   private apiKey:   string;
   private proxyKey: string;
+  private environment?: HotelEnvironment;
+  private missingKeyMessage?: string;
   private recorder?: ExchangeRecorder;
 
   constructor(creds: SupplierCredentials) {
     this.baseUrl  = String(creds.baseUrl ?? "").replace(/\/$/, "");
     this.apiKey   = String(creds.apiKey ?? "");
     this.proxyKey = String(creds.proxyKey ?? "");
+    this.environment = creds.environment === "UAT" || creds.environment === "PRODUCTION" ? creds.environment : undefined;
+    // When set, a missing hotel key is never papered over by the gateway's own fallback key.
+    this.missingKeyMessage = typeof creds.missingKeyMessage === "string" ? creds.missingKeyMessage : undefined;
     this.recorder = typeof creds.recorder === "function" ? creds.recorder as ExchangeRecorder : undefined;
   }
 
@@ -116,6 +128,9 @@ export class TripjackHotelV3Client {
     if (!this.baseUrl || (!this.apiKey && !this.proxyKey)) {
       throw new TripjackHotelError("TripJack hotel API is not configured (gateway URL / API key missing)", { endpoint: path, code: "NOT_CONFIGURED" });
     }
+    if (!this.apiKey && this.missingKeyMessage) {
+      throw new TripjackHotelError(this.missingKeyMessage, { endpoint: path.split("?")[0], code: "NOT_CONFIGURED" });
+    }
     const endpoint = path.split("?")[0];
     const url = `${this.baseUrl}${path}`;
     const requestHeaders: Record<string, string> = {
@@ -123,6 +138,7 @@ export class TripjackHotelV3Client {
       ...(body !== undefined ? { "Content-Type": "application/json" } : {}),
       ...(this.apiKey ? { apikey: this.apiKey } : {}),
       ...(this.proxyKey ? { "X-Tripcod-Gateway-Key": this.proxyKey } : {}),
+      ...(this.environment ? { "X-Tripcod-Hotel-Environment": this.environment } : {}),
     };
     const requestBody = body !== undefined ? JSON.stringify(body) : "";
     const startedAt = new Date();
