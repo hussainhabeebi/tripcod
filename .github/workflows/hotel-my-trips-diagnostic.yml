@@ -10,8 +10,14 @@ jobs:
     timeout-minutes: 5
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
     steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: 22, cache: pnpm}
+      - run: pnpm install --frozen-lockfile
       - name: Read D1 order ownership and deployed bindings only
         shell: python
         run: |
@@ -30,3 +36,31 @@ jobs:
           for worker in ("tripcod-api","tripcod-web"):
               print(json.dumps({"worker":worker,"deployment":cf("/workers/scripts/"+worker+"/deployments")["deployments"][0]}))
           print("No supplier requests, data writes, booking, cancellation, payment or deployment operations.")
+      - name: Verify account linkage and pure My Trips serialization without supplier calls
+        run: |
+          node --import ./node_modules/.pnpm/tsx@4.23.12/node_modules/tsx/dist/loader.mjs --input-type=module <<'JS'
+          import {createRequire} from "node:module";
+          import {rowToOrder} from "./apps/api/src/lib/hotel-order-store.ts";
+          import {publicOrder} from "./apps/api/src/lib/hotel-orders.ts";
+          const require=createRequire(process.cwd()+"/apps/api/package.json");
+          const {neon}=require("@neondatabase/serverless");
+          const sql=neon(process.env.DATABASE_URL);
+          const base="https://api.cloudflare.com/client/v4/accounts/"+process.env.CLOUDFLARE_ACCOUNT_ID;
+          async function cf(path,body){const r=await fetch(base+path,{method:body?"POST":"GET",headers:{Authorization:"Bearer "+process.env.CLOUDFLARE_API_TOKEN,"Content-Type":"application/json"},...(body?{body:JSON.stringify(body)}:{})});if(r.status===404)return null;if(!r.ok)throw new Error("Metadata read HTTP "+r.status);return (await r.json()).result;}
+          const settings=await cf("/workers/scripts/tripcod-api/settings");
+          const bindings=settings.bindings;const id=bindings.find(x=>x.name==="HOTEL_DB").id;
+          const rows=(await cf("/d1/database/"+id+"/query",{sql:"SELECT * FROM hotel_bookings ORDER BY created_at DESC LIMIT 100",params:[]}))[0].results;
+          const owners=[...new Set(rows.map(x=>x.user_id).filter(Boolean))];
+          let n=0;
+          for(const owner of owners){
+           const selected=rows.filter(x=>x.user_id===owner);const q=sql.query?sql.query("SELECT role,is_active,tenant_id FROM users WHERE id=$1",[owner]):sql("SELECT role,is_active,tenant_id FROM users WHERE id=$1",[owner]);
+           const user=(await sql.transaction([q],{readOnly:true}))[0][0];
+           const kv=bindings.find(x=>x.name==="SESSIONS_KV").namespace_id;
+           const req=await fetch(base+"/storage/kv/namespaces/"+kv+"/values/"+encodeURIComponent("session:"+owner),{headers:{Authorization:"Bearer "+process.env.CLOUDFLARE_API_TOKEN}});
+           let session=null;if(req.ok)session=JSON.parse(await req.text());
+           const result={ownerGroup:++n,orders:selected.length,role:user?.role,active:user?.is_active,tenantMatches:selected.every(x=>x.tenant_id===user?.tenant_id),sessionPresent:!!session,sessionIdPresent:!!session?.sessionId,sessionTenantMatches:session?.tenantId===user?.tenant_id,serialized:false,statuses:[]};
+           try{const views=selected.map(row=>publicOrder(rowToOrder(row)));JSON.stringify({orders:views});result.serialized=true;result.statuses=views.map(x=>({status:x.status,occupancyValid:Array.isArray(x.occupancy)&&x.occupancy.every(r=>Array.isArray(r.childAges)),hotelDatesPresent:!!x.hotel?.checkIn&&!!x.hotel?.checkOut,deadlinePresent:!!x.holdDeadline}));}
+           catch(e){result.readError=e.message;}
+           console.log(JSON.stringify(result));
+          }
+          JS
