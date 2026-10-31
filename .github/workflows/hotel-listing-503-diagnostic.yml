@@ -1,0 +1,87 @@
+name: Hotel listing 503 - read-only diagnostic
+on:
+  push:
+    branches: [codex/hotel-listing-503]
+    paths: [.github/workflows/hotel-listing-503-diagnostic.yml]
+permissions:
+  contents: read
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: 22, cache: pnpm}
+      - run: pnpm install --frozen-lockfile
+      - name: Read sanitized logs and verify one UAT search
+        run: |
+          node --input-type=module <<'JS'
+          import { createRequire } from "node:module";
+          const require=createRequire(process.cwd()+"/apps/api/package.json");
+          const {neon}=require("@neondatabase/serverless");
+          const sql=neon(process.env.DATABASE_URL);
+          const secretValues=[process.env.DATABASE_URL,process.env.CLOUDFLARE_API_TOKEN].filter(Boolean);
+          const scrub=(value)=>{let text=JSON.stringify(value);for(const secret of secretValues)text=text.split(secret).join("[REDACTED]");return text;};
+          const out=value=>console.log(scrub(value));
+          const read=async(query,params=[])=>{const q=sql.query?sql.query(query,params):sql(query,params);return (await sql.transaction([q],{readOnly:true}))[0];};
+          const base="https://api.cloudflare.com/client/v4/accounts/"+process.env.CLOUDFLARE_ACCOUNT_ID;
+          async function cf(path,optional=false){
+           const r=await fetch(base+path,{headers:{Authorization:"Bearer "+process.env.CLOUDFLARE_API_TOKEN}});
+           if(optional&&r.status===404)return null;
+           if(!r.ok)throw new Error("Cloudflare read failed HTTP "+r.status);
+           return {text:await r.text(),headers:Object.fromEntries(r.headers)};
+          }
+          async function json(path){return JSON.parse((await cf(path)).text).result;}
+          async function main(){
+           const [tenant]=await read("select id from tenants where slug=$1 limit 1",["tripcod"]);
+           if(!tenant)throw new Error("Tripcod tenant not found");
+           const settings=await json("/workers/scripts/tripcod-api/settings");
+           const bindings=settings.bindings??[];
+           const ns=bindings.find(x=>x.name==="TENANT_CACHE_KV")?.namespace_id;
+           if(!ns)throw new Error("Tenant KV binding missing");
+           const savedObject=await cf("/storage/kv/namespaces/"+ns+"/values/"+encodeURIComponent("admin_settings:"+tenant.id+":integration:tripjack"),true);
+           const saved=savedObject?JSON.parse(savedObject.text):{};
+           for(const key of [saved.apiKey,saved.hotelApiKey])if(key)secretValues.push(key);
+           const hotelEnvironment=saved.hotelEnvironment==="PRODUCTION"?"PRODUCTION":"UAT";
+           const flightEnvironment=saved.environment==="PRODUCTION"?"PRODUCTION":"UAT";
+           const hotelSecret=bindings.some(x=>x.name==="TRIPJACK_HOTEL_API_KEY");
+           const source=saved.hotelApiKey?"admin-hotel-key":hotelSecret?"worker-hotel-secret":hotelEnvironment===flightEnvironment&&(saved.apiKey||bindings.some(x=>x.name==="TRIPJACK_API_KEY"))?"flight-key":"none";
+           out({credentials:{hotelEnvironment,flightEnvironment,effectiveKeySource:source,hotelKeyConfigured:source!=="none",flightCredentialsChanged:false}});
+           const deployments=await json("/workers/scripts/tripcod-api/deployments");
+           out({currentApiDeployment:deployments.deployments[0]});
+           async function logs(label){
+            const rows=await read("select created_at,endpoint,http_status,error_code,error_message,response_snippet,request_id,request_summary from supplier_api_logs where tenant_id=$1 and supplier='TRIPJACK' and endpoint like '%hotel/listing%' order by created_at desc limit 5",[tenant.id]);
+            out({phase:label,supplierLogs:rows.map(r=>({at:r.created_at,endpoint:r.endpoint,httpStatus:r.http_status,errorCode:r.error_code,error:r.error_message,bodySnippet:r.response_snippet?.slice(0,600),requestId:r.request_id,gatewayRequestId:r.request_summary?.gatewayRequestId,upstreamStatus:r.request_summary?.upstreamStatus}))});
+            const exchanges=await read("select endpoint,http_status,duration_ms,request_id,request_key,response_key,started_at from supplier_exchanges where tenant_id=$1 and supplier='TRIPJACK' and endpoint='/hms/v3/hotel/listing' order by started_at desc limit 2",[tenant.id]);
+            for(const row of exchanges){
+             const request=JSON.parse((await cf("/r2/buckets/tripcod-documents/objects/"+row.request_key)).text);
+             const headers=Object.fromEntries(Object.entries(request.headers??{}).map(([k,v])=>[k.toLowerCase(),v]));
+             if(headers.apikey)secretValues.push(headers.apikey);
+             const response=row.response_key?await cf("/r2/buckets/tripcod-documents/objects/"+row.response_key):null;
+             let body=null;try{body=JSON.parse(response?.text??"null");}catch{}
+             let metadata={};try{metadata=JSON.parse(response?.headers["cf-r2-custom-metadata"]??"{}");}catch{}
+             let rh={};try{rh=JSON.parse(metadata.responseHeaders??response?.headers["x-amz-meta-responseheaders"]??"{}");}catch{}
+             out({phase:label,exchange:{at:row.started_at,httpStatus:row.http_status,durationMs:row.duration_ms,requestId:row.request_id,gatewayHost:new URL(request.url).hostname,requestedHotelEnvironment:headers["x-tripcod-hotel-environment"],selectedKeyMatchesAdminHotel:!!saved.hotelApiKey&&headers.apikey===saved.hotelApiKey,selectedKeyMatchesAdminFlight:!!saved.apiKey&&headers.apikey===saved.apiKey,hasApiKey:!!headers.apikey,hotelIds:request.body?.hids?.length,upstreamStatus:rh["x-tripjack-upstream-status"]??null,gatewayRequestId:rh["x-request-id"]??null,actualUpstreamHost:rh["x-tripjack-upstream-host"]??rh["x-tripcod-upstream-host"]??null,errorBody:row.http_status>=400?(body??response?.text.slice(0,600)):null,hotelCount:body?.hotels?.length??null,metadataHeaderNames:response?Object.keys(response.headers).filter(k=>k.includes("meta")):[]}});
+            }
+           }
+           await logs("before");
+           if(hotelEnvironment!=="UAT"||source==="none")throw new Error("Authorized UAT routing/key not configured; no search executed");
+           const today=new Date();today.setUTCDate(today.getUTCDate()+14);const checkIn=today.toISOString().slice(0,10);today.setUTCDate(today.getUTCDate()+2);const checkOut=today.toISOString().slice(0,10);
+           const u=new URL("https://tripcod.com/hotels/search");
+           for(const [k,v]of Object.entries({city:"DXB",cityName:"Dubai",checkIn,checkOut,rooms:"1",adults:"1",currency:"INR",nationality:"IN"}))u.searchParams.set(k,v);
+           out({authorizedReadOnlyUatSearch:{city:"Dubai",checkIn,checkOut,rooms:1,adults:1,retries:0}});
+           const response=await fetch(u,{signal:AbortSignal.timeout(90000)});const page=await response.text();
+           const hotelCount=page.match(/(\d+)\s*(?:<!--\s*-->)?\s*hotel(?:<!--\s*-->)?s?(?:<!--\s*-->)?\s*found/i)?.[1]??null;
+           out({searchPage:{httpStatus:response.status,hotelCount,errorText:page.match(/TripJack hotel[^<]{0,550}/)?.[0]??null}});
+           await new Promise(r=>setTimeout(r,4000));
+           await logs("after");
+           out({complete:true,supplierSearchesRequested:1,bookingRequests:0,paymentRequests:0,deployments:0,credentialChanges:0});
+          }
+          main().catch(e=>{out({diagnosticError:e.message});process.exitCode=1;});
+          JS
