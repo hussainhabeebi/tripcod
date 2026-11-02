@@ -1,0 +1,136 @@
+name: Website header without Hotels — website-only release
+
+# Releases PR #33 (merge f5e61a5) to tripcod-web only. No API, Admin, data,
+# payment or setting change. Any failure after activation restores the
+# recorded website version.
+on:
+  push:
+    branches: [release/hide-hotels-nav]
+    paths: [.github/release/hide-hotels-nav-mode.txt]
+
+permissions:
+  contents: read
+concurrency:
+  group: tripcod-production-release
+  cancel-in-progress: false
+
+env:
+  RELEASE_COMMIT: f5e61a5cdc0ab836095c4a01b507d33a3ca9ad95
+  LIVE_COMMIT: 973bc9ba6501b1436e2bba8d845ebffbad210611   # PR #27 My Trips tabs, serving tripcod-web
+  CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+  CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+  WRANGLER_SEND_METRICS: "false"
+  NEXT_TELEMETRY_DISABLED: "1"
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+
+      - name: Gate — website code differs from the live release only by the header file
+        run: |
+          git merge-base --is-ancestor "$RELEASE_COMMIT" origin/main
+          git diff --exit-code "$RELEASE_COMMIT" HEAD -- apps packages pnpm-lock.yaml
+          changed=$(git diff --name-only "$LIVE_COMMIT" "$RELEASE_COMMIT" -- apps/web packages pnpm-lock.yaml)
+          echo "$changed"
+          [ "$changed" = "apps/web/app/components/SiteNav.tsx" ] || { echo "STOP: unexpected website changes"; exit 1; }
+
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+
+      - name: Cloudflare helper
+        run: |
+          cat > "$RUNNER_TEMP/cf.py" <<'PY'
+          import json, os, pathlib, re, sys, urllib.request, urllib.error
+          root = pathlib.Path(os.environ["RUNNER_TEMP"])
+          base = "https://api.cloudflare.com/client/v4/accounts/" + os.environ["CLOUDFLARE_ACCOUNT_ID"]
+          W = "tripcod-web"
+          def req(path, payload=None):
+              h = {"Authorization": "Bearer " + os.environ["CLOUDFLARE_API_TOKEN"]}
+              if payload is not None: h["Content-Type"] = "application/json"
+              r = urllib.request.Request(base + path, data=None if payload is None else json.dumps(payload).encode(), headers=h, method="GET" if payload is None else "POST")
+              try:
+                  with urllib.request.urlopen(r, timeout=60) as res: v = json.load(res)
+              except urllib.error.HTTPError as e: raise SystemExit("Cloudflare HTTP %s for %s" % (e.code, path))
+              if not v.get("success"): raise SystemExit("Cloudflare call failed: " + path)
+              return v["result"]
+          def deployment(): return req("/workers/scripts/%s/deployments" % W)["deployments"][0]
+          def version(vid): return req("/workers/scripts/%s/versions/%s" % (W, vid))
+          def bind(v): return {(b.get("name"), b.get("type")) for b in v["resources"].get("bindings", [])}
+          mode = sys.argv[1]
+          if mode == "record":
+              d = deployment(); vs = d["versions"]
+              if len(vs) != 1 or vs[0]["percentage"] != 100: raise SystemExit("split deployment in progress — stop")
+              note = (d.get("annotations") or {}).get("workers/message", "")
+              print(json.dumps({"rollbackVersion": vs[0]["version_id"], "deployedAt": d.get("created_on"), "note": note}))
+              if "My Trips vertical main tabs" not in note: raise SystemExit("serving website is not the recorded PR #27 release — stop and review")
+              (root / "before.json").write_text(json.dumps(version(vs[0]["version_id"])))
+              (root / "rollback.txt").write_text(vs[0]["version_id"])
+          elif mode == "activate":
+              m = re.search(r"Worker Version ID:\s*([0-9a-f-]{36})", pathlib.Path(sys.argv[2]).read_text())
+              if not m: raise SystemExit("uploaded version id missing — not activated")
+              old = json.loads((root / "before.json").read_text()); new = version(m[1])
+              if bind(new) != bind(old): raise SystemExit("bindings differ — not activated")
+              o, n = old["resources"].get("script_runtime", {}), new["resources"].get("script_runtime", {})
+              for k in ("compatibility_date", "compatibility_flags", "limits"):
+                  if o.get(k) != n.get(k): raise SystemExit("runtime %s differs — not activated" % k)
+              (root / "activated").write_text(m[1])
+              req("/workers/scripts/%s/deployments" % W, {"strategy": "percentage", "versions": [{"version_id": m[1], "percentage": 100}],
+                  "annotations": {"workers/message": "Website header without Hotels %s" % os.environ["RELEASE_COMMIT"][:7]}})
+              print(json.dumps({"activated": W, "version": m[1]}))
+          elif mode == "after":
+              print(json.dumps({"serving": deployment()["versions"]}))
+          elif mode == "rollback":
+              if (root / "activated").exists():
+                  vid = (root / "rollback.txt").read_text()
+                  req("/workers/scripts/%s/deployments" % W, {"strategy": "percentage", "versions": [{"version_id": vid, "percentage": 100}],
+                      "annotations": {"workers/message": "Rollback of website header release"}})
+                  print(json.dumps({"rolledBack": W, "version": vid}))
+          PY
+
+      - name: Record serving website version (rollback point)
+        run: python3 "$RUNNER_TEMP/cf.py" record
+
+      - name: Build website (production API URL)
+        working-directory: apps/web
+        env: { NEXT_PUBLIC_API_URL: https://api.tripcod.com }
+        run: pnpm exec opennextjs-cloudflare build --dangerouslyUseUnsupportedNextVersion
+
+      - name: Upload, verify, activate website
+        id: web
+        working-directory: apps/web
+        run: |
+          set -o pipefail
+          pnpm exec wrangler versions upload --keep-vars --message "Website header without Hotels $RELEASE_COMMIT" 2>&1 | tee "$RUNNER_TEMP/web.log"
+          python3 "$RUNNER_TEMP/cf.py" activate "$RUNNER_TEMP/web.log"
+
+      - name: Smoke — header has no Hotels link, key pages load
+        run: |
+          python3 - <<'PY'
+          import re, time, urllib.request
+          def get(url):
+              r = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 tripcod-release", "Cache-Control": "no-cache"})
+              with urllib.request.urlopen(r, timeout=60) as res: return res.status, res.read().decode("utf-8", "replace")
+          for i in range(12):
+              s, html = get("https://tripcod.com/?release-check=%d" % i)
+              m = re.search(r'aria-label="Main navigation".*?</nav>', html, re.S)
+              if s == 200 and m and 'href="/hotels"' not in m.group(0) and 'href="/trips"' in m.group(0): break
+              time.sleep(5)
+          else:
+              raise SystemExit("Header still shows Hotels (or main navigation missing) after 60 s")
+          print("tripcod.com header: no Hotels link; Flights / My Trips / Destinations / Services present")
+          for path in ("/", "/hotels", "/trips", "/destinations", "/services", "/checkout/payment-result"):
+              s, _ = get("https://tripcod.com" + path); print(path, s); assert s == 200, path
+          PY
+          python3 "$RUNNER_TEMP/cf.py" after
+
+      - name: Restore recorded website version on any failure
+        if: failure()
+        run: |
+          python3 "$RUNNER_TEMP/cf.py" rollback
+          echo "Restored the website if it had been activated (none listed = nothing had been changed)."
