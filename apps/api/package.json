@@ -8,7 +8,9 @@
     "build":    "tsc --noEmit",
     "deploy":   "wrangler deploy",
     "preview":  "wrangler dev --port 4000 --env staging",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "d1:airports":       "wrangler d1 execute tripcod-hotels --remote --file d1/airports/schema.sql && wrangler d1 execute tripcod-hotels --remote --file d1/airports/seed.sql",
+    "d1:airports:local": "wrangler d1 execute tripcod-hotels --local --file d1/airports/schema.sql && wrangler d1 execute tripcod-hotels --local --file d1/airports/seed.sql"
   },
   "dependencies": {
     "hono": "^4.6.0",

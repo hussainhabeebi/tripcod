@@ -58,14 +58,15 @@ queue             = "tripcod-notifications"
 max_batch_size    = 50
 max_batch_timeout = 2
 
-# ── Hyperdrive (Neon Postgres connection pooling at edge) ─────────
+# ── Hyperdrive (Neon Postgres — SECONDARY database) ──────────────
 [[hyperdrive]]
 binding = "HYPERDRIVE"
 id      = "28bf3c3cf90d4e8f9b0ef1039c68da6a"
 
-# ── D1: website hotel orders (TripJack Hotel v3) ──────────────────
-# Orders, holds, cancellations and payment refs. Customers, wallet, flights and
-# payments stay in Neon. Schema: d1-migrations/ (wrangler d1 migrations apply).
+# ── D1 (PRIMARY database) ─────────────────────────────────────────
+# Hotel orders (schema: d1-migrations/, applied by the guarded release) and the
+# world airport list (d1/airports/, see docs/database.md). Customers, wallet,
+# flights and payments stay in Neon (secondary) for now.
 [[d1_databases]]
 binding        = "HOTEL_DB"
 database_name  = "tripcod-hotels"

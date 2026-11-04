@@ -11,10 +11,10 @@ export interface Env {
   PUBLIC_ASSETS_R2: R2Bucket;
   BOOKING_QUEUE:    Queue;
   NOTIFY_QUEUE:     Queue;
-  HYPERDRIVE:       Hyperdrive;
-  HOTEL_DB:         D1Database;   // website hotel orders (d1-migrations); Neon keeps users, wallet, flights
+  HYPERDRIVE:       Hyperdrive;   // secondary database (Neon Postgres)
+  HOTEL_DB:         D1Database;   // PRIMARY database (Cloudflare D1 "tripcod-hotels"): hotel orders, airports
   TENANT_RATE_LIMITER: DurableObjectNamespace;
-  DATABASE_URL:           string;
+  DATABASE_URL:           string;   // Neon Postgres (secondary)
   JWT_SECRET:             string;
   GOOGLE_CLIENT_ID?:      string;
   APPLE_CLIENT_ID?:       string;

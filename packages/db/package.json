@@ -9,12 +9,14 @@
     "push": "drizzle-kit push",
     "studio": "drizzle-kit studio",
     "seed": "tsx src/seed.ts",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "airports:build": "node scripts/build-airports.mjs"
   },
   "exports": {
     ".": "./src/index.ts",
     "./schema": "./src/schema/index.ts",
-    "./client": "./src/client.ts"
+    "./client": "./src/client.ts",
+    "./d1": "./src/d1/index.ts"
   },
   "dependencies": {
     "drizzle-orm": "^0.36.0",
