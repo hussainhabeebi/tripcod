@@ -8,6 +8,7 @@ import { HTTPException } from "hono/http-exception";
 import { bookings, bookingPassengers } from "@tripcod/db/schema";
 import { eq, and } from "drizzle-orm";
 import type { Env, Variables } from "../types.js";
+import { gatewayAvailability, tenantPaymentSettings } from "../lib/checkout-gateways.js";
 
 const CHECKOUT_TTL = 20 * 60;  // 20 minutes
 
@@ -326,4 +327,10 @@ checkoutRoutes.post("/session/:token/mark-paid", async (c) => {
   }
 
   return c.json({ ok: true });
+});
+
+// GET /api/checkout/payment-options — which online gateways checkout may offer (public, no secrets)
+checkoutRoutes.get("/payment-options", async (c) => {
+  const avail = gatewayAvailability(c.env, await tenantPaymentSettings(c.env, c.get("tenantId")));
+  return c.json({ gateways: { NOMOD: avail.NOMOD, PHONEPE: avail.PHONEPE }, phonepeEnvironment: avail.PHONEPE ? avail.phonepeEnvironment : null });
 });

@@ -3,7 +3,7 @@
 //   GET /api/airports/search?q=tbil&limit=10   → { airports: [...] }
 //   GET /api/airports/TBS                      → { airport: {...} }
 //
-// Data source: the D1 `airports` table (primary database). If D1 is not bound
+// Data source: the `airports` table in D1 (primary database, binding HOTEL_DB). If D1 is not bound
 // or a query fails, the same list bundled into the Worker is used instead, so
 // the search box keeps working (also before the D1 table has been seeded).
 
@@ -72,8 +72,8 @@ airportRoutes.get("/search", async (c) => {
   if (q.length < 2) return c.json({ airports: [] });
 
   let airports: AirportResult[] | null = null;
-  if (c.env.DB) {
-    try { airports = await searchD1(c.env.DB, q, limit); }
+  if (c.env.HOTEL_DB) {
+    try { airports = await searchD1(c.env.HOTEL_DB, q, limit); }
     catch (err) { console.error("[airports] D1 search failed, using bundled list", err); }
   }
   // An empty D1 result can mean the table has not been seeded yet.
@@ -86,9 +86,9 @@ airportRoutes.get("/search", async (c) => {
 airportRoutes.get("/:code{[A-Za-z]{3}}", async (c) => {
   const code = c.req.param("code").toUpperCase();
   let airport: AirportResult | null | undefined;
-  if (c.env.DB) {
+  if (c.env.HOTEL_DB) {
     try {
-      airport = await c.env.DB.prepare(
+      airport = await c.env.HOTEL_DB.prepare(
         "SELECT code, name, city, country, country_name AS countryName FROM airports WHERE code = ?1",
       ).bind(code).first<AirportResult>();
     } catch (err) { console.error("[airports] D1 lookup failed, using bundled list", err); }

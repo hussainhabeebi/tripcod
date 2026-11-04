@@ -3,7 +3,9 @@
 // Pay for a held fare (hold now, pay later). Opened from the hold email /
 // WhatsApp link: /pay?b=<bookingId>&t=<checkout token>.
 
+import BookingProgress from "../components/BookingProgress";
 import { useEffect, useState } from "react";
+import PaymentMethodPicker, { usePaymentOptions, type OnlineGateway } from "../components/PaymentMethodPicker";
 
 const API = process.env.NEXT_PUBLIC_API_URL ?? "https://api.tripcod.com";
 
@@ -17,6 +19,8 @@ export default function PayHeldFarePage() {
   const [held, setHeld] = useState<Held | null>(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const paymentOptions = usePaymentOptions();
+  const [gateway, setGateway] = useState<OnlineGateway>("NOMOD");
 
   useEffect(() => {
     const q = new URLSearchParams(window.location.search);
@@ -36,7 +40,7 @@ export default function PayHeldFarePage() {
       const res = await fetch(`${API}/api/payments/checkout`, {
         method: "POST",
         headers: { "Content-Type": "application/json", "x-tenant-slug": "tripcod", "X-Checkout-Token": ids.t },
-        body: JSON.stringify({ bookingId: ids.b, gateway: "NOMOD" }),
+        body: JSON.stringify({ bookingId: ids.b, gateway: gateway === "PHONEPE" && held?.currency === "INR" ? "PHONEPE" : "NOMOD" }),
       });
       const d = await res.json().catch(() => ({}));
       if (!res.ok || !d.paymentUrl) throw new Error(d.error ?? "The payment page couldn't open. You have not been charged.");
@@ -52,7 +56,8 @@ export default function PayHeldFarePage() {
   const payable = held && held.status === "HELD" && !held.expired;
 
   return (
-    <main className="page-container" style={{ maxWidth: 520, padding: "36px 16px 48px" }}>
+    <main className="page-container flight-payment" style={{ maxWidth: 520, padding: "36px 16px 48px" }}>
+      <BookingProgress current={4} />
       <h1 style={{ margin: "0 0 6px", fontSize: 24 }}>Pay for your held fare</h1>
       {!held && !error && <p style={{ color: "#64748b" }}>Loading…</p>}
       {held && (
@@ -71,6 +76,7 @@ export default function PayHeldFarePage() {
         </section>
       )}
       {error && <p role="alert" style={{ color: "#b91c1c" }}>{error}</p>}
+      {payable && <PaymentMethodPicker options={paymentOptions} currency={held.currency} value={gateway} onChange={setGateway} />}
       {payable && (
         <button type="button" onClick={pay} disabled={busy}
           style={{ width: "100%", height: 52, border: 0, borderRadius: 14, background: "#4B4D4F", color: "#fff", fontSize: 16, fontWeight: 800, cursor: "pointer", opacity: busy ? .7 : 1 }}>

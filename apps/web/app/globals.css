@@ -7,7 +7,7 @@
   --color-secondary:    #FFB005; /* Tripcod amber */
   --color-accent:       #FFB005;
   --color-accent-dark:  #E59E00;
-  --color-accent-soft:  var(--color-accent-soft);
+  --color-accent-soft:  #FFF7E0;
   --color-accent-ring:  #FFEFC2;
   --color-accent-border: #FFD98A;
   --font-body:       Inter, system-ui, -apple-system, sans-serif;

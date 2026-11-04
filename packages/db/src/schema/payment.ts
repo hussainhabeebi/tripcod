@@ -1,5 +1,5 @@
 import {
-  pgTable, text, decimal, timestamp, jsonb, uniqueIndex,
+  pgTable, text, decimal, timestamp, jsonb, uniqueIndex, index,
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import { tenants } from "./tenant.js";
@@ -15,6 +15,7 @@ export const payments = pgTable("payments", {
   bookingId: text("booking_id").notNull().references(() => bookings.id),
 
   gateway:          paymentGatewayEnum("gateway").notNull(),
+  environment:      text("environment"),              // UAT | PRODUCTION (PhonePe); null for older rows
   gatewayOrderId:   text("gateway_order_id"),
   gatewayPaymentId: text("gateway_payment_id"),
 
@@ -33,6 +34,30 @@ export const payments = pgTable("payments", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 }, (t) => ({
   gatewayPaymentIdx: uniqueIndex("payments_gateway_payment_id_idx").on(t.gatewayPaymentId),
+  gatewayOrderIdx:   uniqueIndex("payments_gateway_order_idx").on(t.gateway, t.gatewayOrderId),
+}));
+
+// Append-only gateway ledger for Admin → Transactions: every checkout, webhook,
+// status check, capture, refund and anomaly (amount mismatch, duplicate charge).
+export const paymentEvents = pgTable("payment_events", {
+  id:          text("id").primaryKey().default(sql`gen_random_uuid()`),
+  tenantId:    text("tenant_id"),
+  paymentId:   text("payment_id"),
+  product:     text("product").notNull(),              // FLIGHT | HOTEL
+  referenceId: text("reference_id"),                   // bookings.id (Neon) or the D1 hotel order id
+  gateway:     paymentGatewayEnum("gateway").notNull(),
+  environment: text("environment"),                    // UAT | PRODUCTION
+  event:       text("event").notNull(),                // CHECKOUT_CREATED | WEBHOOK | STATUS_CHECK | CAPTURED | FAILED | REFUND_* | AMOUNT_MISMATCH | DUPLICATE_CHARGE ...
+  status:      text("status"),
+  amount:      decimal("amount", { precision: 14, scale: 2 }),
+  currency:    text("currency"),
+  gatewayRef:  text("gateway_ref"),
+  message:     text("message"),
+  raw:         jsonb("raw"),
+  createdAt:   timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => ({
+  createdIdx: index("payment_events_created_idx").on(t.tenantId, t.createdAt),
+  paymentIdx: index("payment_events_payment_idx").on(t.paymentId),
 }));
 
 export const walletAccounts = pgTable("wallet_accounts", {

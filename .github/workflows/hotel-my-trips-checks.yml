@@ -1,0 +1,51 @@
+name: Hotel My Trips focused checks
+on:
+  push:
+    branches: [codex/hotel-my-trips]
+  pull_request:
+    paths:
+      - apps/web/app/trips/**
+      - apps/web/test/browser/hotel-my-trips.cjs
+      - apps/api/test/hotel-orders-d1.test.ts
+permissions:
+  contents: read
+env:
+  NEXT_TELEMETRY_DISABLED: '1'
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: 22, cache: pnpm}
+      - run: pnpm install --frozen-lockfile
+      - name: TypeScript and hotel regressions (isolated mocks and local D1)
+        run: |
+          pnpm --filter @tripcod/api typecheck
+          pnpm --filter @tripcod/web typecheck
+          node --import ./node_modules/.pnpm/tsx@4.23.12/node_modules/tsx/dist/loader.mjs --test apps/api/test/hotel-orders.test.ts apps/api/test/hotel-orders-d1.test.ts
+      - name: Build website
+        working-directory: apps/web
+        run: pnpm build
+      - name: Install QA browser
+        run: |
+          npm install --prefix "$RUNNER_TEMP/browser" playwright@1.56.1 --ignore-scripts
+          node "$RUNNER_TEMP/browser/node_modules/playwright/cli.js" install --with-deps chromium
+      - name: Desktop and mobile read-only UI regression
+        env:
+          PLAYWRIGHT_MODULE: ${{ runner.temp }}/browser/node_modules/playwright
+          QA_OUTPUT: ${{ runner.temp }}/hotel-my-trips-qa
+        run: |
+          pnpm --filter @tripcod/web start --hostname 127.0.0.1 --port 3000 > "$RUNNER_TEMP/web.log" 2>&1 &
+          web_pid=$!
+          trap 'kill "$web_pid" 2>/dev/null || true' EXIT
+          for attempt in $(seq 1 45); do if curl -fsS http://127.0.0.1:3000/trips > /dev/null; then break; fi; sleep 1; done
+          export CHROMIUM_PATH=$(node -e 'console.log(require(process.env.PLAYWRIGHT_MODULE).chromium.executablePath())')
+          BASE_URL=http://127.0.0.1:3000 node apps/web/test/browser/hotel-my-trips.cjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: hotel-my-trips-screenshots
+          path: ${{ runner.temp }}/hotel-my-trips-qa

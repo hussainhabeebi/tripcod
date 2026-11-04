@@ -9,10 +9,8 @@
     "deploy":   "wrangler deploy",
     "preview":  "wrangler dev --port 4000 --env staging",
     "typecheck": "tsc --noEmit",
-    "d1:migrate":        "wrangler d1 migrations apply tripcod --remote",
-    "d1:migrate:local":  "wrangler d1 migrations apply tripcod --local",
-    "d1:seed:airports":  "wrangler d1 execute tripcod --remote --file d1/seed/airports.sql",
-    "d1:seed:airports:local": "wrangler d1 execute tripcod --local --file d1/seed/airports.sql"
+    "d1:airports":       "wrangler d1 execute tripcod-hotels --remote --file d1/airports/schema.sql && wrangler d1 execute tripcod-hotels --remote --file d1/airports/seed.sql",
+    "d1:airports:local": "wrangler d1 execute tripcod-hotels --local --file d1/airports/schema.sql && wrangler d1 execute tripcod-hotels --local --file d1/airports/seed.sql"
   },
   "dependencies": {
     "hono": "^4.6.0",

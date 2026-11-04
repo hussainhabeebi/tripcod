@@ -1,0 +1,26 @@
+{
+  "browser": "153.0.8010.0",
+  "fixture": true,
+  "viewports": [
+    {
+      "width": 390,
+      "screen": "home",
+      "documentWidth": 390,
+      "viewport": 390,
+      "headings": [
+        "Good journeysstart with better choices."
+      ],
+      "overflow": [],
+      "smallTargets": []
+    }
+  ],
+  "errors": [],
+  "interactions": [
+    {
+      "width": 390,
+      "screen": "home",
+      "result": "PASS"
+    }
+  ],
+  "bookingOrPaymentSubmissions": 0
+}

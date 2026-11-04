@@ -1,0 +1,347 @@
+{
+  "runtime": "Miniflare local workerd",
+  "quotaEnforcement": false,
+  "warning": "Hosted Worker limits and concurrent production load are not enforced by local workerd.",
+  "scenarios": [
+    {
+      "cityCount": 2000,
+      "legacyBytes": 8127854,
+      "originalEtagPreserved": true,
+      "concurrentLookupsDuringMigration": 4,
+      "steps": [
+        {
+          "step": 0,
+          "wallMs": 335,
+          "done": false,
+          "pages": 128,
+          "regions": 256000,
+          "cities": 2000,
+          "phase": "Migrating saved checkpoint"
+        },
+        {
+          "step": 1,
+          "wallMs": 757,
+          "done": false,
+          "pages": 128,
+          "regions": 256000,
+          "cities": 2000,
+          "phase": "Migrating saved checkpoint"
+        },
+        {
+          "step": 2,
+          "wallMs": 1001,
+          "done": false,
+          "pages": 128,
+          "regions": 256000,
+          "cities": 2000,
+          "phase": "Migrating saved checkpoint"
+        },
+        {
+          "step": 3,
+          "wallMs": 1004,
+          "done": false,
+          "pages": 128,
+          "regions": 256000,
+          "cities": 2000,
+          "phase": "Migrating saved checkpoint"
+        },
+        {
+          "step": 4,
+          "wallMs": 1004,
+          "done": false,
+          "pages": 128,
+          "regions": 256000,
+          "cities": 2000,
+          "phase": "Migrating saved checkpoint"
+        },
+        {
+          "step": 5,
+          "wallMs": 1002,
+          "done": false,
+          "pages": 128,
+          "regions": 256000,
+          "cities": 2000,
+          "phase": "Migrating saved checkpoint"
+        },
+        {
+          "step": 6,
+          "wallMs": 1002,
+          "done": false,
+          "pages": 128,
+          "regions": 256000,
+          "cities": 2000,
+          "phase": "Migrating saved checkpoint"
+        },
+        {
+          "step": 7,
+          "wallMs": 1006,
+          "done": false,
+          "pages": 128,
+          "regions": 256000,
+          "cities": 2000,
+          "phase": "Migrating saved checkpoint"
+        },
+        {
+          "step": 8,
+          "wallMs": 1144,
+          "done": false,
+          "pages": 128,
+          "regions": 256000,
+          "cities": 2000,
+          "phase": "Migrating saved checkpoint"
+        },
+        {
+          "step": 9,
+          "wallMs": 1004,
+          "done": false,
+          "pages": 128,
+          "regions": 256000,
+          "cities": 2000,
+          "phase": "Migrating saved checkpoint"
+        },
+        {
+          "step": 10,
+          "wallMs": 1003,
+          "done": false,
+          "pages": 128,
+          "regions": 256000,
+          "cities": 2000,
+          "phase": "Migrating saved checkpoint"
+        },
+        {
+          "step": 11,
+          "wallMs": 1001,
+          "done": false,
+          "pages": 128,
+          "regions": 256000,
+          "cities": 2000,
+          "phase": "Migrating saved checkpoint"
+        },
+        {
+          "step": 12,
+          "wallMs": 1003,
+          "done": false,
+          "pages": 128,
+          "regions": 256000,
+          "cities": 2000,
+          "phase": "Migrating saved checkpoint"
+        },
+        {
+          "step": 13,
+          "wallMs": 1004,
+          "done": false,
+          "pages": 128,
+          "regions": 256000,
+          "cities": 2000,
+          "phase": "Migrating saved checkpoint"
+        },
+        {
+          "step": 14,
+          "wallMs": 1002,
+          "done": false,
+          "pages": 128,
+          "regions": 256000,
+          "cities": 2000,
+          "phase": "Migrating saved checkpoint"
+        },
+        {
+          "step": 15,
+          "wallMs": 1003,
+          "done": false,
+          "pages": 128,
+          "regions": 256000,
+          "cities": 2000,
+          "phase": "Migrating saved checkpoint"
+        },
+        {
+          "step": 16,
+          "wallMs": 1002,
+          "done": false,
+          "pages": 128,
+          "regions": 256000,
+          "cities": 2000,
+          "phase": "Syncing pages"
+        },
+        {
+          "step": 17,
+          "wallMs": 1999,
+          "done": true,
+          "pages": 129,
+          "regions": 256001,
+          "cities": 2001,
+          "phase": "Syncing pages"
+        }
+      ]
+    },
+    {
+      "cityCount": 256000,
+      "legacyBytes": 14625854,
+      "originalEtagPreserved": true,
+      "concurrentLookupsDuringMigration": 4,
+      "steps": [
+        {
+          "step": 0,
+          "wallMs": 569,
+          "done": false,
+          "pages": 128,
+          "regions": 256000,
+          "cities": 256000,
+          "phase": "Migrating saved checkpoint"
+        },
+        {
+          "step": 1,
+          "wallMs": 572,
+          "done": false,
+          "pages": 128,
+          "regions": 256000,
+          "cities": 256000,
+          "phase": "Migrating saved checkpoint"
+        },
+        {
+          "step": 2,
+          "wallMs": 1002,
+          "done": false,
+          "pages": 128,
+          "regions": 256000,
+          "cities": 256000,
+          "phase": "Migrating saved checkpoint"
+        },
+        {
+          "step": 3,
+          "wallMs": 1003,
+          "done": false,
+          "pages": 128,
+          "regions": 256000,
+          "cities": 256000,
+          "phase": "Migrating saved checkpoint"
+        },
+        {
+          "step": 4,
+          "wallMs": 1003,
+          "done": false,
+          "pages": 128,
+          "regions": 256000,
+          "cities": 256000,
+          "phase": "Migrating saved checkpoint"
+        },
+        {
+          "step": 5,
+          "wallMs": 1002,
+          "done": false,
+          "pages": 128,
+          "regions": 256000,
+          "cities": 256000,
+          "phase": "Migrating saved checkpoint"
+        },
+        {
+          "step": 6,
+          "wallMs": 1002,
+          "done": false,
+          "pages": 128,
+          "regions": 256000,
+          "cities": 256000,
+          "phase": "Migrating saved checkpoint"
+        },
+        {
+          "step": 7,
+          "wallMs": 1003,
+          "done": false,
+          "pages": 128,
+          "regions": 256000,
+          "cities": 256000,
+          "phase": "Migrating saved checkpoint"
+        },
+        {
+          "step": 8,
+          "wallMs": 2439,
+          "done": false,
+          "pages": 128,
+          "regions": 256000,
+          "cities": 256000,
+          "phase": "Migrating saved checkpoint"
+        },
+        {
+          "step": 9,
+          "wallMs": 1003,
+          "done": false,
+          "pages": 128,
+          "regions": 256000,
+          "cities": 256000,
+          "phase": "Migrating saved checkpoint"
+        },
+        {
+          "step": 10,
+          "wallMs": 1002,
+          "done": false,
+          "pages": 128,
+          "regions": 256000,
+          "cities": 256000,
+          "phase": "Migrating saved checkpoint"
+        },
+        {
+          "step": 11,
+          "wallMs": 1003,
+          "done": false,
+          "pages": 128,
+          "regions": 256000,
+          "cities": 256000,
+          "phase": "Migrating saved checkpoint"
+        },
+        {
+          "step": 12,
+          "wallMs": 1003,
+          "done": false,
+          "pages": 128,
+          "regions": 256000,
+          "cities": 256000,
+          "phase": "Migrating saved checkpoint"
+        },
+        {
+          "step": 13,
+          "wallMs": 1004,
+          "done": false,
+          "pages": 128,
+          "regions": 256000,
+          "cities": 256000,
+          "phase": "Migrating saved checkpoint"
+        },
+        {
+          "step": 14,
+          "wallMs": 1000,
+          "done": false,
+          "pages": 128,
+          "regions": 256000,
+          "cities": 256000,
+          "phase": "Migrating saved checkpoint"
+        },
+        {
+          "step": 15,
+          "wallMs": 1010,
+          "done": false,
+          "pages": 128,
+          "regions": 256000,
+          "cities": 256000,
+          "phase": "Migrating saved checkpoint"
+        },
+        {
+          "step": 16,
+          "wallMs": 1005,
+          "done": false,
+          "pages": 128,
+          "regions": 256000,
+          "cities": 256000,
+          "phase": "Syncing pages"
+        },
+        {
+          "step": 17,
+          "wallMs": 1999,
+          "done": true,
+          "pages": 129,
+          "regions": 256001,
+          "cities": 256001,
+          "phase": "Syncing pages"
+        }
+      ]
+    }
+  ]
+}

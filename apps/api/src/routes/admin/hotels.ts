@@ -8,6 +8,19 @@ import { parseHotelBookingDetails } from "@tripcod/suppliers";
 import type { Env, Variables } from "../../types.js";
 import { cityIndexStatus, hotelClient, hotelExchanges, hotelRecorder, syncCityIndex } from "../../lib/hotels.js";
 import { hotelError, logged, pollDetails } from "../hotel.js";
+import { applySupplierStatus } from "../../lib/hotel-orders.js";
+import { hotelOrderDeps } from "../../lib/hotel-order-store.js";
+
+// Keeps a website hotel order (if this TripJack booking has one) in step with the supplier.
+async function syncOrder(c: any, bookingId: string, details: ReturnType<typeof parseHotelBookingDetails> | null) {
+  try {
+    const deps = await hotelOrderDeps(c.env, c.get("db"), c.get("tenantId"));
+    const order = await deps.store.bySupplierBooking(c.get("tenantId"), bookingId);
+    if (order && details) await applySupplierStatus(deps, order, details);
+  } catch (err) {
+    console.error(`[admin-hotels] order sync for ${bookingId} failed`, err);
+  }
+}
 
 export const hotelsAdminRoutes = new Hono<{ Bindings: Env; Variables: Variables }>();
 // Booking actions keep raw request / response logs (the city sync pages are too large to keep).
@@ -23,8 +36,11 @@ hotelsAdminRoutes.post("/city-index/sync", zValidator("json", z.object({ restart
   try {
     return c.json(await logged(c, "/hms/v3/content/fetch-city-regionIds", { restart }, () => syncCityIndex(c.env, client, restart),
       (r) => ({ ...r })));
-  } catch (err) {
-    return hotelError(c, err, "City sync failed");
+  } catch (err: any) {
+    return c.json({ error: err?.message ?? "City sync failed", errorCode: err?.code ?? "CITY_SYNC_FAILED",
+      requestId: err?.requestId, httpStatus: err?.statusCode ?? null, upstreamStatus: err?.upstreamStatus ?? null,
+      gatewayRequestId: err?.gatewayRequestId, page: err?.syncPage, pagesDone: err?.pagesDone, phase: err?.syncPhase,
+    }, 502);
   }
 });
 
@@ -45,7 +61,10 @@ hotelsAdminRoutes.get("/bookings/:bookingId", async (c) => {
   const client = await hotelClient(c.env, c.get("tenantId"), hotelRecorder(c));
   try {
     const raw = await logged(c, "/oms/v3/hotel/booking-details", { bookingId, source: "admin" }, () => client.bookingDetails(bookingId));
-    return c.json({ details: parseHotelBookingDetails(raw), raw });
+    const details = parseHotelBookingDetails(raw);
+    // An admin lookup also updates the website order (e.g. a hold the supplier auto-cancelled).
+    await syncOrder(c, bookingId, details);
+    return c.json({ details, raw });
   } catch (err) {
     return hotelError(c, err, "Could not load the hotel booking");
   }
@@ -58,6 +77,7 @@ hotelsAdminRoutes.post("/bookings/:bookingId/confirm", zValidator("json", z.obje
   try {
     await logged(c, "/oms/v3/hotel/confirm-book", { bookingId, amount }, () => client.confirmBook(bookingId, amount));
     const details = await pollDetails(c, client, bookingId, 20_000);
+    await syncOrder(c, bookingId, details);
     return c.json({ bookingId, status: details?.status ?? "IN_PROGRESS", details });
   } catch (err) {
     return hotelError(c, err, "Could not confirm the hotel booking");
@@ -70,6 +90,7 @@ hotelsAdminRoutes.post("/bookings/:bookingId/cancel", async (c) => {
   try {
     await logged(c, "/oms/v3/hotel/cancel-booking", { bookingId }, () => client.cancel(bookingId));
     const details = parseHotelBookingDetails(await client.bookingDetails(bookingId).catch(() => ({})));
+    await syncOrder(c, bookingId, details);
     return c.json({ bookingId, status: details.status || "CANCELLATION_REQUESTED", details });
   } catch (err) {
     return hotelError(c, err, "Could not cancel the hotel booking");

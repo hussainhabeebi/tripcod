@@ -1,0 +1,26 @@
+{
+  "browser": "153.0.8010.0",
+  "fixture": true,
+  "viewports": [
+    {
+      "width": 320,
+      "screen": "passengers",
+      "documentWidth": 320,
+      "viewport": 320,
+      "headings": [
+        "Complete your booking"
+      ],
+      "overflow": [],
+      "smallTargets": []
+    }
+  ],
+  "errors": [],
+  "interactions": [
+    {
+      "width": 320,
+      "screen": "passengers",
+      "result": "PASS"
+    }
+  ],
+  "bookingOrPaymentSubmissions": 0
+}

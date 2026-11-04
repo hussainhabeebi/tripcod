@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { apiCall, inr, readCustomerToken, STATUS_LABEL } from "../lib/customer-api";
 import styles from "./trips.module.css";
+import { HotelStays } from "./HotelStays";
 
 interface TripRow {
   id: string; status: string; pnr: string | null; origin: string; destination: string;
@@ -37,6 +38,7 @@ function dateLabel(value: string | null) {
 }
 
 export default function TripsPage() {
+  const [bookingTab, setBookingTab] = useState<"hotels" | "flights">("hotels");
   const [signedIn, setSignedIn] = useState<boolean | null>(null);
   const [loading, setLoading] = useState(true);
   const [trips, setTrips] = useState<TripRow[]>([]);
@@ -47,7 +49,7 @@ export default function TripsPage() {
     setSignedIn(ok);
     if (!ok) { setLoading(false); return; }
     apiCall<{ trips: TripRow[] }>("/api/profile/trips").then((data) => setTrips(data.trips))
-      .catch((e) => { if (e.status === 401 || e.status === 403) setSignedIn(false); else setError(e.message); })
+      .catch((e) => setError(e.status === 401 || e.status === 403 ? "Please sign in again to see your flight bookings." : e.message))
       .finally(() => setLoading(false));
   }, []);
   const now = new Date();
@@ -60,7 +62,7 @@ export default function TripsPage() {
       <img className={styles.heroImage} src="/trips/airplane-wing-clouds.webp" alt="" width="2048" height="694" fetchPriority="high" />
       <div className={styles.heroContent}><h1>My Trips</h1><p>Manage your bookings and travel details</p></div>
     </header>
-    {signedIn === null || (loading && signedIn) ? <div className={styles.message} role="status">Loading your bookings…</div>
+    {signedIn === null ? <div className={styles.message} role="status">Loading your bookings…</div>
       : !signedIn ? <section className={styles.message}>
         <h2>Sign in to see your trips</h2><p>Bookings made with your account will appear here.</p>
         <div className={styles.actions}>
@@ -69,20 +71,41 @@ export default function TripsPage() {
         </div>
         <p className={styles.guest}>Booked as a guest? <a href="/trips/find">Find your booking with PNR + email</a></p>
       </section> : <>
-        <nav className={styles.filters} aria-label="Filter bookings">
+        <div className={styles.bookingLayout}>
+          <div className={styles.bookingTabs} role="tablist" aria-label="Booking type" aria-orientation="vertical">
+            {(["hotels", "flights"] as const).map((tab) => <button key={tab} type="button" role="tab"
+              id={`booking-tab-${tab}`} aria-controls={`booking-panel-${tab}`} aria-selected={bookingTab === tab}
+              tabIndex={bookingTab === tab ? 0 : -1} className={`${styles.bookingTab} ${bookingTab === tab ? styles.bookingTabActive : ""}`}
+              onClick={() => setBookingTab(tab)} onKeyDown={(event) => {
+                if (!["ArrowUp", "ArrowDown", "Home", "End"].includes(event.key)) return;
+                event.preventDefault();
+                const next = event.key === "Home" ? "hotels" : event.key === "End" ? "flights" : tab === "hotels" ? "flights" : "hotels";
+                setBookingTab(next); document.getElementById(`booking-tab-${next}`)?.focus();
+              }}>{tab === "hotels" ? "Hotel Stays" : "Flight Bookings"}</button>)}
+          </div>
+          <div className={styles.bookingContent}>
+          <div role="tabpanel" id="booking-panel-hotels" aria-labelledby="booking-tab-hotels" hidden={bookingTab !== "hotels"} tabIndex={0}>
+            <HotelStays />
+          </div>
+          <div role="tabpanel" id="booking-panel-flights" aria-labelledby="booking-tab-flights" hidden={bookingTab !== "flights"} tabIndex={0}>
+        <h2 style={{ fontSize: 20, margin: "0 0 12px" }}>Flight bookings</h2>
+        <nav className={styles.filters} aria-label="Filter flight bookings">
           {filters.map(({ id, label }) => <button key={id} type="button"
             className={`${styles.filter} ${filter === id ? styles.selected : ""}`}
             aria-pressed={filter === id} onClick={() => setFilter(id)}>{label} <span className={styles.count}>{counts[id]}</span></button>)}
         </nav>
-        {error ? <div className={styles.error} role="alert">{error}</div>
+        {loading ? <div className={styles.message} role="status">Loading your flight bookings…</div> : error ? <div className={styles.error} role="alert">{error}</div>
           : visible.length ? <div className={styles.list}>{visible.map((trip) => <TripCard key={trip.id} trip={trip} />)}</div>
             : <section className={styles.message}>
               <span className={styles.emptyIcon} aria-hidden="true">✈</span>
-              <h2>{trips.length ? "No bookings in this view" : "No bookings yet"}</h2>
-              <p>{trips.length ? "Try another filter to see your other bookings." : "Your bookings will appear here after you book while signed in."}</p>
+              <h2>{trips.length ? "No flight bookings in this view" : "No flight bookings yet"}</h2>
+              <p>{trips.length ? "Try another filter to see your other bookings." : "Your flight bookings will appear here after you book while signed in."}</p>
               {trips.length ? <button type="button" className={styles.secondaryAction} onClick={() => setFilter("all")}>View all bookings</button>
                 : <a className={styles.primaryAction} href="/">Search flights</a>}
             </section>}
+          </div>
+          </div>
+        </div>
       </>}
   </div></main>;
 }

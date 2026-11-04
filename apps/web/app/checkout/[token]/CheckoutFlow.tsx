@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import BookingProgress from "../../components/BookingProgress";
 import CheckoutClient from "./CheckoutClient";
 
 const API = process.env.NEXT_PUBLIC_API_URL ?? "https://api.tripcod.com";
@@ -121,13 +122,7 @@ export default function CheckoutFlow(props: Props) {
 
   return (
     <>
-      <div className="steps" aria-label="Checkout progress">
-        {["Flight", "Passengers", "Review", "Payment"].map((label, i) => (
-          <div className={i + 1 <= stepNumber ? "step active" : "step"} key={label}>
-            <span>{i + 1 < stepNumber ? "✓" : i + 1}</span><small>{label}</small>
-          </div>
-        ))}
-      </div>
+      <BookingProgress current={stepNumber} />
 
       {step === "passengers" && (
         <>

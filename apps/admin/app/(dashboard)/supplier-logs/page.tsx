@@ -124,6 +124,8 @@ export default async function SupplierLogsPage({
         </p>
       </div>
 
+      <p><a href="/bookings#hotel-uat-logs" style={{ color: "#FFB005" }}>Hotel certification logs are now in Bookings →</a></p>
+
       {/* Error banner */}
       {fetchError && (
         <div style={{

@@ -1,7 +1,7 @@
 import { sqliteTable, text, real, integer, index } from "drizzle-orm/sqlite-core";
 
 // Tables that live in Cloudflare D1 (the primary database).
-// SQL migrations: apps/api/d1/migrations — keep this file in step with them.
+// SQL: apps/api/d1/airports/schema.sql — keep this file in step with it.
 
 export const airports = sqliteTable("airports", {
   code:        text("code").primaryKey(),

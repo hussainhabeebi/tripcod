@@ -1,5 +1,6 @@
 -- D1 (primary database) — world airport list used by the flight search boxes.
--- Data is loaded separately from apps/api/d1/seed/airports.sql.
+-- Idempotent; kept out of d1-migrations/ so it never shows up as a pending
+-- migration in the guarded release. Data: apps/api/d1/airports/seed.sql.
 CREATE TABLE IF NOT EXISTS airports (
   code         TEXT PRIMARY KEY NOT NULL,   -- IATA code, e.g. TBS
   name         TEXT NOT NULL,               -- Tbilisi International Airport

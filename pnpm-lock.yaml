@@ -151,6 +151,9 @@ importers:
 
   apps/web:
     dependencies:
+      '@tripcod/suppliers':
+        specifier: workspace:*
+        version: link:../../packages/suppliers
       '@tripcod/ui':
         specifier: workspace:*
         version: link:../../packages/ui

@@ -25,6 +25,10 @@ import { adminRoutes }         from "./routes/admin/index.js";
 import { webhookRoutes }       from "./routes/webhooks/index.js";
 import { TenantRateLimiter }   from "./lib/rate-limiter.js";
 import { handleBookingQueue, handleNotifyQueue } from "./queue-consumer.js";
+import { sweepExpiredHolds } from "./lib/hotel-order-store.js";
+
+// Must match the hold-expiry entry in wrangler.toml [triggers].
+const HOLD_EXPIRY_CRON = "*/15 * * * *";
 import { paymentRoutes }       from "./routes/payments.js";
 import { eticketRoutes }       from "./routes/eticket.js";
 import { refreshAutoRates } from "./lib/fx.js";
@@ -43,7 +47,7 @@ export { TenantRateLimiter };
 const app = new Hono<{ Bindings: Env; Variables: Variables }>();
 app.use("*", logger());
 app.use("*", secureHeaders());
-app.use("*", cors({origin:(origin)=>origin,credentials:true,allowMethods:["GET","POST","PUT","PATCH","DELETE","OPTIONS"],allowHeaders:["Content-Type","Authorization","X-Tenant-ID","X-API-Key","x-tenant-slug","X-Session-ID","X-Channel","X-TRIPCOD-INTEGRATION-KEY","X-Checkout-Token","X-Trip-Token","X-FP-Agent"],exposeHeaders:["Content-Disposition"]}));
+app.use("*", cors({origin:(origin)=>origin,credentials:true,allowMethods:["GET","POST","PUT","PATCH","DELETE","OPTIONS"],allowHeaders:["Content-Type","Authorization","X-Tenant-ID","X-API-Key","x-tenant-slug","X-Session-ID","X-Channel","X-TRIPCOD-INTEGRATION-KEY","X-Checkout-Token","X-Trip-Token","X-FP-Agent","X-Hotel-Order-Key"],exposeHeaders:["Content-Disposition"]}));
 app.get("/health",(c)=>c.json({status:"ok",env:c.env.ENVIRONMENT,worker:"tripcod-api",timestamp:new Date().toISOString()}));
 // Airport lookup reads only D1 (primary) or the bundled list — registered before
 // tenant resolution so it never needs the Neon (secondary) database.
@@ -139,8 +143,11 @@ export default {
       await handleNotifyQueue(batch as MessageBatch<never>, env);
     }
   },
-  // Cron (wrangler.toml [triggers]): re-check routes with fare alerts.
-  async scheduled(_event: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
+  // Crons (wrangler.toml [triggers]). Every run: queue TripJack status checks for
+  // hotel holds past their deadline. Every 4 hours: fare alerts and exchange rates.
+  async scheduled(event: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
+    ctx.waitUntil(sweepExpiredHolds(env).then((r) => console.info("[hotel-hold-expiry] sweep", r)).catch((err) => console.error("[hotel-hold-expiry] sweep", err)));
+    if (event.cron === HOLD_EXPIRY_CRON) return;
     ctx.waitUntil(sweepFareAlerts(env).then((r) => console.info("[fare-alert-sweep]", r)).catch((err) => console.error("[fare-alert-sweep]", err)));
     // Automatic exchange rates (INR ↔ GCC currencies, USD) for prices and AED payments.
     ctx.waitUntil(refreshAutoRates(env).then((r) => console.info("[fx] auto rates", r.ok ? r.rates.source : r.error)).catch((err) => console.error("[fx]", err)));

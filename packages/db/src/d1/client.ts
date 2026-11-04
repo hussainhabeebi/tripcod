@@ -5,7 +5,7 @@ import * as d1Schema from "./schema.js";
 // @cloudflare/workers-types.
 type D1Binding = Parameters<typeof drizzle>[0];
 
-// Primary database: Cloudflare D1 (bound as `DB` in apps/api/wrangler.toml).
+// Primary database: Cloudflare D1 (bound as `HOTEL_DB` in apps/api/wrangler.toml).
 // Neon (see ../client.ts) is the secondary database for tables not yet moved.
 export function createD1Db(binding: D1Binding) {
   return drizzle(binding, { schema: d1Schema });

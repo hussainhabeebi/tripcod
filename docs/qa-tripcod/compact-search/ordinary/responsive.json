@@ -1,0 +1,122 @@
+{
+  "browser": "153.0.8010.0",
+  "fixture": true,
+  "viewports": [
+    {
+      "width": 320,
+      "screen": "home",
+      "documentWidth": 320,
+      "viewport": 320,
+      "headings": [
+        "Good journeysstart with better choices."
+      ],
+      "overflow": [],
+      "smallTargets": []
+    },
+    {
+      "width": 375,
+      "screen": "home",
+      "documentWidth": 375,
+      "viewport": 375,
+      "headings": [
+        "Good journeysstart with better choices."
+      ],
+      "overflow": [],
+      "smallTargets": []
+    },
+    {
+      "width": 390,
+      "screen": "home",
+      "documentWidth": 390,
+      "viewport": 390,
+      "headings": [
+        "Good journeysstart with better choices."
+      ],
+      "overflow": [],
+      "smallTargets": []
+    },
+    {
+      "width": 428,
+      "screen": "home",
+      "documentWidth": 428,
+      "viewport": 428,
+      "headings": [
+        "Good journeysstart with better choices."
+      ],
+      "overflow": [],
+      "smallTargets": []
+    },
+    {
+      "width": 768,
+      "screen": "home",
+      "documentWidth": 768,
+      "viewport": 768,
+      "headings": [
+        "Good journeysstart with better choices."
+      ],
+      "overflow": [],
+      "smallTargets": []
+    },
+    {
+      "width": 1024,
+      "screen": "home",
+      "documentWidth": 1024,
+      "viewport": 1024,
+      "headings": [
+        "Good journeysstart with better choices."
+      ],
+      "overflow": [],
+      "smallTargets": []
+    },
+    {
+      "width": 1440,
+      "screen": "home",
+      "documentWidth": 1440,
+      "viewport": 1440,
+      "headings": [
+        "Good journeysstart with better choices."
+      ],
+      "overflow": [],
+      "smallTargets": []
+    }
+  ],
+  "errors": [],
+  "interactions": [
+    {
+      "width": 320,
+      "screen": "home",
+      "result": "PASS"
+    },
+    {
+      "width": 375,
+      "screen": "home",
+      "result": "PASS"
+    },
+    {
+      "width": 390,
+      "screen": "home",
+      "result": "PASS"
+    },
+    {
+      "width": 428,
+      "screen": "home",
+      "result": "PASS"
+    },
+    {
+      "width": 768,
+      "screen": "home",
+      "result": "PASS"
+    },
+    {
+      "width": 1024,
+      "screen": "home",
+      "result": "PASS"
+    },
+    {
+      "width": 1440,
+      "screen": "home",
+      "result": "PASS"
+    }
+  ],
+  "bookingOrPaymentSubmissions": 0
+}

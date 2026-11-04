@@ -1,0 +1,689 @@
+{
+  "browser": "153.0.8010.0",
+  "fixture": true,
+  "viewports": [
+    {
+      "width": 320,
+      "screen": "home",
+      "documentWidth": 320,
+      "viewport": 320,
+      "headings": [
+        "Good journeysstart with better choices."
+      ],
+      "overflow": [],
+      "smallTargets": []
+    },
+    {
+      "width": 320,
+      "screen": "results",
+      "documentWidth": 320,
+      "viewport": 320,
+      "headings": [
+        "COK → DXB"
+      ],
+      "overflow": [],
+      "smallTargets": []
+    },
+    {
+      "width": 320,
+      "screen": "passengers",
+      "documentWidth": 320,
+      "viewport": 320,
+      "headings": [
+        "Complete your booking"
+      ],
+      "overflow": [],
+      "smallTargets": []
+    },
+    {
+      "width": 320,
+      "screen": "checkout",
+      "documentWidth": 320,
+      "viewport": 320,
+      "headings": [
+        "Complete Your Booking"
+      ],
+      "overflow": [],
+      "smallTargets": []
+    },
+    {
+      "width": 320,
+      "screen": "trips",
+      "documentWidth": 320,
+      "viewport": 320,
+      "headings": [
+        "My Trips"
+      ],
+      "overflow": [],
+      "smallTargets": []
+    },
+    {
+      "width": 320,
+      "screen": "journey",
+      "documentWidth": 320,
+      "viewport": 320,
+      "headings": [
+        "COK ⇄ DXB"
+      ],
+      "overflow": [],
+      "smallTargets": []
+    },
+    {
+      "width": 375,
+      "screen": "home",
+      "documentWidth": 375,
+      "viewport": 375,
+      "headings": [
+        "Good journeysstart with better choices."
+      ],
+      "overflow": [],
+      "smallTargets": []
+    },
+    {
+      "width": 375,
+      "screen": "results",
+      "documentWidth": 375,
+      "viewport": 375,
+      "headings": [
+        "COK → DXB"
+      ],
+      "overflow": [],
+      "smallTargets": []
+    },
+    {
+      "width": 375,
+      "screen": "passengers",
+      "documentWidth": 375,
+      "viewport": 375,
+      "headings": [
+        "Complete your booking"
+      ],
+      "overflow": [],
+      "smallTargets": []
+    },
+    {
+      "width": 375,
+      "screen": "checkout",
+      "documentWidth": 375,
+      "viewport": 375,
+      "headings": [
+        "Complete Your Booking"
+      ],
+      "overflow": [],
+      "smallTargets": []
+    },
+    {
+      "width": 375,
+      "screen": "trips",
+      "documentWidth": 375,
+      "viewport": 375,
+      "headings": [
+        "My Trips"
+      ],
+      "overflow": [],
+      "smallTargets": []
+    },
+    {
+      "width": 375,
+      "screen": "journey",
+      "documentWidth": 375,
+      "viewport": 375,
+      "headings": [
+        "COK ⇄ DXB"
+      ],
+      "overflow": [],
+      "smallTargets": []
+    },
+    {
+      "width": 390,
+      "screen": "home",
+      "documentWidth": 390,
+      "viewport": 390,
+      "headings": [
+        "Good journeysstart with better choices."
+      ],
+      "overflow": [],
+      "smallTargets": []
+    },
+    {
+      "width": 390,
+      "screen": "results",
+      "documentWidth": 390,
+      "viewport": 390,
+      "headings": [
+        "COK → DXB"
+      ],
+      "overflow": [],
+      "smallTargets": []
+    },
+    {
+      "width": 390,
+      "screen": "passengers",
+      "documentWidth": 390,
+      "viewport": 390,
+      "headings": [
+        "Complete your booking"
+      ],
+      "overflow": [],
+      "smallTargets": []
+    },
+    {
+      "width": 390,
+      "screen": "checkout",
+      "documentWidth": 390,
+      "viewport": 390,
+      "headings": [
+        "Complete Your Booking"
+      ],
+      "overflow": [],
+      "smallTargets": []
+    },
+    {
+      "width": 390,
+      "screen": "trips",
+      "documentWidth": 390,
+      "viewport": 390,
+      "headings": [
+        "My Trips"
+      ],
+      "overflow": [],
+      "smallTargets": []
+    },
+    {
+      "width": 390,
+      "screen": "journey",
+      "documentWidth": 390,
+      "viewport": 390,
+      "headings": [
+        "COK ⇄ DXB"
+      ],
+      "overflow": [],
+      "smallTargets": []
+    },
+    {
+      "width": 428,
+      "screen": "home",
+      "documentWidth": 428,
+      "viewport": 428,
+      "headings": [
+        "Good journeysstart with better choices."
+      ],
+      "overflow": [],
+      "smallTargets": []
+    },
+    {
+      "width": 428,
+      "screen": "results",
+      "documentWidth": 428,
+      "viewport": 428,
+      "headings": [
+        "COK → DXB"
+      ],
+      "overflow": [],
+      "smallTargets": []
+    },
+    {
+      "width": 428,
+      "screen": "passengers",
+      "documentWidth": 428,
+      "viewport": 428,
+      "headings": [
+        "Complete your booking"
+      ],
+      "overflow": [],
+      "smallTargets": []
+    },
+    {
+      "width": 428,
+      "screen": "checkout",
+      "documentWidth": 428,
+      "viewport": 428,
+      "headings": [
+        "Complete Your Booking"
+      ],
+      "overflow": [],
+      "smallTargets": []
+    },
+    {
+      "width": 428,
+      "screen": "trips",
+      "documentWidth": 428,
+      "viewport": 428,
+      "headings": [
+        "My Trips"
+      ],
+      "overflow": [],
+      "smallTargets": []
+    },
+    {
+      "width": 428,
+      "screen": "journey",
+      "documentWidth": 428,
+      "viewport": 428,
+      "headings": [
+        "COK ⇄ DXB"
+      ],
+      "overflow": [],
+      "smallTargets": []
+    },
+    {
+      "width": 768,
+      "screen": "home",
+      "documentWidth": 768,
+      "viewport": 768,
+      "headings": [
+        "Good journeysstart with better choices."
+      ],
+      "overflow": [],
+      "smallTargets": []
+    },
+    {
+      "width": 768,
+      "screen": "results",
+      "documentWidth": 768,
+      "viewport": 768,
+      "headings": [
+        "COK → DXB"
+      ],
+      "overflow": [],
+      "smallTargets": []
+    },
+    {
+      "width": 768,
+      "screen": "passengers",
+      "documentWidth": 768,
+      "viewport": 768,
+      "headings": [
+        "Complete your booking"
+      ],
+      "overflow": [],
+      "smallTargets": []
+    },
+    {
+      "width": 768,
+      "screen": "checkout",
+      "documentWidth": 768,
+      "viewport": 768,
+      "headings": [
+        "Complete Your Booking"
+      ],
+      "overflow": [],
+      "smallTargets": []
+    },
+    {
+      "width": 768,
+      "screen": "trips",
+      "documentWidth": 768,
+      "viewport": 768,
+      "headings": [
+        "My Trips"
+      ],
+      "overflow": [],
+      "smallTargets": []
+    },
+    {
+      "width": 768,
+      "screen": "journey",
+      "documentWidth": 768,
+      "viewport": 768,
+      "headings": [
+        "COK ⇄ DXB"
+      ],
+      "overflow": [],
+      "smallTargets": []
+    },
+    {
+      "width": 1024,
+      "screen": "home",
+      "documentWidth": 1024,
+      "viewport": 1024,
+      "headings": [
+        "Good journeysstart with better choices."
+      ],
+      "overflow": [],
+      "smallTargets": []
+    },
+    {
+      "width": 1024,
+      "screen": "results",
+      "documentWidth": 1024,
+      "viewport": 1024,
+      "headings": [
+        "COK → DXB"
+      ],
+      "overflow": [],
+      "smallTargets": []
+    },
+    {
+      "width": 1024,
+      "screen": "passengers",
+      "documentWidth": 1024,
+      "viewport": 1024,
+      "headings": [
+        "Complete your booking"
+      ],
+      "overflow": [],
+      "smallTargets": []
+    },
+    {
+      "width": 1024,
+      "screen": "checkout",
+      "documentWidth": 1024,
+      "viewport": 1024,
+      "headings": [
+        "Complete Your Booking"
+      ],
+      "overflow": [],
+      "smallTargets": []
+    },
+    {
+      "width": 1024,
+      "screen": "trips",
+      "documentWidth": 1024,
+      "viewport": 1024,
+      "headings": [
+        "My Trips"
+      ],
+      "overflow": [],
+      "smallTargets": []
+    },
+    {
+      "width": 1024,
+      "screen": "journey",
+      "documentWidth": 1024,
+      "viewport": 1024,
+      "headings": [
+        "COK ⇄ DXB"
+      ],
+      "overflow": [],
+      "smallTargets": []
+    },
+    {
+      "width": 1440,
+      "screen": "home",
+      "documentWidth": 1440,
+      "viewport": 1440,
+      "headings": [
+        "Good journeysstart with better choices."
+      ],
+      "overflow": [],
+      "smallTargets": []
+    },
+    {
+      "width": 1440,
+      "screen": "results",
+      "documentWidth": 1440,
+      "viewport": 1440,
+      "headings": [
+        "COK → DXB"
+      ],
+      "overflow": [],
+      "smallTargets": []
+    },
+    {
+      "width": 1440,
+      "screen": "passengers",
+      "documentWidth": 1440,
+      "viewport": 1440,
+      "headings": [
+        "Complete your booking"
+      ],
+      "overflow": [],
+      "smallTargets": []
+    },
+    {
+      "width": 1440,
+      "screen": "checkout",
+      "documentWidth": 1440,
+      "viewport": 1440,
+      "headings": [
+        "Complete Your Booking"
+      ],
+      "overflow": [],
+      "smallTargets": []
+    },
+    {
+      "width": 1440,
+      "screen": "trips",
+      "documentWidth": 1440,
+      "viewport": 1440,
+      "headings": [
+        "My Trips"
+      ],
+      "overflow": [],
+      "smallTargets": []
+    },
+    {
+      "width": 1440,
+      "screen": "journey",
+      "documentWidth": 1440,
+      "viewport": 1440,
+      "headings": [
+        "COK ⇄ DXB"
+      ],
+      "overflow": [],
+      "smallTargets": []
+    }
+  ],
+  "errors": [],
+  "interactions": [
+    {
+      "width": 320,
+      "screen": "home",
+      "result": "PASS"
+    },
+    {
+      "width": 320,
+      "screen": "results",
+      "result": "PASS"
+    },
+    {
+      "width": 320,
+      "screen": "passengers",
+      "result": "PASS"
+    },
+    {
+      "width": 320,
+      "screen": "checkout",
+      "result": "PASS"
+    },
+    {
+      "width": 320,
+      "screen": "trips",
+      "result": "PASS"
+    },
+    {
+      "width": 320,
+      "screen": "journey",
+      "result": "PASS"
+    },
+    {
+      "width": 375,
+      "screen": "home",
+      "result": "PASS"
+    },
+    {
+      "width": 375,
+      "screen": "results",
+      "result": "PASS"
+    },
+    {
+      "width": 375,
+      "screen": "passengers",
+      "result": "PASS"
+    },
+    {
+      "width": 375,
+      "screen": "checkout",
+      "result": "PASS"
+    },
+    {
+      "width": 375,
+      "screen": "trips",
+      "result": "PASS"
+    },
+    {
+      "width": 375,
+      "screen": "journey",
+      "result": "PASS"
+    },
+    {
+      "width": 390,
+      "screen": "home",
+      "result": "PASS"
+    },
+    {
+      "width": 390,
+      "screen": "results",
+      "result": "PASS"
+    },
+    {
+      "width": 390,
+      "screen": "passengers",
+      "result": "PASS"
+    },
+    {
+      "width": 390,
+      "screen": "checkout",
+      "result": "PASS"
+    },
+    {
+      "width": 390,
+      "screen": "trips",
+      "result": "PASS"
+    },
+    {
+      "width": 390,
+      "screen": "journey",
+      "result": "PASS"
+    },
+    {
+      "width": 428,
+      "screen": "home",
+      "result": "PASS"
+    },
+    {
+      "width": 428,
+      "screen": "results",
+      "result": "PASS"
+    },
+    {
+      "width": 428,
+      "screen": "passengers",
+      "result": "PASS"
+    },
+    {
+      "width": 428,
+      "screen": "checkout",
+      "result": "PASS"
+    },
+    {
+      "width": 428,
+      "screen": "trips",
+      "result": "PASS"
+    },
+    {
+      "width": 428,
+      "screen": "journey",
+      "result": "PASS"
+    },
+    {
+      "width": 768,
+      "screen": "home",
+      "result": "PASS"
+    },
+    {
+      "width": 768,
+      "screen": "results",
+      "result": "PASS"
+    },
+    {
+      "width": 768,
+      "screen": "passengers",
+      "result": "PASS"
+    },
+    {
+      "width": 768,
+      "screen": "checkout",
+      "result": "PASS"
+    },
+    {
+      "width": 768,
+      "screen": "trips",
+      "result": "PASS"
+    },
+    {
+      "width": 768,
+      "screen": "journey",
+      "result": "PASS"
+    },
+    {
+      "width": 1024,
+      "screen": "home",
+      "result": "PASS"
+    },
+    {
+      "width": 1024,
+      "screen": "results",
+      "result": "PASS"
+    },
+    {
+      "width": 1024,
+      "screen": "passengers",
+      "result": "PASS"
+    },
+    {
+      "width": 1024,
+      "screen": "checkout",
+      "result": "PASS"
+    },
+    {
+      "width": 1024,
+      "screen": "trips",
+      "result": "PASS"
+    },
+    {
+      "width": 1024,
+      "screen": "journey",
+      "result": "PASS"
+    },
+    {
+      "width": 1440,
+      "screen": "home",
+      "result": "PASS"
+    },
+    {
+      "width": 1440,
+      "screen": "results",
+      "result": "PASS"
+    },
+    {
+      "width": 1440,
+      "screen": "passengers",
+      "result": "PASS"
+    },
+    {
+      "width": 1440,
+      "screen": "checkout",
+      "result": "PASS"
+    },
+    {
+      "width": 1440,
+      "screen": "trips",
+      "result": "PASS"
+    },
+    {
+      "width": 1440,
+      "screen": "journey",
+      "result": "PASS"
+    }
+  ],
+  "bookingOrPaymentSubmissions": 0,
+  "focusedRecheck": "checkbox-recheck.json",
+  "finalChecks": {
+    "allInteractionsPassed": true,
+    "noPageOverflow": true,
+    "noSmallControls": true,
+    "noRuntimeErrors": true
+  }
+}

@@ -77,6 +77,7 @@ function PaymentSettings() {
     defaultGateway: "NOMOD" as "RAZORPAY" | "NOMOD",
     razorpay: { enabled: false, keyId: "", keySecret: "", webhookSecret: "" },
     nomod:    { enabled: false, apiKey: "", apiSecret: "", webhookSecret: "", environment: "production" as "sandbox" | "production", allowTabby: true, allowTamara: true, configured: false, aedRate: null as number | null },
+    phonepe:  { enabled: false, environment: "UAT" as "UAT" | "PRODUCTION", configured: false, missingSecrets: [] as string[] },
   });
 
   useEffect(() => {
@@ -93,7 +94,7 @@ function PaymentSettings() {
       const res = await fetch(`${API}/api/admin/settings/payments`, {
         method: "PUT",
         headers: apiHeaders(),
-        body: JSON.stringify(s),
+        body: JSON.stringify({ ...s, phonepe: { enabled: s.phonepe.enabled } }),
       });
       if (!res.ok) throw new Error("Save failed");
       setSaved(true);
@@ -190,6 +191,16 @@ function PaymentSettings() {
             </div>
           </>
         )}
+      </div>
+
+      {/* PhonePe PG v2 — credentials are Worker secrets, never entered here */}
+      <div style={{ background: "#0f172a", borderRadius: 10, padding: 16, marginBottom: 16 }}>
+        <Toggle label={`Enable PhonePe (${s.phonepe.environment === "PRODUCTION" ? "Production" : "UAT / test"})`}
+          description="UPI, cards and netbanking in INR via PhonePe Standard Checkout v2 — flights and hotels"
+          checked={s.phonepe.enabled} onChange={(v) => setS((p) => ({ ...p, phonepe: { ...p.phonepe, enabled: v } }))} color="#5f259f" />
+        {s.phonepe.configured
+          ? <Hint>Credentials for <b>{s.phonepe.environment}</b> are set on the API Worker. Webhook URL: <code style={codeStyle}>https://api.tripcod.com/webhooks/phonepe</code> (set the same username / password on the PhonePe dashboard).</Hint>
+          : <Hint style={{ color: "#fbbf24" }}>PhonePe stays off at checkout until these Worker secrets are set: {s.phonepe.missingSecrets.join(", ") || "—"}.</Hint>}
       </div>
 
       {error && <ErrorBanner>{error}</ErrorBanner>}
