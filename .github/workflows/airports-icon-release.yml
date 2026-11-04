@@ -1,0 +1,231 @@
+name: World airport search + Google site icon — API + Web release
+
+# Releases PR #34 (airport search, merge de4d472) and PR #35 (site icon,
+# sitemap, robots; merge decbab7) to tripcod-api and tripcod-web.
+#   mode=preflight  read only: gates, typecheck, record serving versions, read D1.
+#   mode=release    re-runs the gates, then:
+#     D1 tripcod-hotels: Time Travel bookmark → create `airports` table (new,
+#       additive; hotel_bookings untouched) → load 5,405 airports → verify
+#     tripcod-api uploaded as a non-serving version, bindings/runtime checked,
+#       activated, smoke-checked (/health, /api/airports/search?q=tbil → TBS)
+#     tripcod-web the same, smoke-checked (home, icons, robots.txt, sitemap.xml)
+# Any failure after an activation restores every Worker to its recorded version.
+# The airports table is ignored by the previous API version, so it can stay.
+# No Neon, payment, booking, supplier or secret change.
+on:
+  push:
+    branches: [claude/dazzling-knuth-46ke0q]
+    paths: [.github/release/airports-icon-mode.txt]
+
+permissions:
+  contents: read
+concurrency:
+  group: tripcod-production-release
+  cancel-in-progress: false
+
+env:
+  RELEASE_COMMIT: decbab7791259097d22ffd4d1082d337126ce2e1
+  LIVE_API_COMMIT: 5bb3cfdf37d165370830802d1f8ece93efbbe7d1   # PR #31, serving tripcod-api
+  LIVE_WEB_COMMIT: f5e61a5cdc0ab836095c4a01b507d33a3ca9ad95   # PR #33, serving tripcod-web
+  CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+  CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+  WRANGLER_SEND_METRICS: "false"
+  NEXT_TELEMETRY_DISABLED: "1"
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+
+      - name: Mode
+        run: |
+          mode=$(tr -d '[:space:]' < .github/release/airports-icon-mode.txt)
+          case "$mode" in preflight|release) ;; *) echo "mode must be preflight or release"; exit 1;; esac
+          echo "MODE=$mode" >> "$GITHUB_ENV"; echo "Mode: $mode"
+
+      - name: Gate — code is merged main and differs from the live code only by PR #34 / #35
+        run: |
+          git merge-base --is-ancestor "$RELEASE_COMMIT" origin/main
+          git diff --exit-code "$RELEASE_COMMIT" HEAD -- apps packages pnpm-lock.yaml
+          api=$(git diff --name-only "$LIVE_API_COMMIT" "$RELEASE_COMMIT" -- apps/api packages pnpm-lock.yaml | sort)
+          web=$(git diff --name-only "$LIVE_WEB_COMMIT" "$RELEASE_COMMIT" -- apps/web packages pnpm-lock.yaml | sort)
+          exp_api=$(printf '%s\n' apps/api/d1/airports/schema.sql apps/api/d1/airports/seed.sql apps/api/package.json \
+            apps/api/src/data/airports.json apps/api/src/index.ts apps/api/src/routes/airports.ts apps/api/src/types.ts \
+            apps/api/tsconfig.json apps/api/wrangler.toml packages/db/package.json packages/db/scripts/build-airports.mjs \
+            packages/db/src/d1/client.ts packages/db/src/d1/index.ts packages/db/src/d1/schema.ts | sort)
+          exp_web=$(printf '%s\n' apps/web/app/components/SearchWidget.tsx apps/web/app/globals.css apps/web/app/icon.png \
+            apps/web/app/layout.tsx apps/web/app/robots.ts apps/web/app/sitemap.ts apps/web/public/favicon-192x192.png \
+            apps/web/public/favicon-48x48.png apps/web/public/favicon-96x96.png apps/web/public/manifest.json \
+            packages/db/package.json packages/db/scripts/build-airports.mjs packages/db/src/d1/client.ts \
+            packages/db/src/d1/index.ts packages/db/src/d1/schema.ts | sort)
+          echo "API changes:"; echo "$api"; echo "Web changes:"; echo "$web"
+          [ "$api" = "$exp_api" ] || { echo "STOP: unexpected API changes"; exit 1; }
+          [ "$web" = "$exp_web" ] || { echo "STOP: unexpected website changes"; exit 1; }
+
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+
+      - name: Gate — typecheck and airport data
+        run: |
+          pnpm --filter @tripcod/api typecheck
+          (cd apps/web && pnpm exec tsc --noEmit -p .)
+          node -e '
+            const a = require("./apps/api/src/data/airports.json");
+            const tbs = a.find((r) => r[0] === "TBS");
+            if (a.length < 5000 || !tbs) { console.error("airport list incomplete"); process.exit(1); }
+            console.log(a.length + " airports; TBS = " + tbs[2]);'
+          grep -c "^INSERT INTO airports" apps/api/d1/airports/seed.sql
+
+      - name: Cloudflare helper
+        run: |
+          cat > "$RUNNER_TEMP/cf.py" <<'PY'
+          import json, os, pathlib, re, sys, urllib.request, urllib.error
+          root = pathlib.Path(os.environ["RUNNER_TEMP"])
+          base = "https://api.cloudflare.com/client/v4/accounts/" + os.environ["CLOUDFLARE_ACCOUNT_ID"]
+          WORKERS = ["tripcod-api", "tripcod-web"]
+          EXPECTED = {"tripcod-api": "Hotel booking logs UI release", "tripcod-web": "Website header without Hotels"}
+          def req(path, payload=None):
+              h = {"Authorization": "Bearer " + os.environ["CLOUDFLARE_API_TOKEN"]}
+              if payload is not None: h["Content-Type"] = "application/json"
+              r = urllib.request.Request(base + path, data=None if payload is None else json.dumps(payload).encode(), headers=h, method="GET" if payload is None else "POST")
+              try:
+                  with urllib.request.urlopen(r, timeout=60) as res: v = json.load(res)
+              except urllib.error.HTTPError as e: raise SystemExit("Cloudflare HTTP %s for %s" % (e.code, path))
+              if not v.get("success"): raise SystemExit("Cloudflare call failed: " + path)
+              return v["result"]
+          def deployment(w): return req("/workers/scripts/%s/deployments" % w)["deployments"][0]
+          def version(w, vid): return req("/workers/scripts/%s/versions/%s" % (w, vid))
+          def bind(v): return {(b.get("name"), b.get("type")) for b in v["resources"].get("bindings", [])}
+          mode = sys.argv[1]
+          if mode == "record":
+              for w in WORKERS:
+                  d = deployment(w); vs = d["versions"]
+                  if len(vs) != 1 or vs[0]["percentage"] != 100: raise SystemExit(w + ": split deployment in progress — stop")
+                  note = (d.get("annotations") or {}).get("workers/message", "")
+                  print(json.dumps({"worker": w, "rollbackVersion": vs[0]["version_id"], "deployedAt": d.get("created_on"), "note": note}))
+                  if EXPECTED[w] not in note: raise SystemExit(w + ": serving version is not the recorded release (" + EXPECTED[w] + ") — stop and review")
+                  (root / (w + "-before.json")).write_text(json.dumps(version(w, vs[0]["version_id"])))
+                  (root / (w + "-rollback.txt")).write_text(vs[0]["version_id"])
+          elif mode == "activate":
+              w = sys.argv[2]
+              m = re.search(r"Worker Version ID:\s*([0-9a-f-]{36})", pathlib.Path(sys.argv[3]).read_text())
+              if not m: raise SystemExit(w + ": uploaded version id missing — not activated")
+              old = json.loads((root / (w + "-before.json")).read_text()); new = version(w, m[1])
+              if bind(new) != bind(old): raise SystemExit(w + ": bindings differ — not activated")
+              o, n = old["resources"].get("script_runtime", {}), new["resources"].get("script_runtime", {})
+              for k in ("compatibility_date", "compatibility_flags", "limits"):
+                  if o.get(k) != n.get(k): raise SystemExit(w + ": runtime %s differs — not activated" % k)
+              (root / (w + "-activated")).write_text(m[1])
+              req("/workers/scripts/%s/deployments" % w, {"strategy": "percentage", "versions": [{"version_id": m[1], "percentage": 100}],
+                  "annotations": {"workers/message": "Airport search + site icon release %s" % os.environ["RELEASE_COMMIT"][:7]}})
+              print(json.dumps({"activated": w, "version": m[1]}))
+          elif mode == "after":
+              for w in WORKERS: print(json.dumps({"worker": w, "serving": deployment(w)["versions"]}))
+          elif mode == "rollback":
+              for w in WORKERS:
+                  if (root / (w + "-activated")).exists():
+                      vid = (root / (w + "-rollback.txt")).read_text()
+                      req("/workers/scripts/%s/deployments" % w, {"strategy": "percentage", "versions": [{"version_id": vid, "percentage": 100}],
+                          "annotations": {"workers/message": "Rollback of airport search + site icon release"}})
+                      print(json.dumps({"rolledBack": w, "version": vid}))
+          PY
+
+      - name: Record serving versions (rollback points)
+        run: python3 "$RUNNER_TEMP/cf.py" record
+
+      - name: D1 — current tables (read only)
+        working-directory: apps/api
+        run: |
+          pnpm exec wrangler d1 info tripcod-hotels
+          pnpm exec wrangler d1 execute tripcod-hotels --remote --json \
+            --command "SELECT type, name FROM sqlite_master WHERE name NOT LIKE 'sqlite_%' AND name NOT LIKE '_cf_%' ORDER BY type, name" | tee "$RUNNER_TEMP/d1-objects.json"
+
+      # ── Release ──────────────────────────────────────────────────────────
+      - name: D1 — Time Travel bookmark, create and load the airports table, verify
+        if: env.MODE == 'release'
+        working-directory: apps/api
+        run: |
+          set -o pipefail
+          echo "D1 restore point:"; pnpm exec wrangler d1 time-travel info tripcod-hotels
+          pnpm exec wrangler d1 execute tripcod-hotels --remote --file d1/airports/schema.sql
+          pnpm exec wrangler d1 execute tripcod-hotels --remote --file d1/airports/seed.sql
+          pnpm exec wrangler d1 execute tripcod-hotels --remote --json \
+            --command "SELECT (SELECT count(*) FROM airports) AS airports, (SELECT city FROM airports WHERE code='TBS') AS tbs" | tee "$RUNNER_TEMP/d1-airports.json"
+          grep -q '"tbs": *"Tbilisi"' "$RUNNER_TEMP/d1-airports.json" || { echo "airports table not loaded"; exit 1; }
+
+      - name: Build website (production API URL)
+        if: env.MODE == 'release'
+        working-directory: apps/web
+        env: { NEXT_PUBLIC_API_URL: https://api.tripcod.com }
+        run: pnpm exec opennextjs-cloudflare build --dangerouslyUseUnsupportedNextVersion
+
+      - name: Upload, verify, activate API
+        if: env.MODE == 'release'
+        working-directory: apps/api
+        run: |
+          set -o pipefail
+          pnpm exec wrangler versions upload --keep-vars --message "Airport search + site icon $RELEASE_COMMIT" 2>&1 | tee "$RUNNER_TEMP/api.log"
+          python3 "$RUNNER_TEMP/cf.py" activate tripcod-api "$RUNNER_TEMP/api.log"
+
+      - name: Smoke — API health and airport search
+        if: env.MODE == 'release'
+        run: |
+          python3 - <<'PY'
+          import json, time, urllib.request
+          def get(url):
+              r = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 tripcod-release", "Cache-Control": "no-cache"})
+              with urllib.request.urlopen(r, timeout=60) as res: return res.status, res.read().decode("utf-8", "replace")
+          for i in range(12):
+              try:
+                  s, body = get("https://api.tripcod.com/api/airports/search?q=tbil&release-check=%d" % i)
+                  if s == 200 and any(a["code"] == "TBS" for a in json.loads(body)["airports"]): break
+              except Exception as e: print("waiting:", e)
+              time.sleep(5)
+          else:
+              raise SystemExit("airport search does not return Tbilisi after 60 s")
+          print("api.tripcod.com/api/airports/search?q=tbil → TBS")
+          s, body = get("https://api.tripcod.com/api/airports/CCJ"); print("CCJ", s, body); assert s == 200 and "Kozhikode" in body
+          s, _ = get("https://api.tripcod.com/health"); print("/health", s); assert s == 200
+          PY
+
+      - name: Upload, verify, activate website
+        if: env.MODE == 'release'
+        working-directory: apps/web
+        run: |
+          set -o pipefail
+          pnpm exec wrangler versions upload --keep-vars --message "Airport search + site icon $RELEASE_COMMIT" 2>&1 | tee "$RUNNER_TEMP/web.log"
+          python3 "$RUNNER_TEMP/cf.py" activate tripcod-web "$RUNNER_TEMP/web.log"
+
+      - name: Smoke — website, icons, robots.txt, sitemap
+        if: env.MODE == 'release'
+        run: |
+          python3 - <<'PY'
+          import time, urllib.request
+          def get(url):
+              r = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 tripcod-release", "Cache-Control": "no-cache"})
+              with urllib.request.urlopen(r, timeout=60) as res: return res.status, res.read().decode("utf-8", "replace")
+          for i in range(12):
+              s, html = get("https://tripcod.com/?release-check=%d" % i)
+              if s == 200 and "/favicon-48x48.png" in html and '"TravelAgency"' in html: break
+              time.sleep(5)
+          else:
+              raise SystemExit("home page does not carry the new icon links after 60 s")
+          print("tripcod.com: new icon links and logo data present")
+          s, body = get("https://tripcod.com/robots.txt"); print("/robots.txt", s); assert s == 200 and "sitemap.xml" in body
+          s, body = get("https://tripcod.com/sitemap.xml"); print("/sitemap.xml", s); assert s == 200 and "<urlset" in body
+          for path in ("/favicon-48x48.png", "/favicon-96x96.png", "/favicon-192x192.png", "/favicon.ico", "/",
+                       "/trips", "/destinations", "/services", "/checkout/payment-result"):
+              s, _ = get("https://tripcod.com" + path); print(path, s); assert s == 200, path
+          PY
+          python3 "$RUNNER_TEMP/cf.py" after
+
+      - name: Restore recorded Worker versions on any failure
+        if: failure() && env.MODE == 'release'
+        run: |
+          python3 "$RUNNER_TEMP/cf.py" rollback
+          echo "Restored every Worker that had been activated (none listed = nothing had been changed)."
