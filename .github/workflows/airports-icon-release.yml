@@ -42,7 +42,7 @@ jobs:
 
       - name: Mode
         run: |
-          mode=$(tr -d '[:space:]' < .github/release/airports-icon-mode.txt)
+          mode=$(head -n1 .github/release/airports-icon-mode.txt | tr -d '[:space:]')   # later lines: notes / attempt
           case "$mode" in preflight|release) ;; *) echo "mode must be preflight or release"; exit 1;; esac
           echo "MODE=$mode" >> "$GITHUB_ENV"; echo "Mode: $mode"
 
@@ -111,6 +111,9 @@ jobs:
                   if EXPECTED[w] not in note: raise SystemExit(w + ": serving version is not the recorded release (" + EXPECTED[w] + ") — stop and review")
                   (root / (w + "-before.json")).write_text(json.dumps(version(w, vs[0]["version_id"])))
                   (root / (w + "-rollback.txt")).write_text(vs[0]["version_id"])
+          elif mode == "limits":
+              lim = json.loads((root / "tripcod-api-before.json").read_text())["resources"].get("script_runtime", {}).get("limits") or {}
+              if lim.get("cpu_ms"): print("\n[limits]\ncpu_ms = %d" % int(lim["cpu_ms"]))
           elif mode == "activate":
               w = sys.argv[2]
               m = re.search(r"Worker Version ID:\s*([0-9a-f-]{36})", pathlib.Path(sys.argv[3]).read_text())
@@ -119,7 +122,7 @@ jobs:
               if bind(new) != bind(old): raise SystemExit(w + ": bindings differ — not activated")
               o, n = old["resources"].get("script_runtime", {}), new["resources"].get("script_runtime", {})
               for k in ("compatibility_date", "compatibility_flags", "limits"):
-                  if o.get(k) != n.get(k): raise SystemExit(w + ": runtime %s differs — not activated" % k)
+                  if o.get(k) != n.get(k): raise SystemExit("%s: runtime %s differs (%s → %s) — not activated" % (w, k, o.get(k), n.get(k)))
               (root / (w + "-activated")).write_text(m[1])
               req("/workers/scripts/%s/deployments" % w, {"strategy": "percentage", "versions": [{"version_id": m[1], "percentage": 100}],
                   "annotations": {"workers/message": "Airport search + site icon release %s" % os.environ["RELEASE_COMMIT"][:7]}})
@@ -164,12 +167,14 @@ jobs:
         env: { NEXT_PUBLIC_API_URL: https://api.tripcod.com }
         run: pnpm exec opennextjs-cloudflare build --dangerouslyUseUnsupportedNextVersion
 
-      - name: Upload, verify, activate API
+      - name: Upload (same CPU limit as live), verify, activate API
         if: env.MODE == 'release'
         working-directory: apps/api
         run: |
           set -o pipefail
-          pnpm exec wrangler versions upload --keep-vars --message "Airport search + site icon $RELEASE_COMMIT" 2>&1 | tee "$RUNNER_TEMP/api.log"
+          cp wrangler.toml wrangler.release.toml
+          python3 "$RUNNER_TEMP/cf.py" limits >> wrangler.release.toml
+          pnpm exec wrangler versions upload --config wrangler.release.toml --keep-vars --message "Airport search + site icon $RELEASE_COMMIT" 2>&1 | tee "$RUNNER_TEMP/api.log"
           python3 "$RUNNER_TEMP/cf.py" activate tripcod-api "$RUNNER_TEMP/api.log"
 
       - name: Smoke — API health and airport search
