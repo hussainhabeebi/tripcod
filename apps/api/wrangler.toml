@@ -58,7 +58,17 @@ queue             = "tripcod-notifications"
 max_batch_size    = 50
 max_batch_timeout = 2
 
-# ── Hyperdrive (Neon Postgres connection pooling at edge) ─────────
+# ── D1 (PRIMARY database) ─────────────────────────────────────────
+# Create once:  npx wrangler d1 create tripcod   → paste the id below.
+# Schema:       pnpm --filter @tripcod/api d1:migrate
+# Airport data: pnpm --filter @tripcod/api d1:seed:airports
+[[d1_databases]]
+binding        = "DB"
+database_name  = "tripcod"
+database_id    = "REPLACE_WITH_D1_DATABASE_ID"
+migrations_dir = "d1/migrations"
+
+# ── Hyperdrive (Neon Postgres — SECONDARY database) ───────────────
 [[hyperdrive]]
 binding = "HYPERDRIVE"
 id      = "28bf3c3cf90d4e8f9b0ef1039c68da6a"

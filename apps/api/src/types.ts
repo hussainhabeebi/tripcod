@@ -1,4 +1,4 @@
-import type { KVNamespace, R2Bucket, Queue, Hyperdrive, DurableObjectNamespace } from "@cloudflare/workers-types";
+import type { KVNamespace, R2Bucket, Queue, Hyperdrive, DurableObjectNamespace, D1Database } from "@cloudflare/workers-types";
 import type { Db } from "@tripcod/db";
 
 export interface Env {
@@ -11,9 +11,10 @@ export interface Env {
   PUBLIC_ASSETS_R2: R2Bucket;
   BOOKING_QUEUE:    Queue;
   NOTIFY_QUEUE:     Queue;
-  HYPERDRIVE:       Hyperdrive;
+  DB?:              D1Database;   // primary database (Cloudflare D1)
+  HYPERDRIVE:       Hyperdrive;   // secondary database (Neon Postgres)
   TENANT_RATE_LIMITER: DurableObjectNamespace;
-  DATABASE_URL:           string;
+  DATABASE_URL:           string;   // Neon Postgres (secondary)
   JWT_SECRET:             string;
   GOOGLE_CLIENT_ID?:      string;
   APPLE_CLIENT_ID?:       string;

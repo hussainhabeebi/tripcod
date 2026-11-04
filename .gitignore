@@ -15,3 +15,6 @@ prisma/generated/
 
 # OpenNext Cloudflare build output
 .open-next/
+
+# Wrangler local state (local D1, dev logs)
+.wrangler/

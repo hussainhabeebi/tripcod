@@ -18,6 +18,8 @@ jobs:
         working-directory: apps/api
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2   # lets the D1 step see whether the airport list changed
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
@@ -27,6 +29,26 @@ jobs:
         working-directory: .
       - run: pnpm --filter @tripcod/api typecheck
         working-directory: .
+      # D1 is the primary database. Create it on first deploy, write its id into
+      # wrangler.toml, apply schema migrations and load the airport list.
+      - name: Prepare D1 (primary database)
+        run: |
+          set -euo pipefail
+          DB_ID=$(pnpm exec wrangler d1 list --json | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const db=JSON.parse(s).find(d=>d.name==="tripcod");process.stdout.write(db?db.uuid:"")})')
+          if [ -z "$DB_ID" ]; then
+            pnpm exec wrangler d1 create tripcod
+            DB_ID=$(pnpm exec wrangler d1 list --json | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{process.stdout.write(JSON.parse(s).find(d=>d.name==="tripcod").uuid)})')
+          fi
+          sed -i "s/REPLACE_WITH_D1_DATABASE_ID/$DB_ID/" wrangler.toml
+          pnpm exec wrangler d1 migrations apply tripcod --remote
+          COUNT=$(pnpm exec wrangler d1 execute tripcod --remote --json --command "SELECT count(*) AS n FROM airports" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{process.stdout.write(String(JSON.parse(s)[0].results[0].n))})')
+          if [ "$COUNT" = "0" ] || ! git diff --quiet HEAD~1 HEAD -- d1/seed/airports.sql 2>/dev/null; then
+            echo "Loading airport list into D1 (currently $COUNT rows)"
+            pnpm exec wrangler d1 execute tripcod --remote --file d1/seed/airports.sql
+          fi
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
       - run: pnpm exec wrangler deploy
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}

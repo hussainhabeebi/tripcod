@@ -6,7 +6,9 @@ import { useRouter } from "next/navigation";
 import { CURRENCY_EVENT, readPrefCurrency, savePrefCurrency } from "../lib/currency-pref";
 import { CURRENCY_LIST, type DisplayCurrency } from "../lib/fx";
 
-const AIRPORTS = [
+// Popular airports: shown when the box is empty and matched instantly while the
+// full world list (≈5,400 airports, D1-backed) loads from /api/airports/search.
+const AIRPORTS: Airport[] = [
   { code: "BOM", city: "Mumbai",        country: "IN" },
   { code: "DEL", city: "New Delhi",     country: "IN" },
   { code: "CCJ", city: "Kozhikode",     country: "IN" },
@@ -69,7 +71,27 @@ const QUICK_CURRENCIES = CURRENCY_LIST.filter((c) => c.code === "INR" || c.code 
 const MORE_CURRENCIES = CURRENCY_LIST.filter((c) => c.code !== "INR" && c.code !== "AED");
 type CurrencyCode = DisplayCurrency;
 
-type Airport = typeof AIRPORTS[number];
+type Airport = { code: string; city: string; country: string; name?: string };
+const AIRPORT_API = process.env.NEXT_PUBLIC_API_URL ?? "https://api.tripcod.com";
+const airportCache = new Map<string, Airport[]>();
+
+async function fetchAirports(q: string, signal: AbortSignal): Promise<Airport[]> {
+  const hit = airportCache.get(q);
+  if (hit) return hit;
+  const res = await fetch(`${AIRPORT_API}/api/airports/search?q=${encodeURIComponent(q)}&limit=10`, { signal });
+  if (!res.ok) throw new Error(`airport search ${res.status}`);
+  const body = (await res.json()) as { airports?: { code: string; city: string; country: string; name: string }[] };
+  const list = (body.airports ?? []).map(({ code, city, country, name }) => ({ code, city, country, name }));
+  airportCache.set(q, list);
+  return list;
+}
+
+function localMatches(q: string): Airport[] {
+  if (!q) return AIRPORTS.slice(0, 8);
+  return AIRPORTS.filter(
+    (a) => a.code.toLowerCase().startsWith(q) || a.city.toLowerCase().includes(q),
+  ).slice(0, 8);
+}
 type TripType = "One Way" | "Round Trip" | "Multi-city";
 
 // TripJack passenger fare types (searchModifiers.pfts).
@@ -106,13 +128,24 @@ function AirportInput({
   }, [value]);
 
   const q = query.toLowerCase().trim();
-  const matches = q
-    ? AIRPORTS.filter(
-        (a) =>
-          a.code.toLowerCase().startsWith(q) ||
-          a.city.toLowerCase().includes(q)
-      ).slice(0, 8)
-    : AIRPORTS.slice(0, 8);
+  const [remote, setRemote] = useState<{ q: string; list: Airport[] } | null>(null);
+
+  // Look up the full airport list as the user types (debounced).
+  useEffect(() => {
+    if (!open || q.length < 2) return;
+    const ctrl = new AbortController();
+    const timer = window.setTimeout(() => {
+      fetchAirports(q, ctrl.signal)
+        .then((list) => setRemote({ q, list }))
+        .catch(() => { /* offline or API down: popular list still works */ });
+    }, 150);
+    return () => { window.clearTimeout(timer); ctrl.abort(); };
+  }, [q, open]);
+
+  const local = localMatches(q);
+  const matches = remote && remote.q === q && remote.list.length > 0
+    ? [...remote.list, ...local.filter((a) => !remote.list.some((r) => r.code === a.code))].slice(0, 10)
+    : local;
 
   function pick(a: Airport) {
     onChange(a);
@@ -145,7 +178,10 @@ function AirportInput({
               onTouchEnd={(e) => { e.preventDefault(); pick(a); }}
             >
               <span className="ap-code">{a.code}</span>
-              <span className="ap-city">{a.city}</span>
+              <span className="ap-city">
+                {a.city}
+                {a.name && a.name !== a.city && <small className="ap-name">{a.name}</small>}
+              </span>
               <span className="ap-flag">
                 {String.fromCodePoint(
                   ...[...a.country].map((c) => 0x1F1A5 + c.charCodeAt(0))

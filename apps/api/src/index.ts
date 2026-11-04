@@ -7,6 +7,7 @@ import { resolveTenant } from "./middleware/tenant.js";
 import { authMiddleware } from "./middleware/auth.js";
 import { rateLimitMiddleware } from "./middleware/ratelimit.js";
 import { searchRoutes }        from "./routes/search.js";
+import { airportRoutes }       from "./routes/airports.js";
 import { hotelRoutes }         from "./routes/hotel.js";
 import { insuranceRoutes }     from "./routes/insurance.js";
 import { aiRoutes }            from "./routes/ai.js";
@@ -44,6 +45,9 @@ app.use("*", logger());
 app.use("*", secureHeaders());
 app.use("*", cors({origin:(origin)=>origin,credentials:true,allowMethods:["GET","POST","PUT","PATCH","DELETE","OPTIONS"],allowHeaders:["Content-Type","Authorization","X-Tenant-ID","X-API-Key","x-tenant-slug","X-Session-ID","X-Channel","X-TRIPCOD-INTEGRATION-KEY","X-Checkout-Token","X-Trip-Token","X-FP-Agent"],exposeHeaders:["Content-Disposition"]}));
 app.get("/health",(c)=>c.json({status:"ok",env:c.env.ENVIRONMENT,worker:"tripcod-api",timestamp:new Date().toISOString()}));
+// Airport lookup reads only D1 (primary) or the bundled list — registered before
+// tenant resolution so it never needs the Neon (secondary) database.
+app.route("/api/airports",       airportRoutes);
 app.use("*", resolveTenant);
 app.use("/api/*", rateLimitMiddleware);
 
