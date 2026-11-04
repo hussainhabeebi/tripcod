@@ -1,0 +1,62 @@
+name: Airport search — live browser check (read only)
+
+# Opens https://tripcod.com in Chromium (desktop + phone), types airport names
+# into the flight search box and reports what the dropdown shows, the API
+# requests made and any browser errors. Changes nothing.
+on:
+  push:
+    branches: [claude/dazzling-knuth-46ke0q]
+    paths: [.github/release/airports-live-check.txt]
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: API directly
+        run: |
+          for q in tbil tbilisi batumi colombo; do
+            echo "== $q"; curl -sS -m 20 -D - -H "Origin: https://tripcod.com" "https://api.tripcod.com/api/airports/search?q=$q&limit=3" | head -c 900; echo
+          done
+      - name: Live page assets
+        run: |
+          curl -sS -m 20 https://tripcod.com/ -o home.html -D - | head -20
+          grep -o '/_next/static/chunks/app/page-[a-z0-9]*\.js' home.html | head -1 | tee chunk.txt
+          curl -sS -m 20 "https://tripcod.com$(cat chunk.txt)" -o page.js
+          echo "page chunk mentions /api/airports/search: $(grep -c 'api/airports/search' page.js)"
+          echo "page chunk API base: $(grep -o 'https://api[a-z.]*tripcod.com' page.js | sort -u | tr '\n' ' ')"
+      - name: Browser check (desktop + phone)
+        run: |
+          npm install --silent --no-save playwright@1.48.2
+          npx playwright install --with-deps chromium >/dev/null
+          cat > check.js <<'JS'
+          const { chromium, devices } = require('playwright');
+          (async () => {
+            for (const mode of ['desktop', 'mobile']) {
+              const b = await chromium.launch();
+              const ctx = mode === 'mobile' ? await b.newContext({ ...devices['iPhone 13'] }) : await b.newContext({ viewport: { width: 1280, height: 900 } });
+              const p = await ctx.newPage();
+              p.on('console', m => { if (m.type() === 'error' || m.type() === 'warning') console.log(mode, 'console', m.type() + ':', m.text().slice(0, 300)); });
+              p.on('requestfailed', r => console.log(mode, 'request failed:', r.url(), r.failure()?.errorText));
+              p.on('response', r => { if (r.url().includes('/api/airports')) console.log(mode, 'api', r.status(), r.url()); });
+              await p.goto('https://tripcod.com/', { waitUntil: 'networkidle', timeout: 60000 });
+              const inputs = p.locator('input[placeholder="City or airport"]');
+              console.log(mode, 'airport inputs:', await inputs.count());
+              for (const q of ['tbilisi', 'batumi', 'colombo']) {
+                const inp = inputs.first();
+                await inp.click(); await inp.fill(''); await inp.pressSequentially(q, { delay: 80 });
+                await p.waitForTimeout(2500);
+                console.log(mode, q, '->', JSON.stringify(await p.locator('.airport-dropdown li').allInnerTexts()));
+              }
+              await p.screenshot({ path: mode + '.png' });
+              await b.close();
+            }
+          })();
+          JS
+          node check.js
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with: { name: screenshots, path: "*.png" }
