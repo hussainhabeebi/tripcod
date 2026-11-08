@@ -373,7 +373,7 @@ function buildBookUrl(fare: any, fareCurrency: string, price: number, adults: nu
 // This option's own perks + the flight's other fare options, so the booking page
 // can show what's included and offer a switch / upgrade.
 function optionLinkParams(fare: any, options: any[]): Record<string, string> {
-  const extra: Record<string, string> = { cab: fare.baggage?.cabin ?? "", fl: fareLabel(fare.fareIdentifier || fare.fareClass) };
+  const extra: Record<string, string> = { cab: fare.baggage?.cabin ?? "", fl: fareLabel(fare.fareIdentifier || fare.fareClass), cc: String(fare.cabinClass ?? "") };
   if (typeof fare.mealIncluded === "boolean") extra.meal = fare.mealIncluded ? "1" : "0";
   const alts = altOptions(options, fare.id);
   if (alts.length) extra.alts = JSON.stringify(alts);

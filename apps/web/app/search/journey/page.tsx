@@ -176,7 +176,7 @@ function Journey() {
       from: legs[0].origin, to: tripType === "ROUNDTRIP" ? legs[0].destination : legs[legs.length - 1].destination,
       dep: firstFare.departureTime, arr: lastFare.arrivalTime, dur: String(firstFare.duration ?? 0), stops: String(firstFare.stops ?? 0),
       price: String(Math.round(total * 100) / 100), cur: currency, ref: selection.every((f) => f.isRefundable) ? "1" : "0",
-      bag: firstFare.baggage?.checked ?? "", ...(searchId ? { sid: searchId } : {}), ...(q.get("pc") ? { pc: q.get("pc")! } : {}),
+      bag: firstFare.baggage?.checked ?? "", cab: firstFare.baggage?.cabin ?? "", cc: q.get("cabinClass") ?? "ECONOMY", ...(searchId ? { sid: searchId } : {}), ...(q.get("pc") ? { pc: q.get("pc")! } : {}),
     });
     window.location.href = `/book?${p}`;
   }
