@@ -58,10 +58,20 @@ queue             = "tripcod-notifications"
 max_batch_size    = 50
 max_batch_timeout = 2
 
-# ── Hyperdrive (Neon Postgres connection pooling at edge) ─────────
+# ── Hyperdrive (Neon Postgres — SECONDARY database) ──────────────
 [[hyperdrive]]
 binding = "HYPERDRIVE"
 id      = "28bf3c3cf90d4e8f9b0ef1039c68da6a"
+
+# ── D1 (PRIMARY database) ─────────────────────────────────────────
+# Hotel orders (schema: d1-migrations/, applied by the guarded release) and the
+# world airport list (d1/airports/, see docs/database.md). Customers, wallet,
+# flights and payments stay in Neon (secondary) for now.
+[[d1_databases]]
+binding        = "HOTEL_DB"
+database_name  = "tripcod-hotels"
+database_id    = "e07a176a-f724-4769-9e0b-26250d23dea2"
+migrations_dir = "d1-migrations"
 
 # ── Durable Objects (per-tenant rate limiter) ─────────────────────
 [[durable_objects.bindings]]
@@ -75,7 +85,8 @@ new_sqlite_classes = ["TenantRateLimiter"]
 
 # ── Cron: fare-alert sweep (re-checks alert routes nobody searched lately) ──
 [triggers]
-crons = ["17 */4 * * *"]
+# "17 */4": fare alerts + exchange rates; "*/15": hotel hold expiry checks (see src/index.ts).
+crons = ["17 */4 * * *", "*/15 * * * *"]
 
 # ── Environment Variables (non-secret) ───────────────────────────
 [vars]
@@ -87,6 +98,12 @@ PLATFORM_TENANT_SLUG = "tripcod"
 # TRIPJACK_API_KEY, TRIPJACK_API_BASE_URL, TRIPJACK_PROXY_KEY, SERP_API_KEY, DUFFEL_API_KEY,
 # RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET, RAZORPAY_WEBHOOK_SECRET,
 # NOMOD_API_KEY, NOMOD_API_SECRET, NOMOD_WEBHOOK_SECRET,
+# PhonePe PG v2 (docs/payments.md) — UAT and Production are separate:
+# PHONEPE_ENV (UAT | PRODUCTION; PRODUCTION honoured only here, ENVIRONMENT=production),
+# PHONEPE_UAT_CLIENT_ID, PHONEPE_UAT_CLIENT_SECRET, PHONEPE_UAT_CLIENT_VERSION,
+# PHONEPE_UAT_WEBHOOK_USERNAME, PHONEPE_UAT_WEBHOOK_PASSWORD,
+# PHONEPE_PROD_CLIENT_ID, PHONEPE_PROD_CLIENT_SECRET, PHONEPE_PROD_CLIENT_VERSION,
+# PHONEPE_PROD_WEBHOOK_USERNAME, PHONEPE_PROD_WEBHOOK_PASSWORD,
 # RESEND_API_KEY,
 # LEADVYNE_API_KEY, LEADVYNE_API_SECRET, LEADVYNE_BASE_URL,
 # LEADVYNE_INSTANCE_ID, LEADVYNE_WEBHOOK_SECRET

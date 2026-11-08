@@ -7,7 +7,7 @@
   --color-secondary:    #FFB005; /* Tripcod amber */
   --color-accent:       #FFB005;
   --color-accent-dark:  #E59E00;
-  --color-accent-soft:  var(--color-accent-soft);
+  --color-accent-soft:  #FFF7E0;
   --color-accent-ring:  #FFEFC2;
   --color-accent-border: #FFD98A;
   --font-body:       Inter, system-ui, -apple-system, sans-serif;
@@ -171,7 +171,8 @@ img { max-width: 100%; display: block; }
   color: var(--color-primary);
   min-width: 38px;
 }
-.ap-city { font-size: 14px; color: #1e293b; flex: 1; }
+.ap-city { font-size: 14px; color: #1e293b; flex: 1; min-width: 0; }
+.ap-name { display: block; font-size: 12px; color: #64748b; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .ap-flag  { font-size: 18px; line-height: 1; }
 
 .search-field {

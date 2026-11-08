@@ -1,12 +1,22 @@
 import Link from "next/link";
 import styles from "./results.module.css";
+import { decodeOccupancy, describeRoom, encodeOccupancy, occupancyTotals, toTripjackRooms, type RoomOccupancy } from "@tripcod/suppliers/hotel-occupancy";
 
 type SearchParams = {
   city?: string; cityName?: string;
   checkIn?: string; checkOut?: string;
-  rooms?: string; adults?: string;
+  occ?: string;                      // room-wise guests, e.g. "2_4_9-3_7" (see encodeOccupancy)
+  rooms?: string; adults?: string;   // older links: same adults in every room
   currency?: string; nationality?: string;
 };
+
+function searchOccupancy(params: SearchParams): RoomOccupancy[] {
+  const decoded = decodeOccupancy(params.occ);
+  if (decoded) return decoded;
+  const rooms = Math.min(9, Math.max(1, parseInt(params.rooms ?? "1") || 1));
+  const adults = Math.min(9, Math.max(1, parseInt(params.adults ?? "1") || 1));
+  return Array.from({ length: rooms }, () => ({ adults, childAges: [] }));
+}
 
 type NormalizedHotel = {
   id: string; hotelCode: string; name: string; starRating: number;
@@ -29,10 +39,8 @@ type HotelSearchResult = {
 
 interface PageProps { searchParams: Promise<SearchParams>; }
 
-async function searchHotels(params: SearchParams): Promise<HotelSearchResult> {
+async function searchHotels(params: SearchParams, occupancy: RoomOccupancy[]): Promise<HotelSearchResult> {
   const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "https://api.tripcod.com";
-  const rooms  = parseInt(params.rooms ?? "1");
-  const adults = parseInt(params.adults ?? "1");
   try {
     const res = await fetch(`${apiUrl}/api/hotels/search`, {
       method:  "POST",
@@ -42,7 +50,7 @@ async function searchHotels(params: SearchParams): Promise<HotelSearchResult> {
         ...(params.cityName ? { cityName: params.cityName } : {}),
         checkIn:     params.checkIn ?? "",
         checkOut:    params.checkOut ?? "",
-        rooms:       Array.from({ length: rooms }, () => ({ adults, children: 0 })),
+        rooms:       toTripjackRooms(occupancy),
         nationality: /^[A-Z]{2}$/.test(params.nationality ?? "") ? params.nationality : "IN",
         currency:    params.currency ?? "INR",
       }),
@@ -66,11 +74,12 @@ function formatMoney(amount: number, currency: string): string {
   }
 }
 
-function buildBookUrl(hotel: NormalizedHotel, rooms: number, adults: number, expiresAt?: string, nationality = "IN"): string {
+// Next step: choose a room at this hotel (all TripJack options for the same occupancy).
+function buildBookUrl(hotel: NormalizedHotel, occ: string | number, expiresAt?: string, nationality = "IN"): string {
   const p = new URLSearchParams({
     hid:       hotel.hid ?? hotel.hotelCode,
     sid:       hotel.correlationId ?? "",
-    adults:    String(adults),
+    occ:       String(occ),
     nat:       nationality,
     exp:       expiresAt ?? "",
     optionId:  hotel.id,
@@ -81,15 +90,15 @@ function buildBookUrl(hotel: NormalizedHotel, rooms: number, adults: number, exp
     checkIn:   hotel.checkIn,
     checkOut:  hotel.checkOut,
     nights:    String(hotel.nights),
-    rooms:     String(rooms),
     roomType:  hotel.roomType,
     mealPlan:  hotel.mealPlan,
     ref:       hotel.isRefundable ? "1" : "0",
     city:      hotel.cityCode,
     address:   hotel.address,
     cc:        hotel.countryCode ?? "",
+    img:       hotel.images?.[0] ?? "",
   });
-  return `/hotels/book?${p}`;
+  return `/hotels/hotel?${p}`;
 }
 
 function Stars({ n }: { n: number }) {
@@ -104,10 +113,12 @@ function Stars({ n }: { n: number }) {
 
 export default async function HotelSearchPage({ searchParams }: PageProps) {
   const params  = await searchParams;
-  const result  = await searchHotels(params);
+  const occupancy = searchOccupancy(params);
+  const occ     = encodeOccupancy(occupancy);
+  const totals  = occupancyTotals(occupancy);
+  const result  = await searchHotels(params, occupancy);
   const hotels  = result.hotels ?? [];
-  const rooms   = parseInt(params.rooms ?? "1");
-  const adults  = parseInt(params.adults ?? "1");
+  const rooms   = totals.rooms;
   const nationality = /^[A-Z]{2}$/.test(params.nationality ?? "") ? params.nationality! : "IN";
   const nights  = hotels[0]?.nights ?? (
     params.checkIn && params.checkOut
@@ -125,8 +136,13 @@ export default async function HotelSearchPage({ searchParams }: PageProps) {
             <span>{params.checkIn} → {params.checkOut}</span>
             <span>{nights} night{nights !== 1 ? "s" : ""}</span>
             <span>{rooms} room{rooms !== 1 ? "s" : ""}</span>
-            <span>{adults * rooms} adult{adults * rooms !== 1 ? "s" : ""} · {adults}/room</span>
+            <span>{totals.adults} adult{totals.adults !== 1 ? "s" : ""}{totals.children ? ` · ${totals.children} child${totals.children !== 1 ? "ren" : ""}` : ""}</span>
           </p>
+          {rooms > 1 || totals.children ? (
+            <ul className={styles.occupancy} aria-label="Guests in each room">
+              {occupancy.map((r, i) => <li key={i}><b>Room {i + 1}</b> {describeRoom(r)}</li>)}
+            </ul>
+          ) : null}
         </div>
         <a href="/hotels" className={styles.newSearch}>‹ New search</a>
       </header>
@@ -155,7 +171,7 @@ export default async function HotelSearchPage({ searchParams }: PageProps) {
             {hotels.length} hotel{hotels.length !== 1 ? "s" : ""} found
           </p>
           {hotels.map((hotel, i) => (
-            <HotelCard key={`${hotel.id}-${i}`} hotel={hotel} rooms={rooms} adults={adults} expiresAt={result.expiresAt} nationality={nationality} />
+            <HotelCard key={`${hotel.id}-${i}`} hotel={hotel} rooms={rooms} occ={occ} expiresAt={result.expiresAt} nationality={nationality} />
           ))}
         </div>
       )}
@@ -163,7 +179,7 @@ export default async function HotelSearchPage({ searchParams }: PageProps) {
   );
 }
 
-function HotelCard({ hotel, rooms, adults, expiresAt, nationality = "IN" }: { hotel: NormalizedHotel; rooms: number; adults: number; expiresAt?: string; nationality?: string }) {
+function HotelCard({ hotel, rooms, occ, expiresAt, nationality = "IN" }: { hotel: NormalizedHotel; rooms: number; occ: string; expiresAt?: string; nationality?: string }) {
   const price = hotel.totalFare;
   const bookable = Boolean(hotel.id);
 
@@ -190,13 +206,13 @@ function HotelCard({ hotel, rooms, adults, expiresAt, nationality = "IN" }: { ho
       </div>
       <div className={styles.priceArea}>
         <div>
-          <p className={styles.totalLabel}>Total stay</p>
+          <p className={styles.totalLabel}>Total stay · from</p>
           {hotel.strikethrough && hotel.strikethrough > price && <div className={styles.previousPrice}>{formatMoney(hotel.strikethrough, hotel.currency)}</div>}
           <p className={styles.price}>{formatMoney(price, hotel.currency)}</p>
           <p className={styles.stay}>{hotel.nights} night{hotel.nights !== 1 ? "s" : ""} · {rooms} room{rooms !== 1 ? "s" : ""}</p>
         </div>
         {bookable ? (
-          <Link href={buildBookUrl(hotel, rooms, adults, expiresAt, nationality)} className={styles.book}>Book Now <span aria-hidden="true">→</span></Link>
+          <Link href={buildBookUrl(hotel, occ, expiresAt, nationality)} className={styles.book}>Choose room <span aria-hidden="true">→</span></Link>
         ) : <p className={styles.unavailable}>Indicative price · Not directly bookable</p>}
       </div>
     </article>

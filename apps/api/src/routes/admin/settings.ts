@@ -13,6 +13,7 @@
 // GET  /api/admin/settings/email/logs — recent emails (sent / failed / skipped)
 
 import { Hono } from "hono";
+import { missingPhonePeSecrets, phonePeEnvironment } from "../../lib/phonepe.js";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import type { Env, Variables } from "../../types.js";
@@ -61,8 +62,17 @@ const paymentsSchema = z.object({
     // INR per 1 AED, used to charge AED to customers who choose AED. Empty/null = AED payment off.
     aedRate:       z.number().positive().max(1000).nullable().optional(),
   }).optional(),
+  // PhonePe credentials live only in Worker secrets (PHONEPE_UAT_* / PHONEPE_PROD_*);
+  // Admin just switches it on for checkout.
+  phonepe: z.object({ enabled: z.boolean() }).optional(),
   defaultGateway: z.enum(["RAZORPAY", "NOMOD"]).default("NOMOD"),
 });
+
+// Names of missing secrets only — never values.
+function phonepeStatus(env: Env, saved: any) {
+  const missing = missingPhonePeSecrets(env);
+  return { enabled: Boolean(saved?.phonepe?.enabled), environment: phonePeEnvironment(env), configured: missing.length === 0, missingSecrets: missing };
+}
 
 settingsAdminRoutes.get("/payments", async (c) => {
   const tenantId = c.get("tenantId");
@@ -71,6 +81,7 @@ settingsAdminRoutes.get("/payments", async (c) => {
     return c.json({
       razorpay: { enabled: false, keyId: "", keySecret: "", webhookSecret: "", configured: false },
       nomod: { enabled: false, apiKey: "", apiSecret: "", webhookSecret: "", environment: "production", allowTabby: true, allowTamara: true, configured: false },
+      phonepe: phonepeStatus(c.env, null),
       defaultGateway: "NOMOD",
     });
   }
@@ -93,6 +104,7 @@ settingsAdminRoutes.get("/payments", async (c) => {
       allowTamara: saved.nomod?.allowTamara ?? true,
       configured: Boolean(saved.nomod?.apiKey),
     },
+    phonepe: phonepeStatus(c.env, saved),
   });
 });
 
@@ -123,6 +135,7 @@ settingsAdminRoutes.put("/payments", zValidator("json", paymentsSchema), async (
       allowTamara:   body.nomod.allowTamara,
       aedRate:       body.nomod.aedRate === undefined ? (existing as any)?.nomod?.aedRate ?? null : body.nomod.aedRate,
     } : (existing as any)?.nomod,
+    phonepe: body.phonepe ?? (existing as any)?.phonepe,
   };
   // Nomod is the only gateway accepting new payments.
   if (!RAZORPAY_ENABLED) {

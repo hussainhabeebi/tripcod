@@ -8,9 +8,12 @@
 // only offers SPECIAL_RETURN fares whose msri contains the onward sri.
 
 import { Suspense, useEffect, useMemo, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { readPrefCurrency } from "../../lib/currency-pref";
 import { convertInr, fetchFxRates, formatIn, type FxRates } from "../../lib/fx";
+
+import SearchResultControls from "../SearchResultControls";
+import { filterJourneyFares, visibleJourneyPicks } from "./journey-filters";
 
 type Segment = { airline: string; airlineName: string; flightNumber: string; origin: string; destination: string; departureTime: string; arrivalTime: string; duration: number; isReturn?: boolean };
 type Fare = {
@@ -40,7 +43,7 @@ const hm = (min: number) => `${Math.floor(min / 60)}h ${min % 60}m`;
 const price = (f: Fare) => f.displayPrice ?? f.totalFare;
 
 export default function JourneyPage() {
-  return <Suspense fallback={<main className="page-container" style={{ padding: 24 }}>Loading…</main>}><Journey /></Suspense>;
+  return <Suspense fallback={<main className="page-container flight-results-page" style={{ padding: 24 }}>Loading…</main>}><Journey /></Suspense>;
 }
 
 function parseLegs(q: URLSearchParams) {
@@ -59,13 +62,14 @@ function parseLegs(q: URLSearchParams) {
 
 function Journey() {
   const q = useSearchParams();
+  const router = useRouter();
   const legs = useMemo(() => parseLegs(new URLSearchParams(q.toString())), [q]);
   const tripType = q.get("tripType") === "MULTICITY" ? "MULTICITY" : "ROUNDTRIP";
   const adults = Math.max(1, Number(q.get("adults")) || 1);
   const children = Number(q.get("children")) || 0;
   const infants = Number(q.get("infants")) || 0;
   const fareType = q.get("fareType") ?? "";
-  const directOnly = q.get("stops") === "0";
+  const searchKey = JSON.stringify([legs, tripType, adults, children, infants, fareType, q.get("cabinClass"), q.get("currency")]);
 
   const [fares, setFares] = useState<Fare[] | null>(null);
   // Prices in the visitor's chosen currency (automatic exchange rates); INR fares otherwise.
@@ -80,13 +84,14 @@ function Journey() {
   };
   const [searchId, setSearchId] = useState<string>();
   const [error, setError] = useState("");
-  const [picked, setPicked] = useState<Record<string, Fare>>({});
-  const [comboPick, setComboPick] = useState<Fare | null>(null);
+  const [savedPicked, setPicked] = useState<Record<string, Fare>>({});
+  const [savedComboPick, setComboPick] = useState<Fare | null>(null);
   const [limit, setLimit] = useState<Record<string, number>>({});
 
   useEffect(() => {
     const first = legs[0];
     if (!first?.origin) { setError("Missing journey details. Please search again."); return; }
+    setFares(null); setError(""); setPicked({}); setComboPick(null); setLimit({});
     const c = new AbortController();
     fetch(`${API}/api/search`, {
       method: "POST", signal: c.signal,
@@ -103,19 +108,20 @@ function Journey() {
       .then((d) => { setFares((d.fares ?? []).filter((f: Fare) => f.supplier === "TRIPJACK" && f.tripKey)); setSearchId(d.searchId); })
       .catch((e) => { if (e.name !== "AbortError") setError(e.message); });
     return () => c.abort();
-  }, [q]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [searchKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const groups = useMemo(() => {
     const byKey: Record<string, Fare[]> = {};
     for (const f of fares ?? []) {
-      if (directOnly && f.stops > 0 && f.tripKey !== "COMBO") continue;
       (byKey[f.tripKey!] ??= []).push(f);
     }
-    for (const k of Object.keys(byKey)) byKey[k].sort((a, b) => price(a) - price(b));
+    for (const k of Object.keys(byKey)) byKey[k] = filterJourneyFares(byKey[k], new URLSearchParams(q.toString()), legs);
     return byKey;
-  }, [fares, directOnly]);
+  }, [fares, q, legs]);
 
   const combo = groups.COMBO ?? [];
+  const comboPick = combo.find((f) => f.id === savedComboPick?.id) ?? null;
+  const picked = visibleJourneyPicks(savedPicked, groups);
   const legKeys = Object.keys(groups).filter((k) => k !== "COMBO")
     .sort((a, b) => (a === "ONWARD" ? -1 : b === "ONWARD" ? 1 : a === "RETURN" ? 1 : b === "RETURN" ? -1 : Number(a) - Number(b)));
 
@@ -180,7 +186,7 @@ function Journey() {
     : legs.map((l) => l.origin).concat(legs[legs.length - 1]?.destination ?? "").join(" → ");
 
   return (
-    <main className="page-container" style={{ paddingTop: 16, paddingBottom: 120 }}>
+    <main className="page-container flight-results-page" style={{ paddingTop: 16, paddingBottom: 120 }}>
       <h1 style={{ fontSize: "clamp(18px,4vw,24px)", fontWeight: 800, margin: "0 0 4px" }}>{title}</h1>
       <p style={{ margin: "0 0 12px", color: "#667085", fontSize: 14 }}>
         {legs.map((l) => day(l.departureDate)).join(" · ")} · {adults} adult{adults > 1 ? "s" : ""}{children ? `, ${children} child` : ""}{infants ? `, ${infants} infant` : ""}
@@ -192,10 +198,23 @@ function Journey() {
       {!fares && !error && <p style={{ padding: "40px 0", textAlign: "center", color: "#667085" }}>Searching live fares for every leg…</p>}
       {fares && !fares.length && !error && <p style={{ padding: "40px 0", textAlign: "center", color: "#667085" }}>No flights found for this journey. Try other dates.</p>}
 
-      {combo.length > 0 && (
+      {fares && fares.length > 0 && <div className="search-results-layout" style={{ marginTop: 16 }}>
+        <SearchResultControls journey origin={legs[0]?.origin ?? ""} destination={legs[0]?.destination ?? ""}
+          departureDate={legs[0]?.departureDate ?? ""} fares={fares} onQueryChange={(query) => { setLimit({}); router.replace(`/search/journey?${query}`, { scroll: false }); }} />
+        <div className="search-results-column">
+          <nav className="sort-tabs" aria-label="Sort journey flights">
+            {[["best", "Recommended"], ["price", "Cheapest"], ["duration", "Fastest"], ["departure", "Earliest"]].map(([key, label]) => {
+              const next = new URLSearchParams(q.toString()); next.set("sort", key);
+              return <button type="button" key={key} className={`sort-tab${(q.get("sort") ?? "best") === key ? " active" : ""}`} aria-pressed={(q.get("sort") ?? "best") === key}
+                onClick={() => router.replace(`/search/journey?${next}`, { scroll: false })}>{label}</button>;
+            })}
+          </nav>
+          <p style={muted} role="status">{Object.values(groups).reduce((n, list) => n + list.length, 0)} matching fares. Times are local to each airport. Fastest compares total flight time for combined fares.</p>
+      {groups.COMBO && (
         <section style={{ marginTop: 16 }}>
           <h2 style={h2}>Complete journey fares</h2>
           <p style={muted}>One fare covers every flight in this journey.</p>
+          {!combo.length && <p style={muted}>No journey fares match these filters. Use Reset all to see all fares.</p>}
           <div style={{ display: "grid", gap: 10 }}>
             {combo.slice(0, limit.COMBO ?? 20).map((f) => (
               <FareRow show={show} travellers={adults + children + infants} key={f.id} fare={f} selected={comboPick?.id === f.id} onPick={() => { setComboPick(f); setPicked({}); }} showSegments />
@@ -225,6 +244,9 @@ function Journey() {
           </section>
         );
       })}
+
+        </div>
+      </div>}
 
       {(selection.length > 0 || Object.keys(picked).length > 0) && (
         <div style={{ position: "fixed", left: 0, right: 0, bottom: 0, background: "#fff", borderTop: "1px solid #e4e7ec", boxShadow: "0 -6px 20px rgba(16,24,40,.08)", padding: "12px 16px calc(12px + env(safe-area-inset-bottom))", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, zIndex: 40 }}>
@@ -267,7 +289,7 @@ function FareRow({ fare, selected, onPick, showSegments, travellers = 1, show = 
       borderRadius: 10, padding: 14, cursor: "pointer", display: "grid", gap: 6,
     }}>
       <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "flex-start" }}>
-        <div>
+        <div style={{ minWidth: 0, overflowWrap: "anywhere" }}>
           <b>{fare.airlineName} · {fare.flightNumber ? `${fare.airline} ${fare.flightNumber}` : ""}</b>
           <div style={{ fontSize: 13, color: "#344054" }}>
             {time(fare.departureTime)} {fare.origin} → {time(fare.arrivalTime)} {fare.destination} · {hm(fare.duration)} · {fare.stops ? `${fare.stops} stop${fare.stops > 1 ? "s" : ""}` : "Non-stop"}

@@ -1,0 +1,169 @@
+name: Hotel API and Admin isolated release
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [codex/hotel-city-sync-resume]
+    paths: [.github/workflows/hotel-api-admin-release.yml]
+
+permissions:
+  contents: read
+concurrency:
+  group: tripcod-hotel-isolated-release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      WRANGLER_SEND_METRICS: "false"
+      NEXT_TELEMETRY_DISABLED: "1"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Pin application code to reviewed hotel fix
+        run: |
+          git diff --exit-code f029cdc1cf3d6e8c7c47cf1dbf99dd50b6c4fc85 HEAD -- apps packages pnpm-lock.yaml
+          git merge-base --is-ancestor origin/main HEAD
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Essential typecheck and regression tests
+        run: |
+          pnpm --filter @tripcod/api typecheck
+          node --import ./node_modules/.pnpm/tsx@4.23.12/node_modules/tsx/dist/loader.mjs --test apps/api/test/hotel-city-sync.test.ts apps/api/test/hotel-validation.test.ts
+          node --test packages/suppliers/test/*.test.cjs apps/tripjack-gateway/test/*.test.mjs
+          node apps/api/test/hotel-city-sync-resources.cjs > "$RUNNER_TEMP/hotel-memory.json"
+          node apps/api/test/hotel-city-sync-worker.cjs > "$RUNNER_TEMP/hotel-workerd.json"
+      - name: Build only Admin with production API URL
+        working-directory: apps/admin
+        env:
+          NEXT_PUBLIC_API_URL: https://api.tripcod.com
+        run: pnpm exec opennextjs-cloudflare build --dangerouslyUseUnsupportedNextVersion
+      - name: Write release guard and activation helper
+        shell: python
+        run: |
+          import os, pathlib
+          pathlib.Path(os.environ["RUNNER_TEMP"], "hotel-release.py").write_text(r'''
+          import hashlib, json, os, pathlib, re, sys, urllib.request, urllib.error
+          root = pathlib.Path(os.environ["RUNNER_TEMP"])
+          base = "https://api.cloudflare.com/client/v4/accounts/" + os.environ["CLOUDFLARE_ACCOUNT_ID"]
+          token = os.environ["CLOUDFLARE_API_TOKEN"]
+          rollback = {"tripcod-api":"ab0d29c4-88d5-4f1c-ac11-d90f4e488223","tripcod-admin":"0dff1fab-6bf6-4354-8a2d-821ea60e09d7"}
+          expected_hash = "30be53537ea7efcee47230149aeaeecfcabd133368f1eb5511eb778d835099c0"
+          def request(path, payload=None):
+              headers = {"Authorization":"Bearer " + token}
+              if payload is not None: headers["Content-Type"] = "application/json"
+              req = urllib.request.Request(base + path, data=None if payload is None else json.dumps(payload).encode(), headers=headers, method="GET" if payload is None else "POST")
+              try:
+                  with urllib.request.urlopen(req, timeout=60) as response: return response.read()
+              except urllib.error.HTTPError as error:
+                  raise SystemExit("Cloudflare release operation failed: HTTP " + str(error.code))
+          def result(path):
+              value = json.loads(request(path))
+              if not value.get("success"): raise SystemExit("Cloudflare release metadata request failed")
+              return value["result"]
+          def checkpoint():
+              data = request("/r2/buckets/tripcod-documents/objects/hotel-static/city-regions.partial.json")
+              if hashlib.sha256(data).hexdigest() != expected_hash: raise SystemExit("Original checkpoint changed. Stop; do not reset or overwrite.")
+              value = json.loads(data)
+              if value["pages"] != 152 or value["count"] != 304000 or not value.get("cursor"): raise SystemExit("Saved checkpoint/cursor gate failed.")
+              print(json.dumps({"checkpointPages":152,"regions":304000,"originalHashUnchanged":True,"cursorPresent":True}))
+          def version(worker, version_id): return result("/workers/scripts/" + worker + "/versions/" + version_id)
+          def bindings(value): return sorted(value["resources"].get("bindings", []), key=lambda item:(item.get("name",""),item.get("type","")))
+          mode = sys.argv[1]
+          if mode == "before":
+              checkpoint()
+              for worker, expected in rollback.items():
+                  deployed = result("/workers/scripts/" + worker + "/deployments")["deployments"][0]["versions"]
+                  if deployed != [{"version_id":expected,"percentage":100}]: raise SystemExit("Deployment moved; recapture rollback before release.")
+                  value = version(worker, expected)
+                  (root / (worker + "-before.json")).write_text(json.dumps(value))
+                  print(json.dumps({"rollbackWorker":worker,"version":expected,"runtime":value["resources"].get("script_runtime",{})}))
+          elif mode == "activate":
+              checkpoint()
+              text = (root / "api-upload.log").read_text()
+              match = re.search(r"Worker Version ID:\s*([0-9a-f-]{36})", text)
+              if not match: raise SystemExit("Uploaded API version ID missing; no activation.")
+              new_id = match[1]
+              old = json.loads((root / "tripcod-api-before.json").read_text())
+              new = version("tripcod-api", new_id)
+              runtime = new["resources"]["script_runtime"]
+              if runtime.get("limits",{}).get("cpu_ms") != 30000: raise SystemExit("30-second CPU budget not verified; no activation.")
+              if bindings(old) != bindings(new): raise SystemExit("API binding differences detected; no activation.")
+              for key in ("compatibility_date","compatibility_flags","migration_tag"):
+                  if old["resources"]["script_runtime"].get(key) != runtime.get(key): raise SystemExit("Unexpected API runtime/migration change; no activation.")
+              # Preserve all existing cron, queue, route and domain triggers: version activation only.
+              response = json.loads(request("/workers/scripts/tripcod-api/deployments", {"strategy":"percentage","versions":[{"version_id":new_id,"percentage":100}],"annotations":{"workers/message":"Tripcod hotel-only release; no migrations or trigger changes"}}))
+              if not response.get("success"): raise SystemExit("API activation failed")
+              (root / "api-activated").write_text(new_id)
+              print(json.dumps({"apiActivatedVersion":new_id,"verifiedCpuMs":30000,"bindingsPreserved":True,"migrationTagUnchanged":True}))
+          elif mode == "after":
+              checkpoint()
+              for worker in rollback:
+                  deployed = result("/workers/scripts/" + worker + "/deployments")["deployments"][0]["versions"]
+                  print(json.dumps({"deployedWorker":worker,"versions":deployed}))
+          elif mode == "rollback":
+              if not (root / "api-activated").exists(): raise SystemExit("No new serving API version to roll back")
+              for worker, old_id in rollback.items():
+                  response = json.loads(request("/workers/scripts/" + worker + "/deployments", {"strategy":"percentage","versions":[{"version_id":old_id,"percentage":100}],"annotations":{"workers/message":"Restore recorded pre-hotel-release version"}}))
+                  if not response.get("success"): raise SystemExit("Rollback failed for " + worker)
+                  print(json.dumps({"rolledBackWorker":worker,"version":old_id}))
+              checkpoint()
+          ''')
+      - name: Verify unchanged checkpoint and exact rollback versions
+        run: python "$RUNNER_TEMP/hotel-release.py" before
+      - name: Upload a non-serving API version with explicit CPU budget
+        working-directory: apps/api
+        shell: bash
+        run: |
+          cp wrangler.toml wrangler.hotel-release.toml
+          printf '\n[limits]\ncpu_ms = 30000\n' >> wrangler.hotel-release.toml
+          set -o pipefail
+          pnpm exec wrangler versions upload --config wrangler.hotel-release.toml --keep-vars --message "Hotel city streaming fix f029cdc" 2>&1 | tee "$RUNNER_TEMP/api-upload.log"
+      - name: Verify CPU, bindings and migration compatibility then activate API
+        id: activate_api
+        run: python "$RUNNER_TEMP/hotel-release.py" activate
+      - name: Deploy Admin only
+        id: deploy_admin
+        working-directory: apps/admin
+        run: pnpm exec wrangler deploy --keep-vars
+      - name: Verify API and Admin health and unchanged city data
+        run: |
+          curl --fail --silent --show-error https://api.tripcod.com/health
+          curl --fail --silent --show-error --output /dev/null https://admin.tripcod.com/login
+          python "$RUNNER_TEMP/hotel-release.py" after
+      - name: Restore recorded versions on release failure
+        if: failure() && steps.activate_api.outcome == 'success'
+        run: python "$RUNNER_TEMP/hotel-release.py" rollback
+      - name: One controlled Dubai search, with Sharjah fallback
+        if: success()
+        shell: python
+        run: |
+          import datetime, json, urllib.request, urllib.error
+          start = datetime.date.today() + datetime.timedelta(days=14)
+          reports = []
+          for city in ("DXB","SHJ"):
+              payload = {"cityCode":city,"checkIn":str(start),"checkOut":str(start+datetime.timedelta(days=2)),"rooms":[{"adults":1,"children":0}],"nationality":"IN","currency":"INR"}
+              request = urllib.request.Request("https://api.tripcod.com/api/hotels/search",data=json.dumps(payload).encode(),headers={"Content-Type":"application/json"},method="POST")
+              try:
+                  with urllib.request.urlopen(request,timeout=120) as response: status=response.status; body=json.load(response)
+              except urllib.error.HTTPError as error: status=error.code; body=json.loads(error.read())
+              report={"city":city,"httpStatus":status,"hotelCount":len(body.get("hotels",[])),"totalCandidates":body.get("totalCandidates"),"errorCode":body.get("errorCode",body.get("code")),"requestId":body.get("requestId"),"error":str(body.get("error",""))[:350]}
+              print(json.dumps(report)); reports.append(report)
+              if status==200 and report["hotelCount"]>0:
+                  print("LIVE_HOTEL_SEARCH_PASSED")
+                  break
+              if status in (401,403) or report["errorCode"] in ("6518","6519","6520","UNAUTHORIZED","FORBIDDEN"):
+                  break
+          else:
+              print("LIVE_HOTEL_SEARCH_NOT_VERIFIED")
+          if not any(r["httpStatus"]==200 and r["hotelCount"]>0 for r in reports):
+              print("Hotel fix deployed; supplier/search blocker remains. No booking or payment request made.")

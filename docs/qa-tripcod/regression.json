@@ -1,0 +1,89 @@
+{
+  "base": "0375431a5d716fdce44faf0b2ac1568a46422b33",
+  "protectedBackendPathsUnchanged": true,
+  "paymentComponentOnlyColorEdits": true,
+  "checks": [
+    {
+      "file": "apps/web/app/search/page.tsx",
+      "function": "searchFlights",
+      "result": "unchanged"
+    },
+    {
+      "file": "apps/web/app/search/page.tsx",
+      "function": "buildBookUrl",
+      "result": "unchanged"
+    },
+    {
+      "file": "apps/web/app/search/page.tsx",
+      "function": "inChosenCurrency",
+      "result": "unchanged"
+    },
+    {
+      "file": "apps/web/app/book/page.tsx",
+      "function": "start",
+      "result": "unchanged"
+    },
+    {
+      "file": "apps/web/app/book/page.tsx",
+      "function": "submit",
+      "result": "unchanged"
+    },
+    {
+      "file": "apps/web/app/book/page.tsx",
+      "function": "startNomodPayment",
+      "result": "unchanged"
+    },
+    {
+      "file": "apps/web/app/book/page.tsx",
+      "function": "payWithWallet",
+      "result": "unchanged"
+    },
+    {
+      "file": "apps/web/app/book/page.tsx",
+      "function": "holdFare",
+      "result": "unchanged"
+    },
+    {
+      "file": "apps/web/app/checkout/[token]/CheckoutFlow.tsx",
+      "function": "saveAndReview",
+      "result": "unchanged"
+    },
+    {
+      "file": "apps/web/app/checkout/[token]/CheckoutClient.tsx",
+      "function": "initiatePayment",
+      "result": "unchanged"
+    },
+    {
+      "file": "apps/web/app/checkout/[token]/CheckoutClient.tsx",
+      "function": "ensureRazorpay",
+      "result": "unchanged"
+    },
+    {
+      "file": "apps/web/app/lib/customer-api.ts",
+      "result": "byte-for-byte unchanged"
+    },
+    {
+      "file": "apps/web/app/lib/fx.ts",
+      "result": "byte-for-byte unchanged"
+    }
+  ],
+  "bookingTests": {
+    "base": {
+      "tests": 24,
+      "passed": 20,
+      "failed": 4
+    },
+    "branch": {
+      "tests": 24,
+      "passed": 20,
+      "failed": 4
+    },
+    "identicalFailures": true,
+    "failureNames": [
+      "explicit rejected booking is not success",
+      "lost submit response is unknown and does not retry",
+      "accepted booking survives local save failure",
+      "confirm route distinguishes review, submission and persistence failures"
+    ]
+  }
+}

@@ -8,7 +8,6 @@ const columns = [
     links: [
       { label: "Flights", href: "/" },
       { label: "Hotels", href: "/hotels" },
-      { label: "Travel insurance", href: "/insurance" },
       { label: "Baggage & visa check", href: "/travel-check" },
     ],
   },
@@ -17,17 +16,16 @@ const columns = [
     links: [
       { label: "My Trips", href: "/trips" },
       { label: "Find a booking", href: "/trips/find" },
-      { label: "Wallet", href: "/wallet" },
       { label: "My account", href: "/account" },
     ],
   },
   {
     title: "Company",
     links: [
-      { label: "About Us", href: "/about-us" },
-      { label: "Destinations", href: "/destinations" },
+      { label: "About", href: "/about-us" },
       { label: "Services", href: "/services" },
       { label: "Support", href: "/support" },
+      { label: "Destinations", href: "/destinations" },
     ],
   },
   {
@@ -91,7 +89,7 @@ export default function SiteFooter() {
           <div className="footer-brand">
             <a href="/" className="footer-logo-link">
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src="/logo-light.png" alt="Tripcod Travel Solutions" height={44} />
+              <img src="/logo-light.png" alt="Tripcod Travel Solutions" width={720} height={252} />
             </a>
             <p>Making your travel dreams come true since 2023. Flights, hotels, visas and holiday packages — India, the Gulf and beyond.</p>
             <div className="footer-trust">

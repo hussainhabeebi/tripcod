@@ -9,6 +9,7 @@ import { bookingsAdminRoutes } from "./bookings.js";
 import { suppliersAdminRoutes } from "./suppliers.js";
 import { agentsAdminRoutes }  from "./agents.js";
 import { financeAdminRoutes } from "./finance.js";
+import { paymentsAdminRoutes } from "./payments.js";
 import { settingsAdminRoutes }      from "./settings.js";
 import { integrationsAdminRoutes } from "./integrations.js";
 import { hotelsAdminRoutes }       from "./hotels.js";
@@ -54,6 +55,7 @@ adminRoutes.route("/suppliers", suppliersAdminRoutes);
 adminRoutes.route("/agents",    agentsAdminRoutes);
 adminRoutes.route("/agent-program", agentProgramAdminRoutes);
 adminRoutes.route("/leadvyne-agents", leadvyneAgentsAdminRoutes);
+adminRoutes.route("/finance/payments", paymentsAdminRoutes);   // Admin → Transactions
 adminRoutes.route("/finance",   financeAdminRoutes);
 adminRoutes.route("/settings",      settingsAdminRoutes);
 adminRoutes.route("/integrations",  integrationsAdminRoutes);

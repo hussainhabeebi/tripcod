@@ -232,7 +232,7 @@ export default function CheckoutClient({
 
   return (
     <div style={card}>
-      <div style={{ fontSize: 12, fontWeight: 700, color: "#94a3b8", textTransform: "uppercase",
+      <div style={{ fontSize: 12, fontWeight: 700, color: "#626568", textTransform: "uppercase",
         letterSpacing: "0.05em", marginBottom: 14 }}>Payment</div>
 
       {/* Only show methods enabled by the administrator */}
@@ -266,7 +266,7 @@ export default function CheckoutClient({
         <span style={{ fontSize: 14, color: "#64748b" }}>Total payable</span>
         <span style={{ fontSize: 20, fontWeight: 800, color: "#0f172a" }}>
           {currencySymbol}{parseFloat(totalAmount).toLocaleString("en-IN")}
-          <span style={{ fontSize: 12, fontWeight: 400, color: "#94a3b8", marginLeft: 6 }}>{currency}</span>
+          <span style={{ fontSize: 12, fontWeight: 400, color: "#626568", marginLeft: 6 }}>{currency}</span>
         </span>
       </div>
 
@@ -290,7 +290,7 @@ export default function CheckoutClient({
           : `Pay now · ${currencySymbol}${parseFloat(totalAmount).toLocaleString("en-IN")}`}
       </button>
 
-      <p style={{ fontSize: 12, color: "#94a3b8", textAlign: "center", margin: "12px 0 0" }}>
+      <p style={{ fontSize: 12, color: "#626568", textAlign: "center", margin: "12px 0 0" }}>
         🔒 Payments are secure and encrypted
       </p>
     </div>
@@ -313,7 +313,7 @@ function GatewayOption({ id, label, subtitle, icon, active, onClick }: {
         <span style={{ fontSize: 20 }}>{icon}</span>
         <div>
           <div style={{ fontWeight: 600, fontSize: 13, color: active ? "#2F3032" : "#0f172a" }}>{label}</div>
-          <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 1 }}>{subtitle}</div>
+          <div style={{ fontSize: 11, color: "#626568", marginTop: 1 }}>{subtitle}</div>
         </div>
         <div style={{ marginLeft: "auto", width: 16, height: 16, borderRadius: "50%",
           border: `2px solid ${active ? "#4B4D4F" : "#CBD5E1"}`,

@@ -1,0 +1,2686 @@
+{
+  "browser": "153.0.8010.0",
+  "fixture": true,
+  "viewports": [
+    {
+      "width": 320,
+      "screen": "home",
+      "documentWidth": 320,
+      "viewport": 320,
+      "headings": [
+        "Good journeysstart with better choices."
+      ],
+      "overflow": [],
+      "smallTargets": []
+    },
+    {
+      "width": 320,
+      "screen": "results",
+      "documentWidth": 320,
+      "viewport": 320,
+      "headings": [
+        "COK → DXB"
+      ],
+      "overflow": [],
+      "smallTargets": []
+    },
+    {
+      "width": 320,
+      "screen": "passengers",
+      "documentWidth": 320,
+      "viewport": 320,
+      "headings": [
+        "Complete your booking"
+      ],
+      "overflow": [],
+      "smallTargets": []
+    },
+    {
+      "width": 320,
+      "screen": "checkout",
+      "documentWidth": 320,
+      "viewport": 320,
+      "headings": [
+        "Complete Your Booking"
+      ],
+      "overflow": [],
+      "smallTargets": []
+    },
+    {
+      "width": 320,
+      "screen": "trips",
+      "documentWidth": 320,
+      "viewport": 320,
+      "headings": [
+        "My Trips"
+      ],
+      "overflow": [],
+      "smallTargets": []
+    },
+    {
+      "width": 320,
+      "screen": "journey",
+      "documentWidth": 320,
+      "viewport": 320,
+      "headings": [
+        "COK ⇄ DXB"
+      ],
+      "overflow": [],
+      "smallTargets": []
+    },
+    {
+      "width": 375,
+      "screen": "home",
+      "documentWidth": 375,
+      "viewport": 375,
+      "headings": [
+        "Good journeysstart with better choices."
+      ],
+      "overflow": [],
+      "smallTargets": []
+    },
+    {
+      "width": 375,
+      "screen": "results",
+      "documentWidth": 375,
+      "viewport": 375,
+      "headings": [
+        "COK → DXB"
+      ],
+      "overflow": [],
+      "smallTargets": []
+    },
+    {
+      "width": 375,
+      "screen": "passengers",
+      "documentWidth": 375,
+      "viewport": 375,
+      "headings": [
+        "Complete your booking"
+      ],
+      "overflow": [],
+      "smallTargets": []
+    },
+    {
+      "width": 375,
+      "screen": "checkout",
+      "documentWidth": 375,
+      "viewport": 375,
+      "headings": [
+        "Complete Your Booking"
+      ],
+      "overflow": [],
+      "smallTargets": []
+    },
+    {
+      "width": 375,
+      "screen": "trips",
+      "documentWidth": 375,
+      "viewport": 375,
+      "headings": [
+        "My Trips"
+      ],
+      "overflow": [],
+      "smallTargets": []
+    },
+    {
+      "width": 375,
+      "screen": "journey",
+      "documentWidth": 375,
+      "viewport": 375,
+      "headings": [
+        "COK ⇄ DXB"
+      ],
+      "overflow": [],
+      "smallTargets": []
+    },
+    {
+      "width": 390,
+      "screen": "home",
+      "documentWidth": 390,
+      "viewport": 390,
+      "headings": [
+        "Good journeysstart with better choices."
+      ],
+      "overflow": [],
+      "smallTargets": []
+    },
+    {
+      "width": 390,
+      "screen": "results",
+      "documentWidth": 390,
+      "viewport": 390,
+      "headings": [
+        "COK → DXB"
+      ],
+      "overflow": [],
+      "smallTargets": []
+    },
+    {
+      "width": 390,
+      "screen": "passengers",
+      "documentWidth": 390,
+      "viewport": 390,
+      "headings": [
+        "Complete your booking"
+      ],
+      "overflow": [],
+      "smallTargets": []
+    },
+    {
+      "width": 390,
+      "screen": "checkout",
+      "documentWidth": 390,
+      "viewport": 390,
+      "headings": [
+        "Complete Your Booking"
+      ],
+      "overflow": [],
+      "smallTargets": []
+    },
+    {
+      "width": 390,
+      "screen": "trips",
+      "documentWidth": 390,
+      "viewport": 390,
+      "headings": [
+        "My Trips"
+      ],
+      "overflow": [],
+      "smallTargets": []
+    },
+    {
+      "width": 390,
+      "screen": "journey",
+      "documentWidth": 390,
+      "viewport": 390,
+      "headings": [
+        "COK ⇄ DXB"
+      ],
+      "overflow": [],
+      "smallTargets": []
+    },
+    {
+      "width": 428,
+      "screen": "home",
+      "documentWidth": 428,
+      "viewport": 428,
+      "headings": [
+        "Good journeysstart with better choices."
+      ],
+      "overflow": [],
+      "smallTargets": []
+    },
+    {
+      "width": 428,
+      "screen": "results",
+      "documentWidth": 428,
+      "viewport": 428,
+      "headings": [
+        "COK → DXB"
+      ],
+      "overflow": [],
+      "smallTargets": []
+    },
+    {
+      "width": 428,
+      "screen": "passengers",
+      "documentWidth": 428,
+      "viewport": 428,
+      "headings": [
+        "Complete your booking"
+      ],
+      "overflow": [],
+      "smallTargets": []
+    },
+    {
+      "width": 428,
+      "screen": "checkout",
+      "documentWidth": 428,
+      "viewport": 428,
+      "headings": [
+        "Complete Your Booking"
+      ],
+      "overflow": [],
+      "smallTargets": []
+    },
+    {
+      "width": 428,
+      "screen": "trips",
+      "documentWidth": 428,
+      "viewport": 428,
+      "headings": [
+        "My Trips"
+      ],
+      "overflow": [],
+      "smallTargets": []
+    },
+    {
+      "width": 428,
+      "screen": "journey",
+      "documentWidth": 428,
+      "viewport": 428,
+      "headings": [
+        "COK ⇄ DXB"
+      ],
+      "overflow": [],
+      "smallTargets": []
+    },
+    {
+      "width": 768,
+      "screen": "home",
+      "documentWidth": 768,
+      "viewport": 768,
+      "headings": [
+        "Good journeysstart with better choices."
+      ],
+      "overflow": [],
+      "smallTargets": []
+    },
+    {
+      "width": 768,
+      "screen": "results",
+      "documentWidth": 768,
+      "viewport": 768,
+      "headings": [
+        "COK → DXB"
+      ],
+      "overflow": [],
+      "smallTargets": []
+    },
+    {
+      "width": 768,
+      "screen": "passengers",
+      "documentWidth": 768,
+      "viewport": 768,
+      "headings": [
+        "Complete your booking"
+      ],
+      "overflow": [],
+      "smallTargets": []
+    },
+    {
+      "width": 768,
+      "screen": "checkout",
+      "documentWidth": 768,
+      "viewport": 768,
+      "headings": [
+        "Complete Your Booking"
+      ],
+      "overflow": [],
+      "smallTargets": []
+    },
+    {
+      "width": 768,
+      "screen": "trips",
+      "documentWidth": 768,
+      "viewport": 768,
+      "headings": [
+        "My Trips"
+      ],
+      "overflow": [],
+      "smallTargets": []
+    },
+    {
+      "width": 768,
+      "screen": "journey",
+      "documentWidth": 768,
+      "viewport": 768,
+      "headings": [
+        "COK ⇄ DXB"
+      ],
+      "overflow": [],
+      "smallTargets": []
+    },
+    {
+      "width": 1024,
+      "screen": "home",
+      "documentWidth": 1024,
+      "viewport": 1024,
+      "headings": [
+        "Good journeysstart with better choices."
+      ],
+      "overflow": [],
+      "smallTargets": []
+    },
+    {
+      "width": 1024,
+      "screen": "results",
+      "documentWidth": 1024,
+      "viewport": 1024,
+      "headings": [
+        "COK → DXB"
+      ],
+      "overflow": [],
+      "smallTargets": []
+    },
+    {
+      "width": 1024,
+      "screen": "passengers",
+      "documentWidth": 1024,
+      "viewport": 1024,
+      "headings": [
+        "Complete your booking"
+      ],
+      "overflow": [],
+      "smallTargets": []
+    },
+    {
+      "width": 1024,
+      "screen": "checkout",
+      "documentWidth": 1024,
+      "viewport": 1024,
+      "headings": [
+        "Complete Your Booking"
+      ],
+      "overflow": [],
+      "smallTargets": []
+    },
+    {
+      "width": 1024,
+      "screen": "trips",
+      "documentWidth": 1024,
+      "viewport": 1024,
+      "headings": [
+        "My Trips"
+      ],
+      "overflow": [],
+      "smallTargets": []
+    },
+    {
+      "width": 1024,
+      "screen": "journey",
+      "documentWidth": 1024,
+      "viewport": 1024,
+      "headings": [
+        "COK ⇄ DXB"
+      ],
+      "overflow": [],
+      "smallTargets": []
+    },
+    {
+      "width": 1440,
+      "screen": "home",
+      "documentWidth": 1440,
+      "viewport": 1440,
+      "headings": [
+        "Good journeysstart with better choices."
+      ],
+      "overflow": [],
+      "smallTargets": []
+    },
+    {
+      "width": 1440,
+      "screen": "results",
+      "documentWidth": 1440,
+      "viewport": 1440,
+      "headings": [
+        "COK → DXB"
+      ],
+      "overflow": [],
+      "smallTargets": []
+    },
+    {
+      "width": 1440,
+      "screen": "passengers",
+      "documentWidth": 1440,
+      "viewport": 1440,
+      "headings": [
+        "Complete your booking"
+      ],
+      "overflow": [],
+      "smallTargets": []
+    },
+    {
+      "width": 1440,
+      "screen": "checkout",
+      "documentWidth": 1440,
+      "viewport": 1440,
+      "headings": [
+        "Complete Your Booking"
+      ],
+      "overflow": [],
+      "smallTargets": []
+    },
+    {
+      "width": 1440,
+      "screen": "trips",
+      "documentWidth": 1440,
+      "viewport": 1440,
+      "headings": [
+        "My Trips"
+      ],
+      "overflow": [],
+      "smallTargets": []
+    },
+    {
+      "width": 1440,
+      "screen": "journey",
+      "documentWidth": 1440,
+      "viewport": 1440,
+      "headings": [
+        "COK ⇄ DXB"
+      ],
+      "overflow": [],
+      "smallTargets": []
+    }
+  ],
+  "errors": [],
+  "interactions": [
+    {
+      "width": 320,
+      "screen": "home",
+      "result": "PASS"
+    },
+    {
+      "width": 320,
+      "screen": "results",
+      "result": "PASS"
+    },
+    {
+      "width": 320,
+      "screen": "passengers",
+      "result": "PASS"
+    },
+    {
+      "width": 320,
+      "screen": "checkout",
+      "result": "PASS"
+    },
+    {
+      "width": 320,
+      "screen": "trips",
+      "result": "PASS"
+    },
+    {
+      "width": 320,
+      "screen": "journey",
+      "result": "PASS"
+    },
+    {
+      "width": 375,
+      "screen": "home",
+      "result": "PASS"
+    },
+    {
+      "width": 375,
+      "screen": "results",
+      "result": "PASS"
+    },
+    {
+      "width": 375,
+      "screen": "passengers",
+      "result": "PASS"
+    },
+    {
+      "width": 375,
+      "screen": "checkout",
+      "result": "PASS"
+    },
+    {
+      "width": 375,
+      "screen": "trips",
+      "result": "PASS"
+    },
+    {
+      "width": 375,
+      "screen": "journey",
+      "result": "PASS"
+    },
+    {
+      "width": 390,
+      "screen": "home",
+      "result": "PASS"
+    },
+    {
+      "width": 390,
+      "screen": "results",
+      "result": "PASS"
+    },
+    {
+      "width": 390,
+      "screen": "passengers",
+      "result": "PASS"
+    },
+    {
+      "width": 390,
+      "screen": "checkout",
+      "result": "PASS"
+    },
+    {
+      "width": 390,
+      "screen": "trips",
+      "result": "PASS"
+    },
+    {
+      "width": 390,
+      "screen": "journey",
+      "result": "PASS"
+    },
+    {
+      "width": 428,
+      "screen": "home",
+      "result": "PASS"
+    },
+    {
+      "width": 428,
+      "screen": "results",
+      "result": "PASS"
+    },
+    {
+      "width": 428,
+      "screen": "passengers",
+      "result": "PASS"
+    },
+    {
+      "width": 428,
+      "screen": "checkout",
+      "result": "PASS"
+    },
+    {
+      "width": 428,
+      "screen": "trips",
+      "result": "PASS"
+    },
+    {
+      "width": 428,
+      "screen": "journey",
+      "result": "PASS"
+    },
+    {
+      "width": 768,
+      "screen": "home",
+      "result": "PASS"
+    },
+    {
+      "width": 768,
+      "screen": "results",
+      "result": "PASS"
+    },
+    {
+      "width": 768,
+      "screen": "passengers",
+      "result": "PASS"
+    },
+    {
+      "width": 768,
+      "screen": "checkout",
+      "result": "PASS"
+    },
+    {
+      "width": 768,
+      "screen": "trips",
+      "result": "PASS"
+    },
+    {
+      "width": 768,
+      "screen": "journey",
+      "result": "PASS"
+    },
+    {
+      "width": 1024,
+      "screen": "home",
+      "result": "PASS"
+    },
+    {
+      "width": 1024,
+      "screen": "results",
+      "result": "PASS"
+    },
+    {
+      "width": 1024,
+      "screen": "passengers",
+      "result": "PASS"
+    },
+    {
+      "width": 1024,
+      "screen": "checkout",
+      "result": "PASS"
+    },
+    {
+      "width": 1024,
+      "screen": "trips",
+      "result": "PASS"
+    },
+    {
+      "width": 1024,
+      "screen": "journey",
+      "result": "PASS"
+    },
+    {
+      "width": 1440,
+      "screen": "home",
+      "result": "PASS"
+    },
+    {
+      "width": 1440,
+      "screen": "results",
+      "result": "PASS"
+    },
+    {
+      "width": 1440,
+      "screen": "passengers",
+      "result": "PASS"
+    },
+    {
+      "width": 1440,
+      "screen": "checkout",
+      "result": "PASS"
+    },
+    {
+      "width": 1440,
+      "screen": "trips",
+      "result": "PASS"
+    },
+    {
+      "width": 1440,
+      "screen": "journey",
+      "result": "PASS"
+    }
+  ],
+  "inventories": [
+    {
+      "width": 320,
+      "headings": [
+        "Where are you flying?",
+        "Already have a booking?",
+        "Our Journey",
+        "Our Trusted Services",
+        "Popular Destinations",
+        "Explore flight routes",
+        "Routes travellers are checking",
+        "Explore airline options",
+        "Less form-filling. More confidence.",
+        "Compare with clarity",
+        "Review before you commit",
+        "A little human help",
+        "What Our Travelers Say",
+        "Explore Our Travel Moments",
+        "Your booking, step by step",
+        "Continue with our travel assistant",
+        "Let’s make your nextdeparture a little easier."
+      ],
+      "sections": [
+        {
+          "tag": "SECTION",
+          "id": "",
+          "cls": "flight-hero"
+        },
+        {
+          "tag": "SECTION",
+          "id": "flight-search",
+          "cls": "flight-search-shell"
+        },
+        {
+          "tag": "DIV",
+          "id": "",
+          "cls": "trust-bar"
+        },
+        {
+          "tag": "SECTION",
+          "id": "",
+          "cls": "flight-manage"
+        },
+        {
+          "tag": "SECTION",
+          "id": "",
+          "cls": "home-shell tc-section"
+        },
+        {
+          "tag": "SECTION",
+          "id": "",
+          "cls": "home-shell tc-section"
+        },
+        {
+          "tag": "SECTION",
+          "id": "",
+          "cls": "home-shell tc-section"
+        },
+        {
+          "tag": "SECTION",
+          "id": "",
+          "cls": "home-shell deal-cards-section"
+        },
+        {
+          "tag": "SECTION",
+          "id": "",
+          "cls": "home-shell popular-routes-section"
+        },
+        {
+          "tag": "SECTION",
+          "id": "",
+          "cls": "home-shell airline-logos-section"
+        },
+        {
+          "tag": "SECTION",
+          "id": "",
+          "cls": "home-shell benefits-section"
+        },
+        {
+          "tag": "SECTION",
+          "id": "",
+          "cls": "flight-confidence"
+        },
+        {
+          "tag": "SECTION",
+          "id": "",
+          "cls": "tc-testimonials-band"
+        },
+        {
+          "tag": "SECTION",
+          "id": "",
+          "cls": "home-shell tc-section"
+        },
+        {
+          "tag": "SECTION",
+          "id": "",
+          "cls": "journey-section"
+        },
+        {
+          "tag": "SECTION",
+          "id": "",
+          "cls": "home-shell"
+        },
+        {
+          "tag": "SECTION",
+          "id": "booking-support",
+          "cls": "flight-assistance"
+        },
+        {
+          "tag": "A",
+          "id": "",
+          "cls": "wa-float"
+        }
+      ],
+      "headerLinks": [
+        {
+          "text": "",
+          "href": "/"
+        },
+        {
+          "text": "Flights",
+          "href": "/#flight-search"
+        },
+        {
+          "text": "My Trips",
+          "href": "/trips"
+        },
+        {
+          "text": "Support",
+          "href": "/#booking-support"
+        },
+        {
+          "text": "Hotels",
+          "href": "/hotels"
+        },
+        {
+          "text": "Insurance",
+          "href": "/insurance"
+        },
+        {
+          "text": "Wallet",
+          "href": "/wallet"
+        },
+        {
+          "text": "Destinations",
+          "href": "/destinations"
+        },
+        {
+          "text": "About Us",
+          "href": "/about-us"
+        },
+        {
+          "text": "QA Traveller",
+          "href": "/account"
+        },
+        {
+          "text": "Flights",
+          "href": "/#flight-search"
+        },
+        {
+          "text": "Hotels",
+          "href": "/hotels"
+        },
+        {
+          "text": "Insurance",
+          "href": "/insurance"
+        },
+        {
+          "text": "My Trips",
+          "href": "/trips"
+        },
+        {
+          "text": "Wallet",
+          "href": "/wallet"
+        },
+        {
+          "text": "Destinations",
+          "href": "/destinations"
+        },
+        {
+          "text": "About Us",
+          "href": "/about-us"
+        },
+        {
+          "text": "Support",
+          "href": "/#booking-support"
+        },
+        {
+          "text": "QA Traveller",
+          "href": "/account"
+        }
+      ],
+      "footerLinks": [
+        {
+          "text": "Register as an agent",
+          "href": "https://portal.tripcod.com/register"
+        },
+        {
+          "text": "Agent login",
+          "href": "https://portal.tripcod.com/login"
+        },
+        {
+          "text": "",
+          "href": "/"
+        },
+        {
+          "text": "",
+          "href": "https://www.instagram.com/tripcod_"
+        },
+        {
+          "text": "",
+          "href": "https://www.facebook.com/share/16HLRp3aWu/"
+        },
+        {
+          "text": "",
+          "href": "https://www.youtube.com/@tripcod"
+        },
+        {
+          "text": "+971 52 931 9100",
+          "href": "tel:+971529319100"
+        },
+        {
+          "text": "+91 9778488122",
+          "href": "tel:+919778488122"
+        },
+        {
+          "text": "tripcodinternational@gmail.com",
+          "href": "mailto:tripcodinternational@gmail.com"
+        },
+        {
+          "text": "Flights",
+          "href": "/"
+        },
+        {
+          "text": "Hotels",
+          "href": "/hotels"
+        },
+        {
+          "text": "Travel insurance",
+          "href": "/insurance"
+        },
+        {
+          "text": "Baggage & visa check",
+          "href": "/travel-check"
+        },
+        {
+          "text": "My Trips",
+          "href": "/trips"
+        },
+        {
+          "text": "Find a booking",
+          "href": "/trips/find"
+        },
+        {
+          "text": "Wallet",
+          "href": "/wallet"
+        },
+        {
+          "text": "My account",
+          "href": "/account"
+        },
+        {
+          "text": "About Us",
+          "href": "/about-us"
+        },
+        {
+          "text": "Destinations",
+          "href": "/destinations"
+        },
+        {
+          "text": "Register your agency",
+          "href": "https://portal.tripcod.com/register"
+        },
+        {
+          "text": "Agent login",
+          "href": "https://portal.tripcod.com/login"
+        },
+        {
+          "text": "aiingo.com",
+          "href": "https://aiingo.com"
+        },
+        {
+          "text": "leadvyne.com",
+          "href": "https://leadvyne.com"
+        }
+      ]
+    },
+    {
+      "width": 375,
+      "headings": [
+        "Where are you flying?",
+        "Already have a booking?",
+        "Our Journey",
+        "Our Trusted Services",
+        "Popular Destinations",
+        "Explore flight routes",
+        "Routes travellers are checking",
+        "Explore airline options",
+        "Less form-filling. More confidence.",
+        "Compare with clarity",
+        "Review before you commit",
+        "A little human help",
+        "What Our Travelers Say",
+        "Explore Our Travel Moments",
+        "Your booking, step by step",
+        "Continue with our travel assistant",
+        "Let’s make your nextdeparture a little easier."
+      ],
+      "sections": [
+        {
+          "tag": "SECTION",
+          "id": "",
+          "cls": "flight-hero"
+        },
+        {
+          "tag": "SECTION",
+          "id": "flight-search",
+          "cls": "flight-search-shell"
+        },
+        {
+          "tag": "DIV",
+          "id": "",
+          "cls": "trust-bar"
+        },
+        {
+          "tag": "SECTION",
+          "id": "",
+          "cls": "flight-manage"
+        },
+        {
+          "tag": "SECTION",
+          "id": "",
+          "cls": "home-shell tc-section"
+        },
+        {
+          "tag": "SECTION",
+          "id": "",
+          "cls": "home-shell tc-section"
+        },
+        {
+          "tag": "SECTION",
+          "id": "",
+          "cls": "home-shell tc-section"
+        },
+        {
+          "tag": "SECTION",
+          "id": "",
+          "cls": "home-shell deal-cards-section"
+        },
+        {
+          "tag": "SECTION",
+          "id": "",
+          "cls": "home-shell popular-routes-section"
+        },
+        {
+          "tag": "SECTION",
+          "id": "",
+          "cls": "home-shell airline-logos-section"
+        },
+        {
+          "tag": "SECTION",
+          "id": "",
+          "cls": "home-shell benefits-section"
+        },
+        {
+          "tag": "SECTION",
+          "id": "",
+          "cls": "flight-confidence"
+        },
+        {
+          "tag": "SECTION",
+          "id": "",
+          "cls": "tc-testimonials-band"
+        },
+        {
+          "tag": "SECTION",
+          "id": "",
+          "cls": "home-shell tc-section"
+        },
+        {
+          "tag": "SECTION",
+          "id": "",
+          "cls": "journey-section"
+        },
+        {
+          "tag": "SECTION",
+          "id": "",
+          "cls": "home-shell"
+        },
+        {
+          "tag": "SECTION",
+          "id": "booking-support",
+          "cls": "flight-assistance"
+        },
+        {
+          "tag": "A",
+          "id": "",
+          "cls": "wa-float"
+        }
+      ],
+      "headerLinks": [
+        {
+          "text": "",
+          "href": "/"
+        },
+        {
+          "text": "Flights",
+          "href": "/#flight-search"
+        },
+        {
+          "text": "My Trips",
+          "href": "/trips"
+        },
+        {
+          "text": "Support",
+          "href": "/#booking-support"
+        },
+        {
+          "text": "Hotels",
+          "href": "/hotels"
+        },
+        {
+          "text": "Insurance",
+          "href": "/insurance"
+        },
+        {
+          "text": "Wallet",
+          "href": "/wallet"
+        },
+        {
+          "text": "Destinations",
+          "href": "/destinations"
+        },
+        {
+          "text": "About Us",
+          "href": "/about-us"
+        },
+        {
+          "text": "QA Traveller",
+          "href": "/account"
+        },
+        {
+          "text": "Flights",
+          "href": "/#flight-search"
+        },
+        {
+          "text": "Hotels",
+          "href": "/hotels"
+        },
+        {
+          "text": "Insurance",
+          "href": "/insurance"
+        },
+        {
+          "text": "My Trips",
+          "href": "/trips"
+        },
+        {
+          "text": "Wallet",
+          "href": "/wallet"
+        },
+        {
+          "text": "Destinations",
+          "href": "/destinations"
+        },
+        {
+          "text": "About Us",
+          "href": "/about-us"
+        },
+        {
+          "text": "Support",
+          "href": "/#booking-support"
+        },
+        {
+          "text": "QA Traveller",
+          "href": "/account"
+        }
+      ],
+      "footerLinks": [
+        {
+          "text": "Register as an agent",
+          "href": "https://portal.tripcod.com/register"
+        },
+        {
+          "text": "Agent login",
+          "href": "https://portal.tripcod.com/login"
+        },
+        {
+          "text": "",
+          "href": "/"
+        },
+        {
+          "text": "",
+          "href": "https://www.instagram.com/tripcod_"
+        },
+        {
+          "text": "",
+          "href": "https://www.facebook.com/share/16HLRp3aWu/"
+        },
+        {
+          "text": "",
+          "href": "https://www.youtube.com/@tripcod"
+        },
+        {
+          "text": "+971 52 931 9100",
+          "href": "tel:+971529319100"
+        },
+        {
+          "text": "+91 9778488122",
+          "href": "tel:+919778488122"
+        },
+        {
+          "text": "tripcodinternational@gmail.com",
+          "href": "mailto:tripcodinternational@gmail.com"
+        },
+        {
+          "text": "Flights",
+          "href": "/"
+        },
+        {
+          "text": "Hotels",
+          "href": "/hotels"
+        },
+        {
+          "text": "Travel insurance",
+          "href": "/insurance"
+        },
+        {
+          "text": "Baggage & visa check",
+          "href": "/travel-check"
+        },
+        {
+          "text": "My Trips",
+          "href": "/trips"
+        },
+        {
+          "text": "Find a booking",
+          "href": "/trips/find"
+        },
+        {
+          "text": "Wallet",
+          "href": "/wallet"
+        },
+        {
+          "text": "My account",
+          "href": "/account"
+        },
+        {
+          "text": "About Us",
+          "href": "/about-us"
+        },
+        {
+          "text": "Destinations",
+          "href": "/destinations"
+        },
+        {
+          "text": "Register your agency",
+          "href": "https://portal.tripcod.com/register"
+        },
+        {
+          "text": "Agent login",
+          "href": "https://portal.tripcod.com/login"
+        },
+        {
+          "text": "aiingo.com",
+          "href": "https://aiingo.com"
+        },
+        {
+          "text": "leadvyne.com",
+          "href": "https://leadvyne.com"
+        }
+      ]
+    },
+    {
+      "width": 390,
+      "headings": [
+        "Where are you flying?",
+        "Already have a booking?",
+        "Our Journey",
+        "Our Trusted Services",
+        "Popular Destinations",
+        "Explore flight routes",
+        "Routes travellers are checking",
+        "Explore airline options",
+        "Less form-filling. More confidence.",
+        "Compare with clarity",
+        "Review before you commit",
+        "A little human help",
+        "What Our Travelers Say",
+        "Explore Our Travel Moments",
+        "Your booking, step by step",
+        "Continue with our travel assistant",
+        "Let’s make your nextdeparture a little easier."
+      ],
+      "sections": [
+        {
+          "tag": "SECTION",
+          "id": "",
+          "cls": "flight-hero"
+        },
+        {
+          "tag": "SECTION",
+          "id": "flight-search",
+          "cls": "flight-search-shell"
+        },
+        {
+          "tag": "DIV",
+          "id": "",
+          "cls": "trust-bar"
+        },
+        {
+          "tag": "SECTION",
+          "id": "",
+          "cls": "flight-manage"
+        },
+        {
+          "tag": "SECTION",
+          "id": "",
+          "cls": "home-shell tc-section"
+        },
+        {
+          "tag": "SECTION",
+          "id": "",
+          "cls": "home-shell tc-section"
+        },
+        {
+          "tag": "SECTION",
+          "id": "",
+          "cls": "home-shell tc-section"
+        },
+        {
+          "tag": "SECTION",
+          "id": "",
+          "cls": "home-shell deal-cards-section"
+        },
+        {
+          "tag": "SECTION",
+          "id": "",
+          "cls": "home-shell popular-routes-section"
+        },
+        {
+          "tag": "SECTION",
+          "id": "",
+          "cls": "home-shell airline-logos-section"
+        },
+        {
+          "tag": "SECTION",
+          "id": "",
+          "cls": "home-shell benefits-section"
+        },
+        {
+          "tag": "SECTION",
+          "id": "",
+          "cls": "flight-confidence"
+        },
+        {
+          "tag": "SECTION",
+          "id": "",
+          "cls": "tc-testimonials-band"
+        },
+        {
+          "tag": "SECTION",
+          "id": "",
+          "cls": "home-shell tc-section"
+        },
+        {
+          "tag": "SECTION",
+          "id": "",
+          "cls": "journey-section"
+        },
+        {
+          "tag": "SECTION",
+          "id": "",
+          "cls": "home-shell"
+        },
+        {
+          "tag": "SECTION",
+          "id": "booking-support",
+          "cls": "flight-assistance"
+        },
+        {
+          "tag": "A",
+          "id": "",
+          "cls": "wa-float"
+        }
+      ],
+      "headerLinks": [
+        {
+          "text": "",
+          "href": "/"
+        },
+        {
+          "text": "Flights",
+          "href": "/#flight-search"
+        },
+        {
+          "text": "My Trips",
+          "href": "/trips"
+        },
+        {
+          "text": "Support",
+          "href": "/#booking-support"
+        },
+        {
+          "text": "Hotels",
+          "href": "/hotels"
+        },
+        {
+          "text": "Insurance",
+          "href": "/insurance"
+        },
+        {
+          "text": "Wallet",
+          "href": "/wallet"
+        },
+        {
+          "text": "Destinations",
+          "href": "/destinations"
+        },
+        {
+          "text": "About Us",
+          "href": "/about-us"
+        },
+        {
+          "text": "QA Traveller",
+          "href": "/account"
+        },
+        {
+          "text": "Flights",
+          "href": "/#flight-search"
+        },
+        {
+          "text": "Hotels",
+          "href": "/hotels"
+        },
+        {
+          "text": "Insurance",
+          "href": "/insurance"
+        },
+        {
+          "text": "My Trips",
+          "href": "/trips"
+        },
+        {
+          "text": "Wallet",
+          "href": "/wallet"
+        },
+        {
+          "text": "Destinations",
+          "href": "/destinations"
+        },
+        {
+          "text": "About Us",
+          "href": "/about-us"
+        },
+        {
+          "text": "Support",
+          "href": "/#booking-support"
+        },
+        {
+          "text": "QA Traveller",
+          "href": "/account"
+        }
+      ],
+      "footerLinks": [
+        {
+          "text": "Register as an agent",
+          "href": "https://portal.tripcod.com/register"
+        },
+        {
+          "text": "Agent login",
+          "href": "https://portal.tripcod.com/login"
+        },
+        {
+          "text": "",
+          "href": "/"
+        },
+        {
+          "text": "",
+          "href": "https://www.instagram.com/tripcod_"
+        },
+        {
+          "text": "",
+          "href": "https://www.facebook.com/share/16HLRp3aWu/"
+        },
+        {
+          "text": "",
+          "href": "https://www.youtube.com/@tripcod"
+        },
+        {
+          "text": "+971 52 931 9100",
+          "href": "tel:+971529319100"
+        },
+        {
+          "text": "+91 9778488122",
+          "href": "tel:+919778488122"
+        },
+        {
+          "text": "tripcodinternational@gmail.com",
+          "href": "mailto:tripcodinternational@gmail.com"
+        },
+        {
+          "text": "Flights",
+          "href": "/"
+        },
+        {
+          "text": "Hotels",
+          "href": "/hotels"
+        },
+        {
+          "text": "Travel insurance",
+          "href": "/insurance"
+        },
+        {
+          "text": "Baggage & visa check",
+          "href": "/travel-check"
+        },
+        {
+          "text": "My Trips",
+          "href": "/trips"
+        },
+        {
+          "text": "Find a booking",
+          "href": "/trips/find"
+        },
+        {
+          "text": "Wallet",
+          "href": "/wallet"
+        },
+        {
+          "text": "My account",
+          "href": "/account"
+        },
+        {
+          "text": "About Us",
+          "href": "/about-us"
+        },
+        {
+          "text": "Destinations",
+          "href": "/destinations"
+        },
+        {
+          "text": "Register your agency",
+          "href": "https://portal.tripcod.com/register"
+        },
+        {
+          "text": "Agent login",
+          "href": "https://portal.tripcod.com/login"
+        },
+        {
+          "text": "aiingo.com",
+          "href": "https://aiingo.com"
+        },
+        {
+          "text": "leadvyne.com",
+          "href": "https://leadvyne.com"
+        }
+      ]
+    },
+    {
+      "width": 428,
+      "headings": [
+        "Where are you flying?",
+        "Already have a booking?",
+        "Our Journey",
+        "Our Trusted Services",
+        "Popular Destinations",
+        "Explore flight routes",
+        "Routes travellers are checking",
+        "Explore airline options",
+        "Less form-filling. More confidence.",
+        "Compare with clarity",
+        "Review before you commit",
+        "A little human help",
+        "What Our Travelers Say",
+        "Explore Our Travel Moments",
+        "Your booking, step by step",
+        "Continue with our travel assistant",
+        "Let’s make your nextdeparture a little easier."
+      ],
+      "sections": [
+        {
+          "tag": "SECTION",
+          "id": "",
+          "cls": "flight-hero"
+        },
+        {
+          "tag": "SECTION",
+          "id": "flight-search",
+          "cls": "flight-search-shell"
+        },
+        {
+          "tag": "DIV",
+          "id": "",
+          "cls": "trust-bar"
+        },
+        {
+          "tag": "SECTION",
+          "id": "",
+          "cls": "flight-manage"
+        },
+        {
+          "tag": "SECTION",
+          "id": "",
+          "cls": "home-shell tc-section"
+        },
+        {
+          "tag": "SECTION",
+          "id": "",
+          "cls": "home-shell tc-section"
+        },
+        {
+          "tag": "SECTION",
+          "id": "",
+          "cls": "home-shell tc-section"
+        },
+        {
+          "tag": "SECTION",
+          "id": "",
+          "cls": "home-shell deal-cards-section"
+        },
+        {
+          "tag": "SECTION",
+          "id": "",
+          "cls": "home-shell popular-routes-section"
+        },
+        {
+          "tag": "SECTION",
+          "id": "",
+          "cls": "home-shell airline-logos-section"
+        },
+        {
+          "tag": "SECTION",
+          "id": "",
+          "cls": "home-shell benefits-section"
+        },
+        {
+          "tag": "SECTION",
+          "id": "",
+          "cls": "flight-confidence"
+        },
+        {
+          "tag": "SECTION",
+          "id": "",
+          "cls": "tc-testimonials-band"
+        },
+        {
+          "tag": "SECTION",
+          "id": "",
+          "cls": "home-shell tc-section"
+        },
+        {
+          "tag": "SECTION",
+          "id": "",
+          "cls": "journey-section"
+        },
+        {
+          "tag": "SECTION",
+          "id": "",
+          "cls": "home-shell"
+        },
+        {
+          "tag": "SECTION",
+          "id": "booking-support",
+          "cls": "flight-assistance"
+        },
+        {
+          "tag": "A",
+          "id": "",
+          "cls": "wa-float"
+        }
+      ],
+      "headerLinks": [
+        {
+          "text": "",
+          "href": "/"
+        },
+        {
+          "text": "Flights",
+          "href": "/#flight-search"
+        },
+        {
+          "text": "My Trips",
+          "href": "/trips"
+        },
+        {
+          "text": "Support",
+          "href": "/#booking-support"
+        },
+        {
+          "text": "Hotels",
+          "href": "/hotels"
+        },
+        {
+          "text": "Insurance",
+          "href": "/insurance"
+        },
+        {
+          "text": "Wallet",
+          "href": "/wallet"
+        },
+        {
+          "text": "Destinations",
+          "href": "/destinations"
+        },
+        {
+          "text": "About Us",
+          "href": "/about-us"
+        },
+        {
+          "text": "QA Traveller",
+          "href": "/account"
+        },
+        {
+          "text": "Flights",
+          "href": "/#flight-search"
+        },
+        {
+          "text": "Hotels",
+          "href": "/hotels"
+        },
+        {
+          "text": "Insurance",
+          "href": "/insurance"
+        },
+        {
+          "text": "My Trips",
+          "href": "/trips"
+        },
+        {
+          "text": "Wallet",
+          "href": "/wallet"
+        },
+        {
+          "text": "Destinations",
+          "href": "/destinations"
+        },
+        {
+          "text": "About Us",
+          "href": "/about-us"
+        },
+        {
+          "text": "Support",
+          "href": "/#booking-support"
+        },
+        {
+          "text": "QA Traveller",
+          "href": "/account"
+        }
+      ],
+      "footerLinks": [
+        {
+          "text": "Register as an agent",
+          "href": "https://portal.tripcod.com/register"
+        },
+        {
+          "text": "Agent login",
+          "href": "https://portal.tripcod.com/login"
+        },
+        {
+          "text": "",
+          "href": "/"
+        },
+        {
+          "text": "",
+          "href": "https://www.instagram.com/tripcod_"
+        },
+        {
+          "text": "",
+          "href": "https://www.facebook.com/share/16HLRp3aWu/"
+        },
+        {
+          "text": "",
+          "href": "https://www.youtube.com/@tripcod"
+        },
+        {
+          "text": "+971 52 931 9100",
+          "href": "tel:+971529319100"
+        },
+        {
+          "text": "+91 9778488122",
+          "href": "tel:+919778488122"
+        },
+        {
+          "text": "tripcodinternational@gmail.com",
+          "href": "mailto:tripcodinternational@gmail.com"
+        },
+        {
+          "text": "Flights",
+          "href": "/"
+        },
+        {
+          "text": "Hotels",
+          "href": "/hotels"
+        },
+        {
+          "text": "Travel insurance",
+          "href": "/insurance"
+        },
+        {
+          "text": "Baggage & visa check",
+          "href": "/travel-check"
+        },
+        {
+          "text": "My Trips",
+          "href": "/trips"
+        },
+        {
+          "text": "Find a booking",
+          "href": "/trips/find"
+        },
+        {
+          "text": "Wallet",
+          "href": "/wallet"
+        },
+        {
+          "text": "My account",
+          "href": "/account"
+        },
+        {
+          "text": "About Us",
+          "href": "/about-us"
+        },
+        {
+          "text": "Destinations",
+          "href": "/destinations"
+        },
+        {
+          "text": "Register your agency",
+          "href": "https://portal.tripcod.com/register"
+        },
+        {
+          "text": "Agent login",
+          "href": "https://portal.tripcod.com/login"
+        },
+        {
+          "text": "aiingo.com",
+          "href": "https://aiingo.com"
+        },
+        {
+          "text": "leadvyne.com",
+          "href": "https://leadvyne.com"
+        }
+      ]
+    },
+    {
+      "width": 768,
+      "headings": [
+        "Where are you flying?",
+        "Already have a booking?",
+        "Our Journey",
+        "Our Trusted Services",
+        "Popular Destinations",
+        "Explore flight routes",
+        "Routes travellers are checking",
+        "Explore airline options",
+        "Less form-filling. More confidence.",
+        "Compare with clarity",
+        "Review before you commit",
+        "A little human help",
+        "What Our Travelers Say",
+        "Explore Our Travel Moments",
+        "Your booking, step by step",
+        "Continue with our travel assistant",
+        "Let’s make your nextdeparture a little easier."
+      ],
+      "sections": [
+        {
+          "tag": "SECTION",
+          "id": "",
+          "cls": "flight-hero"
+        },
+        {
+          "tag": "SECTION",
+          "id": "flight-search",
+          "cls": "flight-search-shell"
+        },
+        {
+          "tag": "DIV",
+          "id": "",
+          "cls": "trust-bar"
+        },
+        {
+          "tag": "SECTION",
+          "id": "",
+          "cls": "flight-manage"
+        },
+        {
+          "tag": "SECTION",
+          "id": "",
+          "cls": "home-shell tc-section"
+        },
+        {
+          "tag": "SECTION",
+          "id": "",
+          "cls": "home-shell tc-section"
+        },
+        {
+          "tag": "SECTION",
+          "id": "",
+          "cls": "home-shell tc-section"
+        },
+        {
+          "tag": "SECTION",
+          "id": "",
+          "cls": "home-shell deal-cards-section"
+        },
+        {
+          "tag": "SECTION",
+          "id": "",
+          "cls": "home-shell popular-routes-section"
+        },
+        {
+          "tag": "SECTION",
+          "id": "",
+          "cls": "home-shell airline-logos-section"
+        },
+        {
+          "tag": "SECTION",
+          "id": "",
+          "cls": "home-shell benefits-section"
+        },
+        {
+          "tag": "SECTION",
+          "id": "",
+          "cls": "flight-confidence"
+        },
+        {
+          "tag": "SECTION",
+          "id": "",
+          "cls": "tc-testimonials-band"
+        },
+        {
+          "tag": "SECTION",
+          "id": "",
+          "cls": "home-shell tc-section"
+        },
+        {
+          "tag": "SECTION",
+          "id": "",
+          "cls": "journey-section"
+        },
+        {
+          "tag": "SECTION",
+          "id": "",
+          "cls": "home-shell"
+        },
+        {
+          "tag": "SECTION",
+          "id": "booking-support",
+          "cls": "flight-assistance"
+        },
+        {
+          "tag": "A",
+          "id": "",
+          "cls": "wa-float"
+        }
+      ],
+      "headerLinks": [
+        {
+          "text": "",
+          "href": "/"
+        },
+        {
+          "text": "Flights",
+          "href": "/#flight-search"
+        },
+        {
+          "text": "My Trips",
+          "href": "/trips"
+        },
+        {
+          "text": "Support",
+          "href": "/#booking-support"
+        },
+        {
+          "text": "Hotels",
+          "href": "/hotels"
+        },
+        {
+          "text": "Insurance",
+          "href": "/insurance"
+        },
+        {
+          "text": "Wallet",
+          "href": "/wallet"
+        },
+        {
+          "text": "Destinations",
+          "href": "/destinations"
+        },
+        {
+          "text": "About Us",
+          "href": "/about-us"
+        },
+        {
+          "text": "QA Traveller",
+          "href": "/account"
+        },
+        {
+          "text": "Flights",
+          "href": "/#flight-search"
+        },
+        {
+          "text": "Hotels",
+          "href": "/hotels"
+        },
+        {
+          "text": "Insurance",
+          "href": "/insurance"
+        },
+        {
+          "text": "My Trips",
+          "href": "/trips"
+        },
+        {
+          "text": "Wallet",
+          "href": "/wallet"
+        },
+        {
+          "text": "Destinations",
+          "href": "/destinations"
+        },
+        {
+          "text": "About Us",
+          "href": "/about-us"
+        },
+        {
+          "text": "Support",
+          "href": "/#booking-support"
+        },
+        {
+          "text": "QA Traveller",
+          "href": "/account"
+        }
+      ],
+      "footerLinks": [
+        {
+          "text": "Register as an agent",
+          "href": "https://portal.tripcod.com/register"
+        },
+        {
+          "text": "Agent login",
+          "href": "https://portal.tripcod.com/login"
+        },
+        {
+          "text": "",
+          "href": "/"
+        },
+        {
+          "text": "",
+          "href": "https://www.instagram.com/tripcod_"
+        },
+        {
+          "text": "",
+          "href": "https://www.facebook.com/share/16HLRp3aWu/"
+        },
+        {
+          "text": "",
+          "href": "https://www.youtube.com/@tripcod"
+        },
+        {
+          "text": "+971 52 931 9100",
+          "href": "tel:+971529319100"
+        },
+        {
+          "text": "+91 9778488122",
+          "href": "tel:+919778488122"
+        },
+        {
+          "text": "tripcodinternational@gmail.com",
+          "href": "mailto:tripcodinternational@gmail.com"
+        },
+        {
+          "text": "Flights",
+          "href": "/"
+        },
+        {
+          "text": "Hotels",
+          "href": "/hotels"
+        },
+        {
+          "text": "Travel insurance",
+          "href": "/insurance"
+        },
+        {
+          "text": "Baggage & visa check",
+          "href": "/travel-check"
+        },
+        {
+          "text": "My Trips",
+          "href": "/trips"
+        },
+        {
+          "text": "Find a booking",
+          "href": "/trips/find"
+        },
+        {
+          "text": "Wallet",
+          "href": "/wallet"
+        },
+        {
+          "text": "My account",
+          "href": "/account"
+        },
+        {
+          "text": "About Us",
+          "href": "/about-us"
+        },
+        {
+          "text": "Destinations",
+          "href": "/destinations"
+        },
+        {
+          "text": "Register your agency",
+          "href": "https://portal.tripcod.com/register"
+        },
+        {
+          "text": "Agent login",
+          "href": "https://portal.tripcod.com/login"
+        },
+        {
+          "text": "aiingo.com",
+          "href": "https://aiingo.com"
+        },
+        {
+          "text": "leadvyne.com",
+          "href": "https://leadvyne.com"
+        }
+      ]
+    },
+    {
+      "width": 1024,
+      "headings": [
+        "Where are you flying?",
+        "Already have a booking?",
+        "Our Journey",
+        "Our Trusted Services",
+        "Popular Destinations",
+        "Explore flight routes",
+        "Routes travellers are checking",
+        "Explore airline options",
+        "Less form-filling. More confidence.",
+        "Compare with clarity",
+        "Review before you commit",
+        "A little human help",
+        "What Our Travelers Say",
+        "Explore Our Travel Moments",
+        "Your booking, step by step",
+        "Continue with our travel assistant",
+        "Let’s make your nextdeparture a little easier."
+      ],
+      "sections": [
+        {
+          "tag": "SECTION",
+          "id": "",
+          "cls": "flight-hero"
+        },
+        {
+          "tag": "SECTION",
+          "id": "flight-search",
+          "cls": "flight-search-shell"
+        },
+        {
+          "tag": "DIV",
+          "id": "",
+          "cls": "trust-bar"
+        },
+        {
+          "tag": "SECTION",
+          "id": "",
+          "cls": "flight-manage"
+        },
+        {
+          "tag": "SECTION",
+          "id": "",
+          "cls": "home-shell tc-section"
+        },
+        {
+          "tag": "SECTION",
+          "id": "",
+          "cls": "home-shell tc-section"
+        },
+        {
+          "tag": "SECTION",
+          "id": "",
+          "cls": "home-shell tc-section"
+        },
+        {
+          "tag": "SECTION",
+          "id": "",
+          "cls": "home-shell deal-cards-section"
+        },
+        {
+          "tag": "SECTION",
+          "id": "",
+          "cls": "home-shell popular-routes-section"
+        },
+        {
+          "tag": "SECTION",
+          "id": "",
+          "cls": "home-shell airline-logos-section"
+        },
+        {
+          "tag": "SECTION",
+          "id": "",
+          "cls": "home-shell benefits-section"
+        },
+        {
+          "tag": "SECTION",
+          "id": "",
+          "cls": "flight-confidence"
+        },
+        {
+          "tag": "SECTION",
+          "id": "",
+          "cls": "tc-testimonials-band"
+        },
+        {
+          "tag": "SECTION",
+          "id": "",
+          "cls": "home-shell tc-section"
+        },
+        {
+          "tag": "SECTION",
+          "id": "",
+          "cls": "journey-section"
+        },
+        {
+          "tag": "SECTION",
+          "id": "",
+          "cls": "home-shell"
+        },
+        {
+          "tag": "SECTION",
+          "id": "booking-support",
+          "cls": "flight-assistance"
+        },
+        {
+          "tag": "A",
+          "id": "",
+          "cls": "wa-float"
+        }
+      ],
+      "headerLinks": [
+        {
+          "text": "",
+          "href": "/"
+        },
+        {
+          "text": "Flights",
+          "href": "/#flight-search"
+        },
+        {
+          "text": "My Trips",
+          "href": "/trips"
+        },
+        {
+          "text": "Support",
+          "href": "/#booking-support"
+        },
+        {
+          "text": "Hotels",
+          "href": "/hotels"
+        },
+        {
+          "text": "Insurance",
+          "href": "/insurance"
+        },
+        {
+          "text": "Wallet",
+          "href": "/wallet"
+        },
+        {
+          "text": "Destinations",
+          "href": "/destinations"
+        },
+        {
+          "text": "About Us",
+          "href": "/about-us"
+        },
+        {
+          "text": "QA Traveller",
+          "href": "/account"
+        },
+        {
+          "text": "Flights",
+          "href": "/#flight-search"
+        },
+        {
+          "text": "Hotels",
+          "href": "/hotels"
+        },
+        {
+          "text": "Insurance",
+          "href": "/insurance"
+        },
+        {
+          "text": "My Trips",
+          "href": "/trips"
+        },
+        {
+          "text": "Wallet",
+          "href": "/wallet"
+        },
+        {
+          "text": "Destinations",
+          "href": "/destinations"
+        },
+        {
+          "text": "About Us",
+          "href": "/about-us"
+        },
+        {
+          "text": "Support",
+          "href": "/#booking-support"
+        },
+        {
+          "text": "QA Traveller",
+          "href": "/account"
+        }
+      ],
+      "footerLinks": [
+        {
+          "text": "Register as an agent",
+          "href": "https://portal.tripcod.com/register"
+        },
+        {
+          "text": "Agent login",
+          "href": "https://portal.tripcod.com/login"
+        },
+        {
+          "text": "",
+          "href": "/"
+        },
+        {
+          "text": "",
+          "href": "https://www.instagram.com/tripcod_"
+        },
+        {
+          "text": "",
+          "href": "https://www.facebook.com/share/16HLRp3aWu/"
+        },
+        {
+          "text": "",
+          "href": "https://www.youtube.com/@tripcod"
+        },
+        {
+          "text": "+971 52 931 9100",
+          "href": "tel:+971529319100"
+        },
+        {
+          "text": "+91 9778488122",
+          "href": "tel:+919778488122"
+        },
+        {
+          "text": "tripcodinternational@gmail.com",
+          "href": "mailto:tripcodinternational@gmail.com"
+        },
+        {
+          "text": "Flights",
+          "href": "/"
+        },
+        {
+          "text": "Hotels",
+          "href": "/hotels"
+        },
+        {
+          "text": "Travel insurance",
+          "href": "/insurance"
+        },
+        {
+          "text": "Baggage & visa check",
+          "href": "/travel-check"
+        },
+        {
+          "text": "My Trips",
+          "href": "/trips"
+        },
+        {
+          "text": "Find a booking",
+          "href": "/trips/find"
+        },
+        {
+          "text": "Wallet",
+          "href": "/wallet"
+        },
+        {
+          "text": "My account",
+          "href": "/account"
+        },
+        {
+          "text": "About Us",
+          "href": "/about-us"
+        },
+        {
+          "text": "Destinations",
+          "href": "/destinations"
+        },
+        {
+          "text": "Register your agency",
+          "href": "https://portal.tripcod.com/register"
+        },
+        {
+          "text": "Agent login",
+          "href": "https://portal.tripcod.com/login"
+        },
+        {
+          "text": "aiingo.com",
+          "href": "https://aiingo.com"
+        },
+        {
+          "text": "leadvyne.com",
+          "href": "https://leadvyne.com"
+        }
+      ]
+    },
+    {
+      "width": 1440,
+      "headings": [
+        "Where are you flying?",
+        "Already have a booking?",
+        "Our Journey",
+        "Our Trusted Services",
+        "Popular Destinations",
+        "Explore flight routes",
+        "Routes travellers are checking",
+        "Explore airline options",
+        "Less form-filling. More confidence.",
+        "Compare with clarity",
+        "Review before you commit",
+        "A little human help",
+        "What Our Travelers Say",
+        "Explore Our Travel Moments",
+        "Your booking, step by step",
+        "Continue with our travel assistant",
+        "Let’s make your nextdeparture a little easier."
+      ],
+      "sections": [
+        {
+          "tag": "SECTION",
+          "id": "",
+          "cls": "flight-hero"
+        },
+        {
+          "tag": "SECTION",
+          "id": "flight-search",
+          "cls": "flight-search-shell"
+        },
+        {
+          "tag": "DIV",
+          "id": "",
+          "cls": "trust-bar"
+        },
+        {
+          "tag": "SECTION",
+          "id": "",
+          "cls": "flight-manage"
+        },
+        {
+          "tag": "SECTION",
+          "id": "",
+          "cls": "home-shell tc-section"
+        },
+        {
+          "tag": "SECTION",
+          "id": "",
+          "cls": "home-shell tc-section"
+        },
+        {
+          "tag": "SECTION",
+          "id": "",
+          "cls": "home-shell tc-section"
+        },
+        {
+          "tag": "SECTION",
+          "id": "",
+          "cls": "home-shell deal-cards-section"
+        },
+        {
+          "tag": "SECTION",
+          "id": "",
+          "cls": "home-shell popular-routes-section"
+        },
+        {
+          "tag": "SECTION",
+          "id": "",
+          "cls": "home-shell airline-logos-section"
+        },
+        {
+          "tag": "SECTION",
+          "id": "",
+          "cls": "home-shell benefits-section"
+        },
+        {
+          "tag": "SECTION",
+          "id": "",
+          "cls": "flight-confidence"
+        },
+        {
+          "tag": "SECTION",
+          "id": "",
+          "cls": "tc-testimonials-band"
+        },
+        {
+          "tag": "SECTION",
+          "id": "",
+          "cls": "home-shell tc-section"
+        },
+        {
+          "tag": "SECTION",
+          "id": "",
+          "cls": "journey-section"
+        },
+        {
+          "tag": "SECTION",
+          "id": "",
+          "cls": "home-shell"
+        },
+        {
+          "tag": "SECTION",
+          "id": "booking-support",
+          "cls": "flight-assistance"
+        },
+        {
+          "tag": "A",
+          "id": "",
+          "cls": "wa-float"
+        }
+      ],
+      "headerLinks": [
+        {
+          "text": "",
+          "href": "/"
+        },
+        {
+          "text": "Flights",
+          "href": "/#flight-search"
+        },
+        {
+          "text": "My Trips",
+          "href": "/trips"
+        },
+        {
+          "text": "Support",
+          "href": "/#booking-support"
+        },
+        {
+          "text": "Hotels",
+          "href": "/hotels"
+        },
+        {
+          "text": "Insurance",
+          "href": "/insurance"
+        },
+        {
+          "text": "Wallet",
+          "href": "/wallet"
+        },
+        {
+          "text": "Destinations",
+          "href": "/destinations"
+        },
+        {
+          "text": "About Us",
+          "href": "/about-us"
+        },
+        {
+          "text": "QA Traveller",
+          "href": "/account"
+        },
+        {
+          "text": "Flights",
+          "href": "/#flight-search"
+        },
+        {
+          "text": "Hotels",
+          "href": "/hotels"
+        },
+        {
+          "text": "Insurance",
+          "href": "/insurance"
+        },
+        {
+          "text": "My Trips",
+          "href": "/trips"
+        },
+        {
+          "text": "Wallet",
+          "href": "/wallet"
+        },
+        {
+          "text": "Destinations",
+          "href": "/destinations"
+        },
+        {
+          "text": "About Us",
+          "href": "/about-us"
+        },
+        {
+          "text": "Support",
+          "href": "/#booking-support"
+        },
+        {
+          "text": "QA Traveller",
+          "href": "/account"
+        }
+      ],
+      "footerLinks": [
+        {
+          "text": "Register as an agent",
+          "href": "https://portal.tripcod.com/register"
+        },
+        {
+          "text": "Agent login",
+          "href": "https://portal.tripcod.com/login"
+        },
+        {
+          "text": "",
+          "href": "/"
+        },
+        {
+          "text": "",
+          "href": "https://www.instagram.com/tripcod_"
+        },
+        {
+          "text": "",
+          "href": "https://www.facebook.com/share/16HLRp3aWu/"
+        },
+        {
+          "text": "",
+          "href": "https://www.youtube.com/@tripcod"
+        },
+        {
+          "text": "+971 52 931 9100",
+          "href": "tel:+971529319100"
+        },
+        {
+          "text": "+91 9778488122",
+          "href": "tel:+919778488122"
+        },
+        {
+          "text": "tripcodinternational@gmail.com",
+          "href": "mailto:tripcodinternational@gmail.com"
+        },
+        {
+          "text": "Flights",
+          "href": "/"
+        },
+        {
+          "text": "Hotels",
+          "href": "/hotels"
+        },
+        {
+          "text": "Travel insurance",
+          "href": "/insurance"
+        },
+        {
+          "text": "Baggage & visa check",
+          "href": "/travel-check"
+        },
+        {
+          "text": "My Trips",
+          "href": "/trips"
+        },
+        {
+          "text": "Find a booking",
+          "href": "/trips/find"
+        },
+        {
+          "text": "Wallet",
+          "href": "/wallet"
+        },
+        {
+          "text": "My account",
+          "href": "/account"
+        },
+        {
+          "text": "About Us",
+          "href": "/about-us"
+        },
+        {
+          "text": "Destinations",
+          "href": "/destinations"
+        },
+        {
+          "text": "Register your agency",
+          "href": "https://portal.tripcod.com/register"
+        },
+        {
+          "text": "Agent login",
+          "href": "https://portal.tripcod.com/login"
+        },
+        {
+          "text": "aiingo.com",
+          "href": "https://aiingo.com"
+        },
+        {
+          "text": "leadvyne.com",
+          "href": "https://leadvyne.com"
+        }
+      ]
+    }
+  ],
+  "bookingOrPaymentSubmissions": 0
+}

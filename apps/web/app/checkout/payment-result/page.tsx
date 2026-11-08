@@ -8,7 +8,7 @@ const API = process.env.NEXT_PUBLIC_API_URL ?? "https://api.tripcod.com";
 
 export default function NomodPaymentResultPage() {
   return (
-    <Suspense fallback={<main style={{ minHeight: "100vh", background: "#f8fafc", display: "grid", placeItems: "center" }}>Confirming payment…</main>}>
+    <Suspense fallback={<main className="flight-payment-result" style={{ minHeight: "100vh", background: "#f8fafc", display: "grid", placeItems: "center" }}>Confirming payment…</main>}>
       <NomodPaymentResult />
     </Suspense>
   );
@@ -74,7 +74,7 @@ function NomodPaymentResult() {
   const tripHref = booking?.hasAccount ? `/trips/${bookingId}` : "/trips/find";
 
   return (
-    <main style={{ minHeight: "100vh", background: "#f8fafc", display: "grid", placeItems: "center", padding: 20 }}>
+    <main className="flight-payment-result" style={{ minHeight: "100vh", background: "#f8fafc", display: "grid", placeItems: "center", padding: 20 }}>
       <section style={{ width: "100%", maxWidth: 480, background: "#fff", border: "1px solid #e2e8f0", borderRadius: 18, padding: 28, textAlign: "center", boxShadow: "0 18px 45px rgba(15,23,42,.09)" }}>
         <div style={{ width: 64, height: 64, display: "grid", placeItems: "center", margin: "0 auto 18px", borderRadius: "50%", background: successful ? "#dcfce7" : failed ? "#fee2e2" : "#ede9fe", fontSize: 28 }}>
           {successful ? "✓" : failed ? "×" : "…"}
@@ -91,7 +91,7 @@ function NomodPaymentResult() {
             ? "Your payment has been received. We're confirming your seat with the airline — this usually takes under a minute."
             : failed
               ? "No charge was confirmed. You can return to checkout and try again."
-              : "Nomod has returned you to Tripcod. Keep this page open while we verify the payment securely."}
+              : `${params.get("gateway") === "PHONEPE" ? "PhonePe" : "The payment page"} has returned you to Tripcod. Keep this page open while we verify the payment securely.`}
         </p>
         {ticketed || bookingFailed ? (
           <div style={{ display: "flex", gap: 10, justifyContent: "center", flexWrap: "wrap" }}>

@@ -1,0 +1,17 @@
+{
+  "reference": "58000f955e08b553642ad3cdb20ca05b9704f2a9",
+  "protectedFiles": 392,
+  "unexpectedChanges": [],
+  "unchangedFunctions": [
+    "function applyAi(",
+    "function handleSearch(",
+    "async function submit("
+  ],
+  "allowedFiles": [
+    "apps/web/app/components/AiTripSearch.tsx",
+    "apps/web/app/components/SearchWidget.tsx",
+    "apps/web/app/flight-experience.css",
+    "apps/web/test/search-widget.test.cjs"
+  ],
+  "homepageHeaderFooterServicesAboutUnchanged": true
+}

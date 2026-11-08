@@ -1,8 +1,13 @@
 "use client";
 
+import PaymentMethodPicker, { usePaymentOptions, type OnlineGateway } from "../components/PaymentMethodPicker";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { SeatPicker, seatCss, type SegmentSeatMap } from "./SeatPicker";
 import { ScanDocument, type ScannedTraveller } from "../components/ScanDocument";
+import { flightClock, flightDay } from "../lib/flight-clock";
+import BookingProgress from "../components/BookingProgress";
+import PassengerDateInput from "./PassengerDateInput";
+import { localToday, passengerDatesError, passportExpiryMinimum } from "./passenger-dates";
 import SocialSignIn from "./SocialSignIn";
 import { bookingError } from "./booking-error";
 import { passengerNameProblem } from "./passenger-names";
@@ -220,6 +225,8 @@ export default function BookPage() {
     return () => window.removeEventListener(CURRENCY_EVENT, onChange);
   }, []);
   const aedRate = rates.AED ?? null;
+  const paymentOptions = usePaymentOptions();
+  const [gateway, setGateway] = useState<OnlineGateway>("NOMOD");
   const [reviewing, setReviewing] = useState(false);
   const [error, setError] = useState("");
   const [fareExpired, setFareExpired] = useState(false);
@@ -530,12 +537,14 @@ export default function BookPage() {
     setPassengers((p) => p.map((x, n) => n === i ? { ...x, seat: { ...x.seat, [key]: code } } : x));
   const picks = (m: Record<string, string>) => Object.entries(m).filter(([, c]) => c).map(([key, code]) => ({ key, code }));
 
-  const t = (s?: string) =>
-    s ? new Date(s).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: false }) : "--:--";
-  const d = (s?: string, long = false) =>
-    s && !isNaN(new Date(s).getTime())
-      ? new Date(s).toLocaleDateString("en-GB", long ? { weekday: "long", day: "numeric", month: "long", year: "numeric" } : { weekday: "short", day: "numeric", month: "short" })
+  const t = flightClock;
+  // Airport-local calendar date, read from the timestamp as-is (like flightClock).
+  const d = (s?: string, long = false) => {
+    const day = flightDay(s);
+    return day
+      ? new Date(`${day}T00:00:00Z`).toLocaleDateString("en-GB", { timeZone: "UTC", ...(long ? { weekday: "long", day: "numeric", month: "long", year: "numeric" } : { weekday: "short", day: "numeric", month: "short" }) })
       : "";
+  };
   const dur = (m?: number) => (m && m > 0 ? `${Math.floor(m / 60)}h ${m % 60}m` : "");
   const titleCase = (v: string) => v.replaceAll("_", " ").toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
   const paxCount = (ty: Passenger["type"]) => passengers.filter((p) => p.type === ty).length;
@@ -544,10 +553,12 @@ export default function BookPage() {
   ].filter(([n]) => n).map(([n, l]) => `${n} ${l}${n === 1 ? "" : l === "Child" ? "ren" : "s"}`).join(", ");
 
   async function startNomodPayment(bookingId: string, checkoutToken: string) {
+    // PhonePe charges INR; Nomod can also charge AED.
+    const useGateway = gateway === "PHONEPE" && payCurrency === "INR" ? "PHONEPE" : "NOMOD";
     const res = await fetch(`${apiUrl}/api/payments/checkout`, {
       method:  "POST",
       headers: { "Content-Type": "application/json", "x-tenant-slug": "tripcod", "X-Checkout-Token": checkoutToken },
-      body:    JSON.stringify({ bookingId, gateway: "NOMOD", ...(payCurrency === "AED" && aedRate ? { currency: "AED" } : {}) }),
+      body:    JSON.stringify({ bookingId, gateway: useGateway, ...(useGateway === "NOMOD" && payCurrency === "AED" && aedRate ? { currency: "AED" } : {}) }),
     }).catch(() => null);
     const data = res ? await res.json().catch(() => ({})) as { paymentUrl?: string; error?: string } : {};
     if (!res?.ok || !data.paymentUrl) {
@@ -665,9 +676,18 @@ export default function BookPage() {
     };
   }
 
+  function validatePassengerDates() {
+    for (const [i, p] of passengers.entries()) {
+      const problem = passengerDatesError(p);
+      if (problem) { setError(`Traveller ${i + 1}: ${problem}`); setReviewing(false); return false; }
+    }
+    return true;
+  }
+
   async function holdFare(form: HTMLFormElement | null) {
     if (!fare || submitting || !review || !cond?.holdAllowed) return;
     if (form && !form.reportValidity()) return;
+    if (!validatePassengerDates()) return;
     setSubmitting(true); setError("");
     try {
       const res = await fetch(`${apiUrl}/api/book`, {
@@ -694,6 +714,7 @@ export default function BookPage() {
   async function submit(e: FormEvent) {
     e.preventDefault();
     if (!fare || submitting || fareExpired || bookingUncertain) return;
+    if (!validatePassengerDates()) { window.scrollTo({ top: 0, behavior: "smooth" }); return; }
     // Names must be real (no TBA / Test) — the airline and TripJack reject placeholders.
     for (const [i, p] of passengers.entries()) {
       const problem = passengerNameProblem(p.firstName, "First name") ?? passengerNameProblem(p.lastName, "Last name");
@@ -779,7 +800,7 @@ export default function BookPage() {
     const until = new Date(held.heldUntil);
     const payLater = `/pay?${new URLSearchParams({ b: held.bookingId, t: held.checkoutToken })}`;
     return (
-      <main className="ck success"><style>{css}{checkoutCss}</style>
+      <main className="ck success"><style>{css + checkoutCss}</style>
         <div className="ok">🔒</div>
         <h1>Your fare is on hold</h1>
         {held.pnr && <p style={{ fontSize: 22, fontWeight: 800 }}>PNR: <span style={{ color: "#4B4D4F" }}>{held.pnr}</span></p>}
@@ -803,7 +824,7 @@ export default function BookPage() {
 
   if (confirmation) {
     return (
-      <main className="ck success"><style>{css}{checkoutCss}</style>
+      <main className="ck success"><style>{css + checkoutCss}</style>
         <div className="ok">✓</div>
         <h1>{["CONFIRMED", "TICKETED"].includes(confirmation.status) && confirmation.pnr ? "Booking confirmed" : "Booking request received"}</h1>
         {confirmation.warningCode === "BOOKING_SAVE_PENDING" && <p>The supplier accepted your request, but we couldn't save all details. Do not book again. Contact support with your booking reference.</p>}
@@ -828,14 +849,14 @@ export default function BookPage() {
   }
 
   return (
-    <main className="ck"><style>{css}{checkoutCss}</style>
+    <main className="ck"><style>{css + checkoutCss}</style>
       <header>
         <button type="button" aria-label={reviewing ? "Edit traveller details" : "Back to results"} disabled={submitting} onClick={() => reviewing ? setReviewing(false) : history.back()}>‹</button>
-        <div><b>{reviewing ? "Review your booking" : "Complete your booking"}</b><span>{reviewing ? "Check names and contact details" : "Continue as a guest — no account required"}</span></div>
+        <div><h1>{reviewing ? "Review your booking" : "Complete your booking"}</h1><span>{reviewing ? "Check names and contact details" : "Continue as a guest — no account required"}</span></div>
         <i>🔒</i>
       </header>
 
-      <p className="checkoutProgress">{reviewing ? "Step 2 of 2 · Review" : "Step 1 of 2 · Traveller details"}</p>
+      <BookingProgress current={reviewing ? 3 : 2} />
 
       {fareExpired && (
         <div className="err" role="alert">
@@ -864,7 +885,7 @@ export default function BookPage() {
                 catch (x: any) { setError(x?.message ?? "The payment page couldn't open."); setSubmitting(false); }
               }}
               style={{ flex: "1 1 180px", background: "#fff", color: "#0f172a", border: "1.5px solid #e2e8f0", borderRadius: 10, padding: "12px 14px", fontWeight: 800, cursor: "pointer" }}>
-              Pay with card (Nomod)
+              {gateway === "PHONEPE" && payCurrency === "INR" ? "Pay with UPI / card (PhonePe)" : "Pay with card (Nomod)"}
             </button>
           </div>
         </div>
@@ -1037,7 +1058,7 @@ export default function BookPage() {
               <div className="grid">
                 <Input l="First name"             v={p.firstName}      c={(v) => upd(i, "firstName",      v)} r />
                 <Input l="Last name"              v={p.lastName}       c={(v) => upd(i, "lastName",       v)} r />
-                <Input l="Date of birth"  t="date" v={p.dob}           c={(v) => upd(i, "dob",            v)} r={p.type !== "ADULT" || isInternational || !!cond?.dobRequired[p.type]} />
+                <PassengerDateInput label="Date of birth" max={localToday()} value={p.dob} onChange={(v) => upd(i, "dob", v)} required={p.type !== "ADULT" || isInternational || !!cond?.dobRequired[p.type]} />
                 <label>Gender
                   <select value={p.gender} onChange={(e) => upd(i, "gender", e.target.value as "M" | "F")}>
                     <option value="M">Male</option>
@@ -1052,9 +1073,9 @@ export default function BookPage() {
                 <div className="grid">
                   <Input l="Nationality (e.g. IN, AE)" v={p.nationality} c={(v) => upd(i, "nationality", v.toUpperCase().slice(0, 2))} max={2} r={passportNeeded} />
                   <Input l="Passport number" v={p.passportNumber} c={(v) => upd(i, "passportNumber", v)} r={passportNeeded} />
-                  <Input l="Passport expiry" t="date" v={p.passportExpiry} c={(v) => upd(i, "passportExpiry", v)} r={passportNeeded || (!!cond?.passportExpiryRequired && !!p.passportNumber)} />
+                  <PassengerDateInput label="Passport expiry" min={passportExpiryMinimum()} value={p.passportExpiry} onChange={(v) => upd(i, "passportExpiry", v)} required={passportNeeded || (!!cond?.passportExpiryRequired && !!p.passportNumber)} />
                   {(passportNeeded || p.passportNumber) && (
-                    <Input l="Passport issue date" t="date" v={p.passportIssueDate} c={(v) => upd(i, "passportIssueDate", v)} />
+                    <PassengerDateInput label="Passport issue date" max={localToday()} value={p.passportIssueDate} onChange={(v) => upd(i, "passportIssueDate", v)} />
                   )}
                   {cond?.panApplicable && (
                     <Input l="PAN (optional)" v={p.panNumber} c={(v) => upd(i, "panNumber", v.toUpperCase().slice(0, 10))} ph="ABCDE1234F" max={10} />
@@ -1194,6 +1215,9 @@ export default function BookPage() {
           </div>
         )}
 
+        {(reviewing || pendingPayment) && !walletOffer && (
+          <PaymentMethodPicker options={paymentOptions} currency={payCurrency} value={gateway} onChange={setGateway} />
+        )}
         <div className="spacer" />
         <div className="pay">
           <div>

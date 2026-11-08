@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { ROUTES, loadConfig, resolveRoute, secretsEqual, upstreamFor, upstreamUrl } from "../src/gateway.mjs";
+import { HOTEL_ENVIRONMENTS, ROUTES, loadConfig, resolveRoute, secretsEqual, selectUpstream, upstreamFor, upstreamUrl } from "../src/gateway.mjs";
 
 test("loads a secure UAT configuration", () => {
   const config = loadConfig({ TRIPCOD_GATEWAY_KEY: "internal" });
@@ -78,4 +78,24 @@ test("routes TripSafe insurance v2 endpoints to the main host", () => {
     { upstreamPath: "/insurance/v2/booking/TJS70360001517547", upstream: "main", method: "GET" });
   assert.equal(resolveRoute("/insurance/v2/booking/TJS1/../x"), null);
   assert.equal(resolveRoute("/insurance/v2/search/"), null);
+});
+
+test("a hotel call may name its TripJack environment; flights and unnamed calls keep the configured hosts", () => {
+  // Shared gateway as deployed: flights on Production, hotels on the default UAT hosts.
+  const config = loadConfig({ TRIPCOD_GATEWAY_KEY: "k", TRIPJACK_UPSTREAM: "https://api.tripjack.com" });
+  const pick = (path, env) => selectUpstream(config, path, resolveRoute(path), env).origin;
+
+  assert.equal(pick("/hms/v3/content/fetch-hotel-mapping"), "https://apitest-hms.tripjack.com");
+  assert.equal(pick("/hms/v3/content/fetch-hotel-mapping", "UAT"), "https://apitest-hms.tripjack.com");
+  assert.equal(pick("/hms/v3/hotel/listing", "PRODUCTION"), "https://hms-search.tripjack.com");
+  assert.equal(pick("/oms/v3/hotel/booking-details", "UAT"), "https://apitest-hotel-booker.tripjack.com");
+  assert.equal(pick("/oms/v3/hotel/book", "PRODUCTION"), "https://hms-booker.tripjack.com");
+  assert.equal(pick("/tj-main/hms/v3/nationality-info", "UAT"), "https://apitest.tripjack.com");
+
+  // Flight, TripSafe and user routes ignore the header entirely.
+  for (const path of ["/air-search-all/v2", "/fms/v1/review", "/oms/v1/air/book", "/insurance/v2/search", "/ums/v1/user-detail"]) {
+    assert.equal(pick(path, "UAT"), "https://api.tripjack.com");
+    assert.equal(pick(path), "https://api.tripjack.com");
+  }
+  assert.deepEqual(HOTEL_ENVIRONMENTS, ["UAT", "PRODUCTION"]);
 });

@@ -1,0 +1,19 @@
+{
+  "reference": "3c7df50df8dcd502f6eb4997a9b0db3acc14e8da",
+  "protectedFiles": 388,
+  "unexpectedChanges": [],
+  "destinationsUnchanged": true,
+  "heroUnchanged": true,
+  "allowedExistingFiles": [
+    "apps/web/app/about-us/page.tsx",
+    "apps/web/app/components/SiteFooter.tsx",
+    "apps/web/app/components/SiteNav.tsx",
+    "apps/web/app/flight-experience.css",
+    "apps/web/app/page.tsx"
+  ],
+  "newPagesAndComponents": [
+    "apps/web/app/services/page.tsx",
+    "apps/web/app/support/page.tsx",
+    "apps/web/app/components/BookingInformation.tsx"
+  ]
+}

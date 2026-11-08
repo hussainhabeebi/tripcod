@@ -15,6 +15,7 @@ import type { Env, Variables } from "../types.js";
 import { resolveFlightSuppliers } from "../routes/search.js";
 import { creditWallet, getOrCreateCustomerWallet, roundMoney } from "./customer-wallet.js";
 import { refundNomodCharge, resolveNomodApiKey } from "./payment-gateway.js";
+import { refundPayment } from "./payment-core.js";
 import { logSupplierCall } from "./supplier-logger.js";
 import { describeError, errorDetail, logBookingEvent } from "./booking-recovery.js";
 
@@ -264,13 +265,14 @@ export async function syncCancellation(c: Ctx, amendment: Amendment): Promise<Am
   return updated;
 }
 
-type RefundMethod = "WALLET" | "AGENT_WALLET" | "NOMOD" | "MANUAL";
+type RefundMethod = "WALLET" | "AGENT_WALLET" | "NOMOD" | "PHONEPE" | "MANUAL";
 
 // The refund goes back to how the booking was paid.
 export function originalRefundMethod(paid: { gateway: string; gatewayPaymentId?: string | null } | undefined, hasCustomer: boolean): RefundMethod {
   if (paid?.gateway === "WALLET" && paid.gatewayPaymentId?.startsWith("agentwallet_")) return "AGENT_WALLET";
   if (paid?.gateway === "WALLET" && hasCustomer) return "WALLET";
   if (paid?.gateway === "NOMOD" && paid.gatewayPaymentId) return "NOMOD";
+  if (paid?.gateway === "PHONEPE" && paid.gatewayPaymentId) return "PHONEPE";
   return "MANUAL";
 }
 
@@ -278,6 +280,7 @@ export const REFUND_METHOD_LABEL: Record<RefundMethod, string> = {
   WALLET: "your Tripcod wallet (instant)",
   AGENT_WALLET: "your agency wallet (instant)",
   NOMOD:  "your original card / payment method (usually 5–10 working days)",
+  PHONEPE: "your original UPI / card / bank account via PhonePe (usually 5–7 working days)",
   MANUAL: "your original payment method (our team will process it)",
 };
 
@@ -318,7 +321,7 @@ export async function settleRefund(
     await db.update(bookings).set({ status: "REFUNDED", updatedAt: new Date() }).where(eq(bookings.id, claimed.bookingId));
     const row = await finish({ refundStatus: "DONE", refundReference: reference, refundedAt: new Date() });
     // Wallet refunds are instant (the "cancelled" email already says so); card refunds get their own email.
-    if (row && amount > 0 && claimed.refundMethod === "NOMOD") await emailCancellation(env, db, row, "REFUNDED");
+    if (row && amount > 0 && (claimed.refundMethod === "NOMOD" || claimed.refundMethod === "PHONEPE")) await emailCancellation(env, db, row, "REFUNDED");
     return row;
   };
 
@@ -353,6 +356,18 @@ export async function settleRefund(
     return outcome.definite
       ? finish({ refundStatus: "FAILED", refundError: `Nomod HTTP ${outcome.httpStatus}: ${outcome.error}` })
       : finish({ refundStatus: "MANUAL_REQUIRED", refundError: `No response from Nomod (${outcome.error}). Check the Nomod dashboard before retrying.` });
+  }
+
+  if (method === "PHONEPE") {
+    const [row] = await db.select().from(payments)
+      .where(and(eq(payments.bookingId, claimed.bookingId), eq(payments.status, "SUCCESS"), eq(payments.gateway, "PHONEPE"))).limit(1);
+    if (!row) return finish({ refundStatus: "MANUAL_REQUIRED", refundError: "Captured PhonePe payment not found." });
+    const outcome = await refundPayment(db, env, row, { amount, reason: `Cancellation of booking ${claimed.bookingId.slice(0, 8)}` });
+    if (outcome.ok) return done(outcome.refundRef);
+    console.error(`[refund] PhonePe refund for ${claimed.bookingId}:`, outcome.error);
+    return outcome.definite
+      ? finish({ refundStatus: "FAILED", refundError: `PhonePe: ${outcome.error}` })
+      : finish({ refundStatus: "MANUAL_REQUIRED", refundError: `No response from PhonePe (${outcome.error}). Check Admin → Transactions before retrying.` });
   }
 
   return finish({ refundStatus: "MANUAL_REQUIRED", refundError: `Paid via ${paid?.gateway ?? "unknown"}: refund manually to the original payment method.` });

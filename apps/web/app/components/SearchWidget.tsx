@@ -1,12 +1,13 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback } from "react";
-import { AiTripSearch, type AiTripFields } from "./AiTripSearch";
 import { useRouter } from "next/navigation";
 import { CURRENCY_EVENT, readPrefCurrency, savePrefCurrency } from "../lib/currency-pref";
 import { CURRENCY_LIST, type DisplayCurrency } from "../lib/fx";
 
-const AIRPORTS = [
+// Popular airports: shown when the box is empty and matched instantly while the
+// full world list (≈5,400 airports, D1-backed) loads from /api/airports/search.
+const AIRPORTS: Airport[] = [
   { code: "BOM", city: "Mumbai",        country: "IN" },
   { code: "DEL", city: "New Delhi",     country: "IN" },
   { code: "CCJ", city: "Kozhikode",     country: "IN" },
@@ -69,7 +70,27 @@ const QUICK_CURRENCIES = CURRENCY_LIST.filter((c) => c.code === "INR" || c.code 
 const MORE_CURRENCIES = CURRENCY_LIST.filter((c) => c.code !== "INR" && c.code !== "AED");
 type CurrencyCode = DisplayCurrency;
 
-type Airport = typeof AIRPORTS[number];
+type Airport = { code: string; city: string; country: string; name?: string };
+const AIRPORT_API = process.env.NEXT_PUBLIC_API_URL ?? "https://api.tripcod.com";
+const airportCache = new Map<string, Airport[]>();
+
+async function fetchAirports(q: string, signal: AbortSignal): Promise<Airport[]> {
+  const hit = airportCache.get(q);
+  if (hit) return hit;
+  const res = await fetch(`${AIRPORT_API}/api/airports/search?q=${encodeURIComponent(q)}&limit=10`, { signal });
+  if (!res.ok) throw new Error(`airport search ${res.status}`);
+  const body = (await res.json()) as { airports?: { code: string; city: string; country: string; name: string }[] };
+  const list = (body.airports ?? []).map(({ code, city, country, name }) => ({ code, city, country, name }));
+  airportCache.set(q, list);
+  return list;
+}
+
+function localMatches(q: string): Airport[] {
+  if (!q) return AIRPORTS.slice(0, 8);
+  return AIRPORTS.filter(
+    (a) => a.code.toLowerCase().startsWith(q) || a.city.toLowerCase().includes(q),
+  ).slice(0, 8);
+}
 type TripType = "One Way" | "Round Trip" | "Multi-city";
 
 // TripJack passenger fare types (searchModifiers.pfts).
@@ -82,16 +103,17 @@ function AirportInput({
   id, label, value, onChange, placeholder, tabIndex,
 }: {
   id: string; label: string; value: Airport | null;
-  onChange: (a: Airport) => void; placeholder: string; tabIndex?: number;
+  onChange: (a: Airport | null) => void; placeholder: string; tabIndex?: number;
 }) {
   const displayVal = value ? `${value.city} (${value.code})` : "";
   const [query, setQuery] = useState(displayVal);
   const [open,  setOpen]  = useState(false);
+  const [activeIndex, setActiveIndex] = useState(-1);
   const wrapRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    setQuery(value ? `${value.city} (${value.code})` : "");
+    if (value) setQuery(`${value.city} (${value.code})`);
   }, [value]);
 
   useEffect(() => {
@@ -105,18 +127,30 @@ function AirportInput({
     return () => document.removeEventListener("mousedown", onOutside);
   }, [value]);
 
-  const q = query.toLowerCase().trim();
-  const matches = q
-    ? AIRPORTS.filter(
-        (a) =>
-          a.code.toLowerCase().startsWith(q) ||
-          a.city.toLowerCase().includes(q)
-      ).slice(0, 8)
-    : AIRPORTS.slice(0, 8);
+  const q = query === displayVal ? "" : query.toLowerCase().trim();
+  const [remote, setRemote] = useState<{ q: string; list: Airport[] } | null>(null);
+
+  // Look up the full airport list as the user types (debounced).
+  useEffect(() => {
+    if (!open || q.length < 2) return;
+    const ctrl = new AbortController();
+    const timer = window.setTimeout(() => {
+      fetchAirports(q, ctrl.signal)
+        .then((list) => setRemote({ q, list }))
+        .catch(() => { /* offline or API down: popular list still works */ });
+    }, 150);
+    return () => { window.clearTimeout(timer); ctrl.abort(); };
+  }, [q, open]);
+
+  const local = localMatches(q);
+  const matches = remote && remote.q === q && remote.list.length > 0
+    ? [...remote.list, ...local.filter((a) => !remote.list.some((r) => r.code === a.code))].slice(0, 10)
+    : local;
 
   function pick(a: Airport) {
     onChange(a);
     setQuery(`${a.city} (${a.code})`);
+    setActiveIndex(-1);
     setOpen(false);
   }
 
@@ -132,20 +166,36 @@ function AirportInput({
         autoComplete="off"
         inputMode="text"
         tabIndex={tabIndex}
-        onFocus={() => { setQuery(""); setOpen(true); }}
-        onChange={(e) => { setQuery(e.target.value); setOpen(true); }}
+        role="combobox" aria-autocomplete="list" aria-expanded={open}
+        aria-controls={`${id}-options`} aria-activedescendant={open && activeIndex >= 0 && matches[activeIndex] ? `${id}-${matches[activeIndex].code}` : undefined}
+        onFocus={() => { setOpen(true); setActiveIndex(-1); inputRef.current?.select(); }}
+        onBlur={() => { setOpen(false); setQuery(value ? `${value.city} (${value.code})` : ""); }}
+        onChange={(e) => { setQuery(e.target.value); onChange(null); setOpen(true); setActiveIndex(-1); }}
+        onKeyDown={(e) => {
+          if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+            e.preventDefault(); setOpen(true);
+            setActiveIndex((i) => e.key === "ArrowDown" ? Math.min(i + 1, matches.length - 1) : Math.max(0, i - 1));
+          } else if (e.key === "Enter" && open) {
+            e.preventDefault(); if (matches[activeIndex]) pick(matches[activeIndex]);
+          } else if (e.key === "Escape") { setOpen(false); setActiveIndex(-1); }
+        }}
         required
       />
+      {value && <button type="button" className="airport-clear" aria-label={`Clear ${label.toLowerCase()} airport`} onClick={() => { onChange(null); setQuery(""); inputRef.current?.focus(); }}>×</button>}
+      {open && matches.length === 0 && <div className="airport-empty" role="status">No matching airports. Try a city or airport code.</div>}
       {open && matches.length > 0 && (
-        <ul className="airport-dropdown">
+        <ul className="airport-dropdown" role="listbox" id={`${id}-options`} aria-label={`${label} airports`}>
           {matches.map((a) => (
             <li
-              key={a.code}
+              key={a.code} id={`${id}-${a.code}`} role="option" aria-selected={matches[activeIndex]?.code === a.code}
               onMouseDown={(e) => { e.preventDefault(); pick(a); }}
               onTouchEnd={(e) => { e.preventDefault(); pick(a); }}
             >
               <span className="ap-code">{a.code}</span>
-              <span className="ap-city">{a.city}</span>
+              <span className="ap-city">
+                {a.city}
+                {a.name && a.name !== a.city && <small className="ap-name">{a.name}</small>}
+              </span>
               <span className="ap-flag">
                 {String.fromCodePoint(
                   ...[...a.country].map((c) => 0x1F1A5 + c.charCodeAt(0))
@@ -173,6 +223,7 @@ export default function SearchWidget() {
   const paxRef = useRef<HTMLDivElement>(null);
   const [cabinClass,    setCabinClass]    = useState<(typeof CABIN_CLASSES)[number]>("Economy");
   const [currency,      setCurrencyState] = useState<CurrencyCode>("INR");
+  const [searchError, setSearchError] = useState("");
   const [searching,     setSearching]     = useState(false);
   const [searchStage,   setSearchStage]   = useState(0);
   const [directOnly,    setDirectOnly]    = useState(false);
@@ -185,35 +236,12 @@ export default function SearchWidget() {
     function onOutside(e: MouseEvent) {
       if (paxRef.current && !paxRef.current.contains(e.target as Node)) setPaxOpen(false);
     }
-    document.addEventListener("mousedown", onOutside);
-    return () => document.removeEventListener("mousedown", onOutside);
+    const onEscape = (e: KeyboardEvent) => { if (e.key === "Escape") setPaxOpen(false); };
+    document.addEventListener("mousedown", onOutside); document.addEventListener("keydown", onEscape);
+    return () => { document.removeEventListener("mousedown", onOutside); document.removeEventListener("keydown", onEscape); };
   }, []);
 
   const SEARCH_STAGES = ["Checking live fares", "Comparing airlines", "Finding your best options"];
-
-  // Plain-language search fills the regular form; its result-page preferences
-  // (sort / refundable / baggage) ride along with the next search.
-  const formRef = useRef<HTMLFormElement>(null);
-  const [aiPrefs, setAiPrefs] = useState<Record<string, string>>({});
-  function applyAi(f: AiTripFields) {
-    const toAirport = (p: { code: string; city: string } | null): Airport | null =>
-      p ? (AIRPORTS.find((a) => a.code === p.code) ?? { code: p.code, city: p.city, country: "" }) : null;
-    setTripType(f.tripType === "ROUNDTRIP" ? "Round Trip" : "One Way");
-    if (f.origin) setOrigin(toAirport(f.origin));
-    if (f.destination) setDest(toAirport(f.destination));
-    if (f.departureDate) setDepartDate(f.departureDate);
-    setReturnDate(f.returnDate ?? "");
-    setAdults(f.adults); setChildren(f.children); setInfants(f.infants);
-    setCabinClass(({ ECONOMY: "Economy", PREMIUM_ECONOMY: "Premium Economy", BUSINESS: "Business", FIRST: "First" } as const)[f.cabinClass]);
-    setSpecialFare(f.fareType === "STUDENT" ? "Student" : f.fareType === "SENIOR_CITIZEN" ? "Senior Citizen" : "Regular");
-    setDirectOnly(f.directOnly);
-    if (f.currency) setCurrency(f.currency);
-    setAiPrefs({
-      ...(f.sort !== "best" ? { sort: f.sort, all: "1" } : {}),
-      ...(f.refundableOnly ? { refundable: "1" } : {}),
-      ...(f.withBaggage ? { baggage: "1" } : {}),
-    });
-  }
 
   useEffect(() => {
     if (!searching) { setSearchStage(0); return; }
@@ -245,9 +273,13 @@ export default function SearchWidget() {
 
   function handleSearch(e: React.FormEvent) {
     e.preventDefault();
-    if (!origin || !dest) return;
+    if (searching) return;
+    setSearchError("");
+    if (!origin || !dest) { setSearchError("Choose an origin and destination from the airport suggestions."); return; }
+    if (origin.code === dest.code) { setSearchError("Choose different departure and arrival airports."); return; }
     const multi = tripType === "Multi-city";
-    if (multi && extraLegs.some((l) => !l.origin || !l.dest || !l.date)) return;
+    if (multi && extraLegs.some((l) => !l.origin || !l.dest || !l.date)) { setSearchError("Choose airports and a date for every flight."); return; }
+    if (multi && extraLegs.some((l) => l.origin?.code === l.dest?.code)) { setSearchError("Each flight needs different departure and arrival airports."); return; }
     const params = new URLSearchParams({
       origin:        origin.code,
       destination:   multi ? extraLegs[extraLegs.length - 1].dest!.code : dest.code,
@@ -260,7 +292,6 @@ export default function SearchWidget() {
       currency,
       ...(FARE_TYPE_PARAM[specialFare] !== "REGULAR" ? { fareType: FARE_TYPE_PARAM[specialFare] } : {}),
       ...(directOnly ? { stops: "0" } : {}),
-      ...aiPrefs,
       ...(tripType === "Round Trip" && returnDate ? { returnDate } : {}),
       // legs=DEL-BOM-2026-10-01,BOM-GOI-2026-10-05
       ...(multi ? { legs: [`${origin.code}-${dest.code}-${departDate}`, ...extraLegs.map((l) => `${l.origin!.code}-${l.dest!.code}-${l.date}`)].join(",") } : {}),
@@ -277,12 +308,11 @@ export default function SearchWidget() {
 
   return (
     <div className="search-widget">
-      <AiTripSearch onApply={applyAi} onSearchNow={() => formRef.current?.requestSubmit()} />
       {/* Top bar: trip type + passengers */}
       <div className="trip-tabs">
         {(["One Way", "Round Trip", "Multi-city"] as TripType[]).map((t) => (
           <button
-            key={t} type="button"
+            key={t} type="button" aria-pressed={t === tripType}
             onClick={() => setTripType(t)}
             className={t === tripType ? "trip-tab trip-tab-active" : "trip-tab trip-tab-inactive"}
           >
@@ -294,13 +324,13 @@ export default function SearchWidget() {
             type="button"
             className="passengers-select"
             onClick={() => setPaxOpen((v) => !v)}
-            aria-label="Passengers"
+            aria-expanded={paxOpen} aria-controls="traveller-picker"
             style={{ cursor: "pointer", textAlign: "left" }}
           >
-            {adults + children + infants} Pax {children + infants > 0 ? `· ${adults}A${children > 0 ? ` ${children}C` : ""}${infants > 0 ? ` ${infants}I` : ""}` : adults === 1 ? "Adult" : "Adults"}
+            {adults + children + infants} traveller{adults + children + infants === 1 ? "" : "s"} · {cabinClass}
           </button>
           {paxOpen && (
-            <div style={{ position: "absolute", top: "calc(100% + 6px)", left: 0, zIndex: 50, background: "#fff", border: "1px solid #d0d5dd", borderRadius: 14, padding: "14px 16px", minWidth: 220, boxShadow: "0 8px 24px rgba(0,0,0,.12)" }}>
+            <div id="traveller-picker" className="traveller-picker" style={{ position: "absolute", top: "calc(100% + 6px)", left: 0, zIndex: 50, background: "#fff", border: "1px solid #d0d5dd", borderRadius: 14, padding: "14px 16px", minWidth: 220, boxShadow: "0 8px 24px rgba(0,0,0,.12)" }}>
               {([
                 // Airline rules: max 9 seats (adults + children); infants sit on an adult's lap, 1 per adult.
                 { label: "Adults", sub: "12+ years", val: adults, set: (n: number) => { setAdults(n); setInfants((i) => Math.min(i, n)); }, min: 1, max: 9 - children },
@@ -313,9 +343,9 @@ export default function SearchWidget() {
                     <div style={{ fontSize: 12, color: "#667085" }}>{sub}</div>
                   </div>
                   <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                    <button type="button" onClick={() => (set as (n: number) => void)(Math.max(min, val - 1))} disabled={val <= min} style={{ width: 32, height: 32, borderRadius: "50%", border: "1px solid #d0d5dd", background: val <= min ? "#f9fafb" : "#fff", fontWeight: 800, fontSize: 18, cursor: val <= min ? "default" : "pointer", color: val <= min ? "#d0d5dd" : "#111" }}>−</button>
+                    <button type="button" aria-label={`Remove ${label.toLowerCase()}`} onClick={() => (set as (n: number) => void)(Math.max(min, val - 1))} disabled={val <= min} style={{ width: 32, height: 32, borderRadius: "50%", border: "1px solid #d0d5dd", background: val <= min ? "#f9fafb" : "#fff", fontWeight: 800, fontSize: 18, cursor: val <= min ? "default" : "pointer", color: val <= min ? "#d0d5dd" : "#111" }}>−</button>
                     <span style={{ minWidth: 18, textAlign: "center", fontWeight: 700 }}>{val}</span>
-                    <button type="button" onClick={() => (set as (n: number) => void)(Math.min(max, val + 1))} disabled={val >= max} style={{ width: 32, height: 32, borderRadius: "50%", border: "1px solid #d0d5dd", background: val >= max ? "#f9fafb" : "#fff", fontWeight: 800, fontSize: 18, cursor: val >= max ? "default" : "pointer", color: val >= max ? "#d0d5dd" : "#111" }}>+</button>
+                    <button type="button" aria-label={`Add ${label.toLowerCase()}`} onClick={() => (set as (n: number) => void)(Math.min(max, val + 1))} disabled={val >= max} style={{ width: 32, height: 32, borderRadius: "50%", border: "1px solid #d0d5dd", background: val >= max ? "#f9fafb" : "#fff", fontWeight: 800, fontSize: 18, cursor: val >= max ? "default" : "pointer", color: val >= max ? "#d0d5dd" : "#111" }}>+</button>
                   </div>
                 </div>
               ))}
@@ -354,21 +384,22 @@ export default function SearchWidget() {
         </div>
       </div>
 
-      <form ref={formRef} onSubmit={handleSearch} aria-busy={searching}>
+      {searchError && <p className="flight-validation" role="alert">{searchError}</p>}
+      <form onSubmit={handleSearch} aria-busy={searching}>
         <div className={tripType === "Multi-city" ? "sw-grid sw-grid-multicity" : "sw-grid"}>
           {tripType === "Multi-city" && <div className="sw-flight-label">Flight 1</div>}
           {/* Route row: FROM ⇄ TO */}
           <div className="sw-route-row">
             <AirportInput
               id="sw-origin" label="From" value={origin}
-              onChange={setOrigin} placeholder="City or airport" tabIndex={1}
+              onChange={setOrigin} placeholder="City or airport"
             />
             <button type="button" className="swap-btn" onClick={swap} aria-label="Swap airports">
               ⇄
             </button>
             <AirportInput
               id="sw-dest" label="To" value={dest}
-              onChange={setDest} placeholder="City or airport" tabIndex={2}
+              onChange={setDest} placeholder="City or airport"
             />
           </div>
 
@@ -379,7 +410,7 @@ export default function SearchWidget() {
               <input
                 id="sw-depart" className="search-input" type="date"
                 value={departDate} onChange={(e) => setDepartDate(e.target.value)}
-                required min={today} tabIndex={3}
+                required min={today}
               />
             </div>
 
@@ -389,21 +420,20 @@ export default function SearchWidget() {
                 <input
                   id="sw-return" className="search-input" type="date"
                   value={returnDate} onChange={(e) => setReturnDate(e.target.value)}
-                  required min={departDate || today} tabIndex={4}
+                  required min={departDate || today}
                 />
               </div>
-            ) : (
-              <div className="search-field">
+            ) : null}
+              <div className={tripType === "Round Trip" ? "search-field flight-cabin-label" : "search-field"}>
                 <label htmlFor="sw-class">Class</label>
                 <select
                   id="sw-class" className="search-input" value={cabinClass}
                   onChange={(e) => setCabinClass(e.target.value as typeof cabinClass)}
-                  tabIndex={4}
+
                 >
                   {CABIN_CLASSES.map((c) => <option key={c}>{c}</option>)}
                 </select>
               </div>
-            )}
           </div>
 
           {tripType === "Multi-city" && (
@@ -457,7 +487,7 @@ export default function SearchWidget() {
           </div>
 
           {/* Search button */}
-          <button type="submit" className={searching ? "search-btn search-btn-loading" : "search-btn"} tabIndex={5} disabled={searching}>
+          <button type="submit" className={searching ? "search-btn search-btn-loading" : "search-btn"} disabled={searching}>
             {searching ? <><span className="search-spinner" /> {SEARCH_STAGES[searchStage]}</> : <>Search live flights <span aria-hidden="true">→</span></>}
           </button>
         </div>

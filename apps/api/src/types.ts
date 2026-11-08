@@ -1,4 +1,4 @@
-import type { KVNamespace, R2Bucket, Queue, Hyperdrive, DurableObjectNamespace } from "@cloudflare/workers-types";
+import type { KVNamespace, R2Bucket, Queue, Hyperdrive, DurableObjectNamespace, D1Database } from "@cloudflare/workers-types";
 import type { Db } from "@tripcod/db";
 
 export interface Env {
@@ -11,9 +11,10 @@ export interface Env {
   PUBLIC_ASSETS_R2: R2Bucket;
   BOOKING_QUEUE:    Queue;
   NOTIFY_QUEUE:     Queue;
-  HYPERDRIVE:       Hyperdrive;
+  HYPERDRIVE:       Hyperdrive;   // secondary database (Neon Postgres)
+  HOTEL_DB:         D1Database;   // PRIMARY database (Cloudflare D1 "tripcod-hotels"): hotel orders, airports
   TENANT_RATE_LIMITER: DurableObjectNamespace;
-  DATABASE_URL:           string;
+  DATABASE_URL:           string;   // Neon Postgres (secondary)
   JWT_SECRET:             string;
   GOOGLE_CLIENT_ID?:      string;
   APPLE_CLIENT_ID?:       string;
@@ -27,6 +28,7 @@ export interface Env {
   TRIPJACK_API_BASE_URL:  string;
   TRIPJACK_OMS_BASE_URL?: string;  // OMS (book/cancel) base URL — set when proxy only covers FMS
   TRIPJACK_PROXY_KEY:     string;
+  TRIPJACK_HOTEL_API_KEY?: string;  // hotel account key when it differs from the flight key (optional; Admin setting wins)
   SERP_API_KEY:           string;
   GEMINI_MODEL?:          string;   // optional override for plain-language search (default gemini-2.5-flash)
   GEMINI_SCAN_MODEL?:     string;   // optional model for document / ticket reading (default GEMINI_MODEL)
@@ -40,6 +42,20 @@ export interface Env {
   NOMOD_API_KEY:          string;
   NOMOD_API_SECRET:       string;
   NOMOD_WEBHOOK_SECRET:   string;
+  // PhonePe PG v2 — separate UAT and Production credentials (see lib/phonepe.ts).
+  // PHONEPE_ENV=PRODUCTION is honoured only on the production Worker.
+  PHONEPE_ENV?:                   string;
+  PHONEPE_UAT_CLIENT_ID?:         string;
+  PHONEPE_UAT_CLIENT_SECRET?:     string;
+  PHONEPE_UAT_CLIENT_VERSION?:    string;
+  PHONEPE_UAT_WEBHOOK_USERNAME?:  string;
+  PHONEPE_UAT_WEBHOOK_PASSWORD?:  string;
+  PHONEPE_PROD_CLIENT_ID?:        string;
+  PHONEPE_PROD_CLIENT_SECRET?:    string;
+  PHONEPE_PROD_CLIENT_VERSION?:   string;
+  PHONEPE_PROD_WEBHOOK_USERNAME?: string;
+  PHONEPE_PROD_WEBHOOK_PASSWORD?: string;
+  PUBLIC_WEB_URL?:                string;   // customer site for payment return URLs (default https://tripcod.com)
   RESEND_API_KEY:         string;
   EMAIL_FROM?:            string;   // default sender address (must be verified in Resend), e.g. bookings@tripcod.com
   EMAIL_REPLY_TO?:        string;   // default reply-to address
