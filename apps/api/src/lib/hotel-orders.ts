@@ -198,6 +198,7 @@ const FAILED = ["FAILED", "ABORTED"];
 // Definite "TripJack did not accept this" (vs. an unknown outcome such as a timeout).
 export function isDefiniteRejection(err: any): boolean {
   const code = String(err?.code ?? "");
+  if (code === "1092") return true;   // explicit PAN validation rejection, including HTTP-200 error envelopes
   if (code === "NOT_CONFIGURED" || code === "INVALID_BOOKING_ID") return true;   // nothing was sent
   if (["TIMEOUT", "NETWORK_ERROR", "RESPONSE_READ_FAILED", "INVALID_RESPONSE"].includes(code)) return false;
   const status = Number(err?.statusCode);
@@ -309,8 +310,11 @@ async function submitAndSettle(deps: HotelOrderDeps, order: HotelOrder, endpoint
       bookingId: order.supplierBookingId, mode: order.mode, amount: Number(order.amount), rooms: (order.occupancy as RoomOccupancy[]).length,
     }, submit);
   } catch (err: any) {
-    // Even a rejected call is checked against Booking Details before deciding.
-    const d = await details(deps, order, `${endpoint} error`);
+    // A definite rejected Book has no supplier order to poll (e.g. PAN 1092).
+    // A conflict may refer to an existing order; timeouts/5xx also still need reconciliation.
+    // Confirm-hold failures retain their existing hold-status reconciliation.
+    const rejectedBook = endpoint === "book" && isDefiniteRejection(err) && Number(err?.statusCode) !== 409;
+    const d = rejectedBook ? null : await details(deps, order, `${endpoint} error`);
     if (d?.status && (d.status !== "ON_HOLD" || endpoint === "book")) return applySupplierStatus(deps, order, d);
     if (!isDefiniteRejection(err)) {
       // Unknown outcome: never re-submit; Booking Details decides later.
@@ -438,6 +442,9 @@ export async function refreshOrder(deps: HotelOrderDeps, order: HotelOrder, forc
       && ((order.mode === "INSTANT" && !order.supplierSubmittedAt) || (order.mode === "HOLD" && order.status === "ON_HOLD" && !order.confirmSubmittedAt))) {
     await deps.enqueue(order.id);
   }
+  // Failed validation did not create an order. Even a forced page refresh or queue
+  // recovery must not turn that rejection into repeated Booking Details / 2501 calls.
+  if (order.status === "FAILED" && !order.supplierStatus) return order;
   if (!order.supplierSubmittedAt) return order;              // nothing at TripJack yet
   // A confirmed booking is re-read only on demand; holds and in-flight orders every 20 s.
   if (!force && (SETTLED.includes(order.status) || (order.lastCheckedAt && now - order.lastCheckedAt.getTime() < 20_000))) return order;
